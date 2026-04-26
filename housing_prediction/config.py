@@ -12,6 +12,9 @@ DATA_PATH = BASE_DIR / "data" / "housing.csv"
 # Định nghĩa nơi sẽ lưu trữ mô hình máy học sau khi đã được huấn luyện
 MODEL_PATH = BASE_DIR / "artifacts" / "model.joblib"
 
+# Định nghĩa nơi lưu trữ logs
+LOGS_PATH = BASE_DIR / "logs" / "app.log"
+
 # Tên của cột mà chúng ta muốn dự đoán (đây là "mục tiêu" hoặc "nhãn")
 TARGET = "price"
 

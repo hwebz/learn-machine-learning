@@ -73,11 +73,60 @@ python train.py
 - Mô hình được đánh giá bằng **Điểm R²** và **RMSE**.
 - "Bộ não" được lưu vào `model/model.joblib`.
 
-### 5. Thực hiện dự đoán
-Sử dụng mô hình đã huấn luyện để dự đoán giá cho một ngôi nhà cụ thể:
+### 5. Thực hiện dự đoán (Script)
+Sử dụng mô hình đã huấn luyện để dự đoán giá cho một ngôi nhà cụ thể thông qua script:
 ```bash
 python predict.py
 ```
+
+### 6. Triển khai API với FastAPI
+Dự án này cũng cung cấp một giao diện API để bạn có thể tích hợp mô hình vào các ứng dụng web hoặc di động khác.
+
+**Khởi chạy server API:**
+```bash
+uvicorn app.main:app --reload
+```
+Sau khi chạy, API sẽ mặc định hoạt động tại địa chỉ: `http://127.0.0.1:8000`
+
+**Kiểm tra API bằng `curl`:**
+
+1. **Kiểm tra trạng thái hệ thống (Health Check):**
+```bash
+curl http://127.0.0.1:8000/health
+```
+
+2. **Dự đoán giá nhà qua API:**
+```bash
+curl -X POST http://127.0.0.1:8000/predict ^
+     -H "Content-Type: application/json" ^
+     -d "{\"size_m2\": 120, \"bedrooms\": 3, \"distance_km\": 4, \"age_years\": 10, \"size_ft2\": 1291.668}"
+```
+*(Lưu ý: Nếu bạn dùng Linux/macOS, hãy thay dấu `^` bằng dấu `\` và bỏ các dấu backslash `\` trước dấu ngoặc kép trong chuỗi JSON nếu cần thiết tùy theo shell của bạn)*
+
+**Tài liệu API tự động (Swagger UI):**
+FastAPI tự động tạo tài liệu cho bạn. Hãy mở trình duyệt và truy cập:
+- [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+
+### 7. Đóng gói với Docker (Dockerization)
+Bạn có thể đóng gói toàn bộ ứng dụng (bao gồm cả quy trình tạo dữ liệu, huấn luyện và chạy API) vào một Docker container để dễ dàng triển khai ở bất cứ đâu.
+
+**Xây dựng Docker image:**
+```bash
+docker build -t housing-prediction .
+```
+
+**Chạy Docker container:**
+```bash
+docker run -p 8000:8000 housing-prediction
+```
+Khi chạy lệnh này, Docker sẽ tự động:
+1. Cài đặt môi trường Python.
+2. Cài đặt các thư viện cần thiết.
+3. Chạy `generate_data.py` để tạo dữ liệu.
+4. Chạy `train.py` để huấn luyện mô hình.
+5. Khởi chạy FastAPI server trên cổng 8000.
+
+Sau đó, bạn có thể truy cập API tại `http://localhost:8000` như bình thường.
 
 ---
 
