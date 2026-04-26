@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_PATH = BASE_DIR / "data" / "housing.csv"
 
 # Định nghĩa nơi sẽ lưu trữ mô hình máy học sau khi đã được huấn luyện
-MODEL_PATH = BASE_DIR / "model" / "model.joblib"
+MODEL_PATH = BASE_DIR / "artifacts" / "model.joblib"
 
 # Tên của cột mà chúng ta muốn dự đoán (đây là "mục tiêu" hoặc "nhãn")
 TARGET = "price"
@@ -31,4 +31,4 @@ TEST_SIZE = 0.2
 # Một con số "hạt giống" để đảm bảo các thao tác ngẫu nhiên (như chia dữ liệu)
 # luôn cho ra cùng một kết quả mỗi khi chúng ta chạy mã
 RANDOM_STATE = 42
-
+
