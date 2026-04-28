@@ -4,8 +4,27 @@ from pydantic import BaseModel
 import numpy as np
 import pandas as pd
 import uvicorn
+import joblib
+import os
 
 app = FastAPI(title="System Load Predictor API")
+
+# Lưu model và scaler sau khi train
+MODEL_PATH = "models/system_predictor.pkl"
+SCALER_PATH = "models/scaler.pkl"
+
+def save_model(predictor, model_path=MODEL_PATH, scaler_path=SCALER_PATH):
+    os.makedirs(os.path.dirname(model_path), exist_ok=True)
+    os.makedirs(os.path.dirname(scaler_path), exist_ok=True)
+    joblib.dump(predictor.model, model_path)
+    joblib.dump(predictor.scaler, scaler_path)
+
+# Load lại khi cần
+def load_model(model_path=MODEL_PATH, scaler_path=SCALER_PATH):
+    predictor = SystemPredictor()
+    predictor.model = joblib.load(model_path)
+    predictor.scaler = joblib.load(scaler_path)
+    return predictor
 
 # Khởi tạo model sẵn (trong thực tế có thể load dữ liệu từ file .pkl)
 # Ở đây ta giả lập dữ liệu để train ngay khi khởi động

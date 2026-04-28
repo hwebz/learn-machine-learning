@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ai-ops-config
+data:
+  MODEL_TYPE: "huber"
+  LOG_LEVEL: "info"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-ops-engine
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "8000"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ai-ops-engine
+  template:
+    metadata:
+      labels:
+        app: ai-ops-engine
+    spec:
+      containers:
+      - name: engine
+        image: ai-ops-engine:v2.0
+        envFrom:
+        - configMapRef:
+            name: ai-ops-config
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: predictor-service
+spec:
+  selector:
+    app: ai-ops-engine
+  ports:
+  - port: 8000
+    targetPort: 8000
+  type: ClusterIP
