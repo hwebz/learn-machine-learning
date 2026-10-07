@@ -1,0 +1,93 @@
+# DOM/ARIA selectors for browser UI adapters.
+# Every locator value is an ORDERED fallback chain; the first rung whose
+# locator matches at least one element in the live DOM wins.
+# Keys: role / name / testid / placeholder / css / text
+# "text" is a visible-text fallback (Playwright get_by_text, exact=False).
+# When a site ships a UI change, edit this file — never hardcode selectors in Python.
+# Validate with: python scripts/smoke_test.py
+
+completion:
+  stable_seconds: 5
+  poll_interval_s: 2
+  min_poll_s: 1.5
+  max_poll_s: 3.0
+
+blocking:
+  url_patterns:
+    - "accounts.google.com"
+    - "/auth/login"
+    - "/login"
+    - "/signin"
+  text_patterns:
+    - "Verify you are human"
+    - "unusual traffic"
+    - "captcha"
+    - "Sign in to continue"
+    - "rate limit"
+
+providers:
+  perplexity:
+    new_chat_url: "https://www.perplexity.ai/"
+    question_input:
+      - { role: textbox }
+      - { css: "[contenteditable='true']" }
+      - { role: textbox, name: "Ask anything" }
+      - { testid: search-input }
+      - { placeholder: "Ask anything" }
+    submit:
+      - { role: button, name: "Submit" }
+      - { testid: submit-button }
+      - { css: "button[aria-label='Submit']" }
+    mode_selectors:
+      pro_toggle: { testid: pro-toggle }
+      research_mode: { role: button, name: "Pro" }
+    generating_indicator:
+      - { css: "button[aria-label*='Stop' i]" }
+      - { css: "button[aria-label*='Ngừng' i]" }
+      - { role: button, name: "Stop" }
+      - { testid: generating }
+      - { css: "[aria-live='polite'][aria-busy='true']" }
+    done_indicator:
+      - { css: "button[aria-label='Copy']" }
+      - { css: "button[aria-label='Sao chép']" }
+      - { css: "button[aria-label*='Copy response' i]" }
+    answer_container:
+      - { css: "div.prose" }
+      - { testid: answer }
+      - { css: "article [data-testid='markdown']" }
+    source_links:
+      - { css: "a[data-testid='citation']" }
+      - { css: ".prose a[href^='http']" }
+      - { css: "a:has(span.citation)" }
+      - { css: "a[href^='http']:has(span.sr-only)" }
+  gemini:
+    new_chat_url: "https://gemini.google.com/app"
+    question_input:
+      - { role: textbox }
+      - { css: "rich-textarea [contenteditable='true']" }
+      - { css: ".ql-editor[contenteditable='true']" }
+    submit:
+      - { css: "button:has(mat-icon[data-mat-icon-name='arrow_upward'])" }
+      - { role: button, name: "Send" }
+      - { css: "button[aria-label='Send message']" }
+    mode_selectors:
+      deep_research: { role: button, name: "Deep Research" }
+    generating_indicator:
+      - { css: "button[aria-label*='Ngừng' i]" }
+      - { css: "button[aria-label*='Stop' i]" }
+      - { role: button, name: "Stop generating" }
+      - { role: button, name: "Ngừng tạo câu trả lời" }
+      - { css: "model-response[aria-busy='true']" }
+      - { css: "img[alt='Loading']" }
+      - { css: ".response-container-header-processing-state" }
+    done_indicator:
+      - { css: "button[aria-label*='Sao chép' i]:not([aria-label*='câu lệnh' i])" }
+      - { css: "button[aria-label*='Copy' i]:not([aria-label*='prompt' i]):not([aria-label*='query' i])" }
+    answer_container:
+      - { css: "model-response .markdown" }
+      - { css: ".response-container-content" }
+      - { css: "model-response .response-container" }
+      - { testid: response-container }
+    source_links:
+      - { css: "a[data-test-id='cite-link']" }
+      - { css: "a[href][target='_blank']:has(.citation-pill)" }

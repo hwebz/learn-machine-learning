@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "deepresearch-local"
+version = "0.1.0"
+description = "Local multi-chatbot deep research orchestrator"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+  "fastapi>=0.115,<1.0",
+  "uvicorn[standard]>=0.30,<1.0",
+  "playwright>=1.48,<2.0",
+  "sqlmodel>=0.0.22,<1.0",
+  "aiosqlite>=0.20,<1.0",
+  "pydantic>=2.9,<3.0",
+  "openai>=1.50,<2.0",
+  "httpx>=0.27,<1.0",
+  "tenacity>=9.0,<10.0",
+  "structlog>=24.4,<26.0",
+  "pyyaml>=6.0,<7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3,<9.0",
+  "pytest-asyncio>=0.24,<2.0",
+  "httpx>=0.27,<1.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+  "live: requires a real signed-in browser profile (run with -m live)",
+]
