@@ -94,16 +94,79 @@ Before enabling UI automation in earnest, review each provider's terms and recor
 
 ## Run (all modes)
 
+### 1. Khởi động Server nhanh bằng script (Khuyên dùng)
+
+```powershell
+.\scripts\StartServer.ps1
+```
+*(Script tự động kích hoạt `.venv`, kiểm tra cổng `8000` và khởi chạy Uvicorn tại `http://127.0.0.1:8000`)*
+
+Hoặc khởi động trực tiếp:
 ```powershell
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-`GET /health` is public. Every other route requires `X-API-Key`. Use `GET /research/{job_id}/events` for SSE status/progress, `POST /research/{job_id}/cancel` for cooperative cancellation.
+`GET /health` is public. Every other route requires header `X-API-Key: changeme` (hoặc cấu hình trong `.env`). Use `GET /research/{job_id}/events` for SSE status/progress, `POST /research/{job_id}/cancel` for cooperative cancellation.
 
 Job outcomes:
 - `completed` — all providers returned answers.
 - `partial` — some providers succeeded; see `provider_runs` and the report's "Provider issues" section.
 - `needs_user_action` — providers are blocked on login/CAPTCHA; check `data/artifacts/`.
+
+## Postman Documentation
+
+Dự án cung cấp sẵn file Postman Collection v2.1 đầy đủ: [Deep_Research_Local.postman_collection.json](Deep_Research_Local.postman_collection.json).
+
+### Cách 1: Import file Collection vào Postman (1-Click)
+1. Trong Postman, bấm **Import** (hoặc `Ctrl + O`) $\rightarrow$ chọn file `Deep_Research_Local.postman_collection.json`.
+2. Mở rộng (nhấp dấu mũi tên `>`) collection **Deep Research Local (pc_chatbots)** ở thanh bên trái để thấy 5 requests:
+   - `1. Health Check` (`GET http://127.0.0.1:8000/health`)
+   - `2. Create Research Job` (`POST http://127.0.0.1:8000/research`) — *Tự động lưu `job_id` vào biến collection!*
+   - `3. Get Research Job Status & Result` (`GET http://127.0.0.1:8000/research/{{job_id}}`) — *Tự động dùng `job_id` vừa lưu.*
+   - `4. Cancel Research Job` (`POST http://127.0.0.1:8000/research/{{job_id}}/cancel`)
+   - `5. Research Events Stream (SSE)` (`GET http://127.0.0.1:8000/research/{{job_id}}/events`)
+
+### Cách 2: Import nhanh qua cURL
+Bấm **Import** trong Postman $\rightarrow$ chọn tab **Raw text** $\rightarrow$ dán lệnh cURL:
+
+```bash
+curl --location 'http://127.0.0.1:8000/research' \
+--header 'X-API-Key: changeme' \
+--header 'Content-Type: application/json' \
+--data '{
+  "query": "Explained in detailed about Gradient Decent for Vietnamese",
+  "depth": "standard",
+  "providers": [
+    "copilot",
+    "gemini",
+    "qwen"
+  ],
+  "max_minutes": 20
+}'
+```
+
+### Chi tiết các Endpoint chính
+
+| Endpoint | Method | Header | Mô tả |
+|---|---|---|---|
+| `/health` | `GET` | Không cần | Kiểm tra trạng thái server, router LLM và danh sách các adapter UI đã login. |
+| `/research` | `POST` | `X-API-Key: changeme`<br>`Content-Type: application/json` | Tạo job nghiên cứu mới. Trả về `202 Accepted` với `{ "job_id": "uuid" }`. |
+| `/research/{job_id}` | `GET` | `X-API-Key: changeme` | Lấy tiến độ xử lý và toàn bộ nội dung báo cáo Markdown (`report_markdown`) khi hoàn tất. |
+| `/research/{job_id}/cancel` | `POST` | `X-API-Key: changeme` | Hủy an toàn job đang thực hiện. |
+| `/research/{job_id}/events` | `GET` | `X-API-Key: changeme`<br>`Accept: text/event-stream` | Theo dõi thời gian thực sự thay đổi trạng thái qua Server-Sent Events (SSE). |
+
+#### Cấu trúc Body mẫu (`POST /research`)
+
+```json
+{
+  "query": "Explained in detailed about Gradient Decent for Vietnamese",
+  "depth": "standard",
+  "providers": ["copilot", "gemini", "qwen"],
+  "max_minutes": 20
+}
+```
+Các providers khả dụng: `copilot`, `gemini`, `qwen`, `chatgpt`, `claude`, `deepseek`, `perplexity`, `kimi`, `grok`, `meta`, `mistral`, `pi`, `zhipu`, `minimax`.
+
 
 ## Tests
 
