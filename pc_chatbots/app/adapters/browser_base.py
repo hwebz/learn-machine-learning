@@ -121,9 +121,14 @@ class BrowserProviderAdapter(ABC):
                 try:
                     count = await copy_locator.count()
                     if count > 0:
+                        # Clear clipboard first to prevent stale text leakage from prior providers
+                        try:
+                            await page.evaluate("navigator.clipboard.writeText('')")
+                        except Exception:  # noqa: BLE001
+                            pass
                         target_btn = copy_locator.last if count > 1 else copy_locator.first
                         await target_btn.click(timeout=2000)
-                        await asyncio.sleep(0.3)
+                        await asyncio.sleep(0.5)
                         clipboard_text = await page.evaluate("navigator.clipboard.readText()")
                         if (
                             clipboard_text
@@ -231,17 +236,14 @@ class BrowserProviderAdapter(ABC):
                     from app.browser.waits import detect_blocking_state
 
                     blocking = await detect_blocking_state(page, self._selectors.get("blocking", {}))
+                    if blocking is not None and blocking.kind == "login":
+                        recovered = await self.attempt_login_recovery(page)
+                        if recovered:
+                            blocking = await detect_blocking_state(page, self._selectors.get("blocking", {}))
+
                     if blocking is not None:
-                        # Best-effort recovery for remembered-account login screens
-                        # (e.g., Copilot's "Pick an account" tile) before giving up.
-                        recovered = False
-                        if blocking.kind == "login":
-                            recovered = await self.attempt_login_recovery(page)
-                            if recovered:
-                                blocking = await detect_blocking_state(page, self._selectors.get("blocking", {}))
-                        if blocking is not None:
-                            status = "needs_user_action"
-                            error = f"Blocked ({blocking.kind}): {blocking.detail}. Complete login/CAPTCHA in the browser, then retry."
+                        status = "needs_user_action"
+                        error = f"Blocked ({blocking.kind}): {blocking.detail}. Complete login/CAPTCHA in the browser, then retry."
                     else:
                         await self._select_mode(page, mode)
 
@@ -355,7 +357,12 @@ class BrowserProviderAdapter(ABC):
                         artifact_dir=self._artifact_dir,
                     )
                     try:
-                        await page.close()
+                        # Keep at least one tab alive (navigate to about:blank)
+                        # so Chromium doesn't exit when the last tab is closed.
+                        if self._session._ctx is not None and len(self._session._ctx.pages) <= 1:
+                            await page.goto("about:blank")
+                        else:
+                            await page.close()
                     except Exception:  # noqa: BLE001
                         pass
         except ProviderNeedsUserAction:

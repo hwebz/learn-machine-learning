@@ -79,6 +79,7 @@ class BrowserSession:
                 permissions=["clipboard-read", "clipboard-write"],
                 viewport={"width": 1280, "height": 900},
             )
+            ctx.on("close", lambda: setattr(self, "_ctx", None))
             self._pw = pw
             self._ctx = ctx
 
@@ -116,6 +117,15 @@ class BrowserSession:
         import asyncio
 
         await self.start()
+        # Check if the existing context is still alive; if dead/closed, restart it.
+        try:
+            assert self._ctx is not None
+            _ = self._ctx.pages
+        except Exception:
+            logger.warning("browser_context_dead_restarting")
+            await self.close()
+            await self.start()
+
         assert self._ctx is not None  # narrowed for type checkers
 
         # Reuse an existing blank tab if one is free (single-page, no prior use).

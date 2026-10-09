@@ -1,0 +1,137 @@
+{
+  "info": {
+    "_postman_id": "b8908819-7e3e-4f2a-b024-5d9c2409f6e3",
+    "name": "Deep Research Local (pc_chatbots)",
+    "description": "API collection for pc_chatbots research orchestrator",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://127.0.0.1:8000/health"
+        },
+        "description": "Kiểm tra tình trạng server và danh sách các adapter UI/API khả dụng."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Create Research Job",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 202) {",
+              "    var json = pm.response.json();",
+              "    if (json.job_id) {",
+              "        pm.collectionVariables.set('job_id', json.job_id);",
+              "        console.log('Tự động lưu job_id:', json.job_id);",
+              "    }",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "changeme",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"Explained in detailed about Gradient Decent for Vietnamese\",\n  \"depth\": \"standard\",\n  \"providers\": [\n    \"copilot\",\n    \"gemini\",\n    \"qwen\"\n  ],\n  \"max_minutes\": 20\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://127.0.0.1:8000/research"
+        },
+        "description": "Gửi câu hỏi nghiên cứu. Script Tests sẽ tự động lưu job_id vào biến collection."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Get Research Job Status & Result",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "changeme",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://127.0.0.1:8000/research/{{job_id}}"
+        },
+        "description": "Xem trạng thái tiến độ hoặc toàn bộ bài giải thích Markdown khi hoàn thành."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Cancel Research Job",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "changeme",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://127.0.0.1:8000/research/{{job_id}}/cancel"
+        },
+        "description": "Hủy hợp tác (cooperative cancel) job đang chạy."
+      },
+      "response": []
+    },
+    {
+      "name": "5. Research Events Stream (SSE)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "changeme",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "text/event-stream",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://127.0.0.1:8000/research/{{job_id}}/events"
+        },
+        "description": "Stream Server-Sent Events (SSE) để theo dõi thời gian thực."
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "job_id",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

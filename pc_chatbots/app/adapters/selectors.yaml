@@ -97,6 +97,8 @@ providers:
       - { css: "button[aria-label*='Sao chép' i]:not([aria-label*='câu lệnh' i])" }
       - { css: "button[aria-label*='Copy' i]:not([aria-label*='prompt' i]):not([aria-label*='query' i])" }
     answer_container:
+      - { css: "message-content" }
+      - { css: "model-response message-content" }
       - { css: "model-response .markdown" }
       - { css: ".response-container-content" }
       - { css: "model-response .response-container" }
