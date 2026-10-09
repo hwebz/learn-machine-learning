@@ -10,7 +10,7 @@ from typing import Any
 
 import structlog
 
-from app.adapters.base import HealthStatus, ProviderResult, Source
+from app.adapters.base import HealthStatus, ProviderResult, Source, StepCallback
 from app.adapters.selectors_loader import load_selectors, provider_selectors
 from app.browser.artifacts import save_artifacts
 from app.browser.extraction import html_to_markdown, normalize_sources
@@ -209,7 +209,14 @@ class BrowserProviderAdapter(ABC):
 
     # ------------------------------------------------------------- ask flow
 
-    async def ask(self, prompt: str, *, timeout_s: int, mode: str = "default") -> ProviderResult:
+    async def ask(
+        self,
+        prompt: str,
+        *,
+        timeout_s: int,
+        mode: str = "default",
+        on_step: StepCallback | None = None,
+    ) -> ProviderResult:
         started_at = datetime.now(timezone.utc)
         bucket = _bucket_for(self.name)
         if not bucket.try_acquire():
@@ -217,7 +224,15 @@ class BrowserProviderAdapter(ABC):
                 f"Rate limit reached for {self.name} ({settings.max_questions_per_hour}/hour)."
             )
 
+        async def _notify(step: str, message: str, data: dict[str, Any] | None = None) -> None:
+            if on_step is not None:
+                try:
+                    await on_step(step, message, data)
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug("on_step_notify_failed", provider=self.name, step=step, error=str(exc))
+
         # Defensive jitter between questions (dispatcher also delays).
+        await _notify("waiting_turn", f"Chuẩn bị tài nguyên trình duyệt cho {self.name}...")
         await asyncio.sleep(random.uniform(settings.min_delay_between_questions_s, settings.max_delay_between_questions_s))
 
         job_tag = f"ui-{self.name}-{int(time.time())}"
@@ -231,12 +246,16 @@ class BrowserProviderAdapter(ABC):
 
         try:
             async with self._session.exclusive():
-                page = await self._session.new_page(self._cfg["new_chat_url"])
+                target_url = self._cfg.get("new_chat_url", "")
+                await _notify("navigating", f"Đang mở trang web {self.name} ({target_url})...", {"url": target_url})
+                page = await self._session.new_page(target_url)
                 try:
                     from app.browser.waits import detect_blocking_state
 
+                    await _notify("checking_auth", f"Đang kiểm tra đăng nhập/CAPTCHA trên {self.name}...")
                     blocking = await detect_blocking_state(page, self._selectors.get("blocking", {}))
                     if blocking is not None and blocking.kind == "login":
+                        await _notify("recovering_auth", f"Phát hiện màn hình đăng nhập, đang thử tự động khôi phục phiên cho {self.name}...")
                         recovered = await self.attempt_login_recovery(page)
                         if recovered:
                             blocking = await detect_blocking_state(page, self._selectors.get("blocking", {}))
@@ -244,17 +263,27 @@ class BrowserProviderAdapter(ABC):
                     if blocking is not None:
                         status = "needs_user_action"
                         error = f"Blocked ({blocking.kind}): {blocking.detail}. Complete login/CAPTCHA in the browser, then retry."
+                        await _notify(
+                            "blocked",
+                            f"{self.name} yêu cầu xác thực người dùng ({blocking.kind}): {blocking.detail}",
+                            {"blocking_kind": blocking.kind, "blocking_detail": blocking.detail},
+                        )
                     else:
+                        if mode and mode != "default":
+                            await _notify("selecting_mode", f"Đang cấu hình chế độ nghiên cứu ({mode}) cho {self.name}...")
                         await self._select_mode(page, mode)
 
                         # SPA editors (e.g., Mistral) can take several seconds to hydrate
                         # depending on network conditions — poll until the input appears
                         # instead of sleeping a fixed amount.
+                        await _notify("locating_input", f"Đang định vị ô nhập prompt trên {self.name}...")
                         input_locator = await wait_for_input(page, self._cfg.get("question_input", []))
                         if input_locator is None:
                             status = "error"
                             error = "Question input locator not found — selectors may be stale. See selectors.yaml and data/artifacts."
+                            await _notify("error", f"Không tìm thấy ô nhập câu hỏi trên {self.name}.", {"error": error})
                         else:
+                            await _notify("entering_prompt", f"Đang nhập câu hỏi vào ô chat của {self.name}...")
                             # Click to focus, then type. fill() does not work reliably on
                             # contenteditable rich-text editors (Perplexity/Gemini), and the
                             # submit button often only appears after text is entered.
@@ -283,7 +312,10 @@ class BrowserProviderAdapter(ABC):
                                         error = "Submit locator not found and Enter key failed — selectors may be stale."
                                 else:
                                     await submit_locator.click()
+                                if status != "error":
+                                    await _notify("submitting", f"Đã gửi câu hỏi đến {self.name}, đang chờ xử lý...")
                             if status not in {"error", "needs_user_action"}:
+                                await _notify("generating", f"Đang đợi {self.name} sinh câu trả lời (thời gian tối đa {timeout_s}s)...")
                                 # Per-provider completion overrides (e.g., Mistral's
                                 # done_marker_delay_s) take precedence over global defaults.
                                 completion_cfg = {**self._selectors.get("completion", {}),
@@ -307,6 +339,7 @@ class BrowserProviderAdapter(ABC):
                                 ):
                                     retries += 1
                                     logger.info("answer_retry", provider=self.name, attempt=retries)
+                                    await _notify("retrying", f"{self.name} thông báo bận, đang thử lại (lần {retries}/{max_retries})...")
                                     completion = await wait_for_completion(
                                         page,
                                         provider_cfg=self._cfg,
@@ -332,6 +365,7 @@ class BrowserProviderAdapter(ABC):
 
                     if status in {"ok", "partial"}:
                         try:
+                            await _notify("extracting", f"Đang trích xuất nội dung câu trả lời và nguồn trích dẫn từ {self.name}...")
                             answer = await self._extract_answer(page, prompt=prompt) or completion_text
                             sources = await self._extract_sources(page)
                             if not answer.strip():

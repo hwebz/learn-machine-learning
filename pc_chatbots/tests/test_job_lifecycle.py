@@ -109,3 +109,70 @@ def test_cancel_active_job_is_cooperative(monkeypatch: MonkeyPatch) -> None:
                 break
             time.sleep(0.02)
         assert job["status"] == "cancelled"
+
+
+def test_sse_emits_granular_steps_and_valid_responses(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(pipeline, "create_adapter", lambda provider: FakeAdapter(provider))
+    with TestClient(app) as client:
+        accepted = client.post(
+            "/research",
+            headers=API_HEADERS,
+            json={"query": "Test granular SSE steps", "providers": ["copilot"]},
+        )
+        assert accepted.status_code == 202
+        job_id = accepted.json()["job_id"]
+
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            job = client.get(f"/research/{job_id}", headers=API_HEADERS).json()
+            if job["status"] == "completed":
+                break
+            time.sleep(0.02)
+        assert job["status"] == "completed"
+
+        events_resp = client.get(f"/research/{job_id}/events", headers=API_HEADERS)
+        assert events_resp.status_code == 200
+        text = events_resp.text
+
+        # Verify step events were streamed
+        assert "event: step" in text
+        assert '"step": "provider_start"' in text
+        assert '"step": "generating"' in text
+        assert '"step": "response_valid"' in text
+        assert '"response_markdown":' in text
+        assert '"status": "ok"' in text
+
+
+def test_sse_emits_failure_step_when_adapter_fails(monkeypatch: MonkeyPatch) -> None:
+    from app.adapters.browser_base import ProviderNeedsUserAction
+
+    async def failing_ask(self, prompt: str, *, timeout_s: int, mode: str = "default", on_step=None) -> ProviderResult:
+        raise ProviderNeedsUserAction("Simulated login failure on test provider")
+
+    monkeypatch.setattr(FakeAdapter, "ask", failing_ask)
+    monkeypatch.setattr(pipeline, "create_adapter", lambda provider: FakeAdapter(provider))
+
+    with TestClient(app) as client:
+        accepted = client.post(
+            "/research",
+            headers=API_HEADERS,
+            json={"query": "Test failing provider SSE", "providers": ["copilot"]},
+        )
+        assert accepted.status_code == 202
+        job_id = accepted.json()["job_id"]
+
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            job = client.get(f"/research/{job_id}", headers=API_HEADERS).json()
+            if job["status"] in {"needs_user_action", "failed"}:
+                break
+            time.sleep(0.02)
+
+        events_resp = client.get(f"/research/{job_id}/events", headers=API_HEADERS)
+        assert events_resp.status_code == 200
+        text = events_resp.text
+
+        assert "event: step" in text
+        assert '"step": "failed"' in text
+        assert "Simulated login failure on test provider" in text
+        assert '"status": "needs_user_action"' in text

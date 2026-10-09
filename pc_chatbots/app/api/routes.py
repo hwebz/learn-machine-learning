@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncIterator
+from typing import Any
 from uuid import uuid4
 
 from openai import AsyncOpenAI
@@ -104,7 +105,14 @@ async def create_research(payload: ResearchRequest, request: Request) -> Researc
     )
     async with SessionLocal() as session:
         session.add(job)
-        session.add(JobEvent(job_id=job_id, status="queued", subtasks_total=job.subtasks_total, subtasks_done=0))
+        session.add(JobEvent(
+            job_id=job_id,
+            status="queued",
+            event_type="progress",
+            message="Job nghiên cứu đã được đưa vào hàng đợi xử lý.",
+            subtasks_total=job.subtasks_total,
+            subtasks_done=0,
+        ))
         await session.commit()
     await request.app.state.job_queue.put(job_id)
     logger.info("research_job_queued", job_id=job_id, providers=payload.providers)
@@ -132,16 +140,31 @@ async def research_events(job_id: str) -> StreamingResponse:
                 return
             for event in events:
                 last_event_id = event.id or last_event_id
-                data = {
+                event_type = getattr(event, "event_type", None) or "progress"
+                data: dict[str, Any] = {
                     "job_id": job_id,
                     "status": event.status,
+                    "event_type": event_type,
                     "progress": {"subtasks_total": event.subtasks_total, "subtasks_done": event.subtasks_done},
                 }
-                yield f"id: {last_event_id}\nevent: progress\ndata: {json.dumps(data)}\n\n"
+                if getattr(event, "provider", None):
+                    data["provider"] = event.provider
+                if getattr(event, "step", None):
+                    data["step"] = event.step
+                if getattr(event, "message", None):
+                    data["message"] = event.message
+                if getattr(event, "data_json", None):
+                    try:
+                        data["data"] = json.loads(event.data_json)
+                    except Exception:
+                        data["data"] = event.data_json
+
+                yield f"id: {last_event_id}\nevent: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
             if job.status in {"completed", "partial", "failed", "needs_user_action", "cancelled"} and not events:
                 yield "event: done\ndata: {}\n\n"
                 return
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(0.25)
 
     return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 

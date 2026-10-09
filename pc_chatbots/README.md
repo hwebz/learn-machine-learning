@@ -153,7 +153,7 @@ curl --location 'http://127.0.0.1:8000/research' \
 | `/research` | `POST` | `X-API-Key: changeme`<br>`Content-Type: application/json` | Tạo job nghiên cứu mới. Trả về `202 Accepted` với `{ "job_id": "uuid" }`. |
 | `/research/{job_id}` | `GET` | `X-API-Key: changeme` | Lấy tiến độ xử lý và toàn bộ nội dung báo cáo Markdown (`report_markdown`) khi hoàn tất. |
 | `/research/{job_id}/cancel` | `POST` | `X-API-Key: changeme` | Hủy an toàn job đang thực hiện. |
-| `/research/{job_id}/events` | `GET` | `X-API-Key: changeme`<br>`Accept: text/event-stream` | Theo dõi thời gian thực sự thay đổi trạng thái qua Server-Sent Events (SSE). |
+| `/research/{job_id}/events` | `GET` | `X-API-Key: changeme`<br>`Accept: text/event-stream` | Theo dõi tiến độ thời gian thực (real-time granular tracking) qua Server-Sent Events (SSE). |
 
 #### Cấu trúc Body mẫu (`POST /research`)
 
@@ -166,6 +166,124 @@ curl --location 'http://127.0.0.1:8000/research' \
 }
 ```
 Các providers khả dụng: `copilot`, `gemini`, `qwen`, `chatgpt`, `claude`, `deepseek`, `perplexity`, `kimi`, `grok`, `meta`, `mistral`, `pi`, `zhipu`, `minimax`.
+
+### Real-Time Status Tracking qua SSE (`/research/{job_id}/events`)
+
+Endpoint SSE trả về dòng sự kiện liên tục theo chuẩn HTTP `text/event-stream`. Client (Web UI, Mobile, hoặc Postman) có thể lắng nghe 3 loại event:
+
+1. **`event: progress`**: Cập nhật giai đoạn tổng thể (`planning`, `researching`, `extracting`, `verifying`, `synthesizing`, `completed`, `partial`, `failed`, `cancelled`).
+2. **`event: step`**: Cập nhật chi tiết từng bước tự động hóa của từng chatbot đang chạy.
+3. **`event: done`**: Báo hiệu job đã kết thúc hoàn toàn (client có thể đóng kết nối).
+
+#### Các bước cụ thể (`step`) của từng Chatbot:
+
+| Bước (`step`) | Mô tả chi tiết |
+|---|---|
+| `provider_start` | Bắt đầu xử lý với provider (ví dụ Copilot `1/3`). |
+| `waiting_turn` | Chuẩn bị tài nguyên trình duyệt / giãn cách thời gian ngẫu nhiên (jitter). |
+| `navigating` | Đang mở tab trình duyệt và truy cập URL của chatbot. |
+| `checking_auth` | Đang kiểm tra trạng thái đăng nhập hoặc phát hiện CAPTCHA. |
+| `recovering_auth` | Phát hiện màn hình đăng nhập, đang thử tự khôi phục phiên (với tài khoản đã lưu). |
+| `locating_input` | Đang tìm kiếm ô nhập prompt trên trang web. |
+| `entering_prompt` | Đang gõ câu hỏi vào ô chat. |
+| `submitting` | Đã gửi câu hỏi, bắt đầu chờ phản hồi. |
+| `generating` | Đang chờ chatbot sinh câu trả lời (tối đa theo timeout). |
+| `retrying` | Phát hiện chatbot thông báo nghẽn/bận, tự động bấm thử lại (Retry). |
+| `extracting` | Đang trích xuất nội dung câu trả lời Markdown và danh sách link trích dẫn. |
+| `response_valid` | **Hoàn tất thành công**: Chatbot trả về câu trả lời hợp lệ (kèm full text Markdown, preview, sources). |
+| `response_partial` | Chatbot chỉ trả về câu trả lời một phần (do timeout hoặc bị ngắt). |
+| `failed` | **Thất bại**: Chi tiết nguyên nhân lỗi (`error`), trạng thái và danh sách file artifacts debug. |
+
+#### Dữ liệu mẫu nhận được từ SSE:
+
+**Khi đang xử lý từng bước (`event: step`):**
+```json
+{
+  "job_id": "8b51dcf8-a28d-4f11-97b7-6f81e695d732",
+  "status": "researching",
+  "event_type": "step",
+  "progress": { "subtasks_total": 3, "subtasks_done": 0 },
+  "provider": "copilot",
+  "step": "generating",
+  "message": "Đang đợi copilot sinh câu trả lời (thời gian tối đa 1200s)..."
+}
+```
+
+**Khi chatbot trả về kết quả hợp lệ (`step: response_valid`):**
+```json
+{
+  "job_id": "8b51dcf8-a28d-4f11-97b7-6f81e695d732",
+  "status": "researching",
+  "event_type": "step",
+  "progress": { "subtasks_total": 3, "subtasks_done": 0 },
+  "provider": "copilot",
+  "step": "response_valid",
+  "message": "copilot đã trả về phản hồi hợp lệ.",
+  "data": {
+    "status": "ok",
+    "provider": "copilot",
+    "response_length": 2450,
+    "response_preview": "Gradient Descent (Hạ độ dốc) là thuật toán tối ưu hóa nền tảng...",
+    "response_markdown": "# Gradient Descent\n\nGradient Descent là thuật toán...",
+    "sources_count": 3,
+    "sources": [
+      { "url": "https://machinelearningcoban.com/2017/01/12/gradient_descent/", "title": "Gradient Descent cơ bản" }
+    ],
+    "conversation_url": "https://copilot.microsoft.com/chats/abc123xyz",
+    "elapsed_ms": 15820
+  }
+}
+```
+
+**Khi chatbot gặp sự cố (`step: failed`):**
+```json
+{
+  "job_id": "8b51dcf8-a28d-4f11-97b7-6f81e695d732",
+  "status": "researching",
+  "event_type": "step",
+  "progress": { "subtasks_total": 3, "subtasks_done": 1 },
+  "provider": "qwen",
+  "step": "failed",
+  "message": "qwen thất bại: Blocked (login): Please sign in to continuing...",
+  "data": {
+    "status": "needs_user_action",
+    "provider": "qwen",
+    "error": "Blocked (login): Please sign in to continuing. Complete login/CAPTCHA in the browser, then retry.",
+    "artifact_paths": ["data/artifacts/ui-qwen-1773099999.png"],
+    "elapsed_ms": 4200
+  }
+}
+```
+
+#### Code mẫu Client lắng nghe SSE (JavaScript / React):
+
+```javascript
+const evtSource = new EventSource("http://127.0.0.1:8000/research/" + jobId + "/events");
+
+// Lắng nghe tiến độ chung
+evtSource.addEventListener("progress", (e) => {
+  const data = JSON.parse(e.data);
+  console.log(`[Tiến độ ${data.status}] ${data.progress.subtasks_done}/${data.progress.subtasks_total} - ${data.message}`);
+});
+
+// Lắng nghe chi tiết từng bước của từng chatbot
+evtSource.addEventListener("step", (e) => {
+  const data = JSON.parse(e.data);
+  console.log(`[${data.provider}] Bước: ${data.step} -> ${data.message}`);
+
+  if (data.step === "response_valid") {
+    console.log("Câu trả lời hợp lệ:", data.data.response_markdown);
+  } else if (data.step === "failed") {
+    console.error("Lỗi chatbot:", data.data.error, "Trạng thái:", data.data.status);
+  }
+});
+
+// Khi kết thúc toàn bộ job
+evtSource.addEventListener("done", () => {
+  console.log("Job nghiên cứu đã hoàn tất!");
+  evtSource.close();
+});
+```
 
 
 ## Tests

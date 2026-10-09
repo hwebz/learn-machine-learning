@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 
-from app.adapters.base import HealthStatus, ProviderResult, Source
+from app.adapters.base import HealthStatus, ProviderResult, Source, StepCallback
 from app.core.config import settings
 
 
@@ -34,11 +34,21 @@ class PerplexityAgentAdapter:
         detail = "Official API key configured" if configured else "Set PERPLEXITY_API_KEY to enable live research"
         return HealthStatus(logged_in=configured, selectors_ok=configured, detail=detail)
 
-    async def ask(self, prompt: str, *, timeout_s: int, mode: str = "default") -> ProviderResult:
+    async def ask(
+        self,
+        prompt: str,
+        *,
+        timeout_s: int,
+        mode: str = "default",
+        on_step: StepCallback | None = None,
+    ) -> ProviderResult:
         started_at = datetime.now(timezone.utc)
         preset = "high" if mode == "deep" else self.preset
         if not self.api_key:
             raise RuntimeError("PERPLEXITY_API_KEY is not configured")
+
+        if on_step is not None:
+            await on_step("requesting", "Đang gửi yêu cầu đến Perplexity Agent API...", {"preset": preset})
 
         timeout = httpx.Timeout(timeout_s)
         async with httpx.AsyncClient(
@@ -50,6 +60,9 @@ class PerplexityAgentAdapter:
             response = await client.post(self.endpoint, json={"preset": preset, "input": prompt})
         if response.is_error:
             raise RuntimeError(f"Perplexity Agent API returned HTTP {response.status_code}")
+
+        if on_step is not None:
+            await on_step("extracting", "Đang phân tích phản hồi từ Perplexity API...", None)
 
         payload = response.json()
         answer = _answer_text(payload)

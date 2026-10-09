@@ -22,9 +22,28 @@ engine = create_async_engine(settings.db_url, connect_args={"check_same_thread":
 SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
+from sqlalchemy import text
+
+
 async def init_db() -> None:
     async with engine.begin() as connection:
         await connection.run_sync(SQLModel.metadata.create_all)
+
+        def _migrate_jobevent(sync_conn) -> None:
+            result = sync_conn.execute(text("PRAGMA table_info(jobevent)"))
+            cols = [row[1] for row in result.fetchall()]
+            new_cols = {
+                "event_type": "VARCHAR DEFAULT 'progress'",
+                "provider": "VARCHAR",
+                "step": "VARCHAR",
+                "message": "VARCHAR",
+                "data_json": "TEXT",
+            }
+            for col_name, col_type in new_cols.items():
+                if col_name not in cols:
+                    sync_conn.execute(text(f"ALTER TABLE jobevent ADD COLUMN {col_name} {col_type}"))
+
+        await connection.run_sync(_migrate_jobevent)
 
 
 async def close_db() -> None:

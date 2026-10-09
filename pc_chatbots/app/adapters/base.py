@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, Protocol
+from typing import Any, Awaitable, Callable, Literal, Protocol
 
 from pydantic import BaseModel, HttpUrl
+
+StepCallback = Callable[[str, str, dict[str, Any] | None], Awaitable[None]]
 
 
 class Source(BaseModel):
@@ -36,5 +38,12 @@ class ProviderAdapter(Protocol):
 
     async def health(self) -> HealthStatus: ...
 
-    async def ask(self, prompt: str, *, timeout_s: int, mode: str = "default") -> ProviderResult: ...
+    async def ask(
+        self,
+        prompt: str,
+        *,
+        timeout_s: int,
+        mode: str = "default",
+        on_step: StepCallback | None = None,
+    ) -> ProviderResult: ...
 

@@ -34,6 +34,11 @@ class JobEvent(SQLModel, table=True):
     subtasks_total: int = 0
     subtasks_done: int = 0
     created_at: datetime = Field(default_factory=utc_now)
+    event_type: str = Field(default="progress")
+    provider: str | None = Field(default=None, index=True)
+    step: str | None = Field(default=None)
+    message: str | None = Field(default=None)
+    data_json: str | None = Field(default=None)
 
 
 class Subtask(SQLModel, table=True):
