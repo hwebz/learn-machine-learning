@@ -8,8 +8,14 @@ from app.adapters.base import HealthStatus, ProviderResult, Source
 class FakeAdapter:
     """Deterministic local adapter used to exercise the job lifecycle."""
 
+    _KNOWN_PROVIDERS = {
+        "perplexity", "gemini", "chatgpt", "claude", "copilot",
+        "qwen", "kimi", "deepseek", "zhipu", "grok",
+        "minimax", "meta", "pi", "mistral",
+    }
+
     def __init__(self, name: str) -> None:
-        if name not in {"perplexity", "gemini"}:
+        if name not in self._KNOWN_PROVIDERS:
             raise ValueError(f"Unsupported fake provider: {name}")
         self.name = name
 

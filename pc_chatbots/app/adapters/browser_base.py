@@ -16,7 +16,7 @@ from app.browser.artifacts import save_artifacts
 from app.browser.extraction import html_to_markdown, normalize_sources
 from app.browser.locators import resolve_locator
 from app.browser.session import BrowserSession
-from app.browser.waits import wait_for_completion
+from app.browser.waits import wait_for_completion, wait_for_input
 from app.core.config import settings
 
 logger = structlog.get_logger(__name__)
@@ -173,6 +173,35 @@ class BrowserProviderAdapter(ABC):
             return []
         return normalize_sources(pairs)
 
+    async def attempt_login_recovery(self, page: Any) -> bool:
+        """Best-effort recovery when the site shows a login screen. Returns True
+        once the page is past the login wall (e.g., a remembered-account tile was
+        clicked and navigation completed). Base implementation never recovers;
+        sites that remember the account (Copilot) override this."""
+        return False
+
+    async def _retry_button_visible(self, page: Any) -> bool:
+        """Return True if a site-specific retry button is visible and click it.
+        Used when the model returns a transient error (e.g., Kimi busy).
+        Subclasses declare 'retry_indicator' in selectors.yaml; base does nothing."""
+        chain = self._cfg.get("retry_indicator")
+        if not chain:
+            return False
+        locator, _ = await resolve_locator(page, chain)
+        if locator is None:
+            return False
+        try:
+            count = await locator.count()
+            if count == 0:
+                return False
+            btn = locator.first
+            if await btn.is_visible(timeout=2000):
+                await btn.click(timeout=5000)
+                return True
+        except Exception:  # noqa: BLE001
+            return False
+        return False
+
     # ------------------------------------------------------------- ask flow
 
     async def ask(self, prompt: str, *, timeout_s: int, mode: str = "default") -> ProviderResult:
@@ -203,12 +232,23 @@ class BrowserProviderAdapter(ABC):
 
                     blocking = await detect_blocking_state(page, self._selectors.get("blocking", {}))
                     if blocking is not None:
-                        status = "needs_user_action"
-                        error = f"Blocked ({blocking.kind}): {blocking.detail}. Complete login/CAPTCHA in the browser, then retry."
+                        # Best-effort recovery for remembered-account login screens
+                        # (e.g., Copilot's "Pick an account" tile) before giving up.
+                        recovered = False
+                        if blocking.kind == "login":
+                            recovered = await self.attempt_login_recovery(page)
+                            if recovered:
+                                blocking = await detect_blocking_state(page, self._selectors.get("blocking", {}))
+                        if blocking is not None:
+                            status = "needs_user_action"
+                            error = f"Blocked ({blocking.kind}): {blocking.detail}. Complete login/CAPTCHA in the browser, then retry."
                     else:
                         await self._select_mode(page, mode)
 
-                        input_locator, _ = await resolve_locator(page, self._cfg.get("question_input", []))
+                        # SPA editors (e.g., Mistral) can take several seconds to hydrate
+                        # depending on network conditions — poll until the input appears
+                        # instead of sleeping a fixed amount.
+                        input_locator = await wait_for_input(page, self._cfg.get("question_input", []))
                         if input_locator is None:
                             status = "error"
                             error = "Question input locator not found — selectors may be stale. See selectors.yaml and data/artifacts."
@@ -242,13 +282,36 @@ class BrowserProviderAdapter(ABC):
                                 else:
                                     await submit_locator.click()
                             if status not in {"error", "needs_user_action"}:
+                                # Per-provider completion overrides (e.g., Mistral's
+                                # done_marker_delay_s) take precedence over global defaults.
+                                completion_cfg = {**self._selectors.get("completion", {}),
+                                                  **(self._cfg.get("completion") or {})}
                                 completion = await wait_for_completion(
                                     page,
                                     provider_cfg=self._cfg,
                                     blocking=self._selectors.get("blocking", {}),
-                                    completion_cfg=self._selectors.get("completion", {}),
+                                    completion_cfg=completion_cfg,
                                     timeout_s=timeout_s,
                                 )
+                                # Some sites (e.g., Kimi) finish with "System is
+                                # currently busy..." and a Retry button — retry a
+                                # couple of times before giving up.
+                                retries = 0
+                                max_retries = int(self._cfg.get("max_retries", 2))
+                                while (
+                                    completion.reason in {"timeout", "stable", "done_marker"}
+                                    and retries < max_retries
+                                    and await self._retry_button_visible(page)
+                                ):
+                                    retries += 1
+                                    logger.info("answer_retry", provider=self.name, attempt=retries)
+                                    completion = await wait_for_completion(
+                                        page,
+                                        provider_cfg=self._cfg,
+                                        blocking=self._selectors.get("blocking", {}),
+                                        completion_cfg=completion_cfg,
+                                        timeout_s=timeout_s,
+                                    )
                                 completion_text = completion.text
                                 if completion.reason == "blocked":
                                     status = "needs_user_action"

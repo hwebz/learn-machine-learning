@@ -15,7 +15,8 @@ def test_load_selectors_parses_and_validates() -> None:
 
 def test_providers_have_required_keys() -> None:
     selectors = load_selectors()
-    for provider in ("perplexity", "gemini"):
+    assert len(selectors["providers"]) >= 14
+    for provider in selectors["providers"]:
         cfg = provider_selectors(selectors, provider)
         for key in ("new_chat_url", "question_input", "submit", "answer_container", "source_links"):
             assert key in cfg, f"provider {provider} missing key {key}"

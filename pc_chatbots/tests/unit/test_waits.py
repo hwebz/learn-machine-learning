@@ -47,8 +47,11 @@ def test_classify_blocking_kinds() -> None:
 def test_evaluate_completion_signals() -> None:
     # (1) input enabled AND (2) stable
     assert evaluate_completion(input_editable=True, text_stable=True, done_marker_visible=False) == (True, "stable")
-    # (2) done marker visible wins even mid-generation
-    assert evaluate_completion(input_editable=False, text_stable=False, done_marker_visible=True, generating=True) == (True, "done_marker")
+    # done marker mid-generation does NOT complete (ChatGPT renders the user's
+    # copy button while still streaming the answer)
+    assert evaluate_completion(input_editable=False, text_stable=False, done_marker_visible=True, generating=True) == (False, "in_progress")
+    # done marker after generation finishes completes
+    assert evaluate_completion(input_editable=False, text_stable=False, done_marker_visible=True, generating=False) == (True, "done_marker")
     # generating indicator active suppresses stable
     assert evaluate_completion(input_editable=True, text_stable=True, done_marker_visible=False, generating=True) == (False, "in_progress")
     # input still disabled (submitting)

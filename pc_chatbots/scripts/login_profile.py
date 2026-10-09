@@ -8,12 +8,16 @@ from app.browser.session import BrowserSession
 from app.core.config import settings
 
 
-def _provider_urls() -> list[tuple[str, str]]:
+import argparse
+
+
+def _provider_urls(provider_name: str | None = None) -> list[tuple[str, str]]:
     from app.adapters.selectors_loader import load_selectors, provider_selectors
 
     selectors = load_selectors()
     urls: list[tuple[str, str]] = []
-    for name in ("perplexity", "gemini"):
+    providers = [provider_name] if provider_name else list(selectors.get("providers", {}).keys())
+    for name in providers:
         try:
             cfg = provider_selectors(selectors, name)
             urls.append((name, cfg["new_chat_url"]))
@@ -23,26 +27,35 @@ def _provider_urls() -> list[tuple[str, str]]:
 
 
 async def main() -> int:
-    """Open the automation Chrome profile at both chatbot sites so you can log in once.
+    """Open the automation Chrome profile at chatbot sites so you can log in once.
 
     The profile persists under BROWSER_PROFILE_DIR. After logging in, press Enter
     in this terminal to close the browser cleanly. Login cookies are stored in the
     profile — this script never extracts or logs them.
     """
+    parser = argparse.ArgumentParser(description="Log in to chatbot sites with persistent Chrome profile")
+    parser.add_argument("--provider", default=None, help="Specific provider to open (e.g. chatgpt, claude)")
+    args = parser.parse_args()
+
     profile_dir: Path = settings.browser_profile_dir
     profile_dir.mkdir(parents=True, exist_ok=True)
     print(f"Profile dir: {profile_dir.resolve()}")
     print("A headed Chrome window will open at each chatbot site.")
     print("Sign in to any site that shows a login page, then return here.\n")
 
+    urls = _provider_urls(args.provider)
+    if not urls:
+        print(f"No valid providers found matching: {args.provider}")
+        return 1
+
     session = BrowserSession.instance()
     try:
         await session.start()
-        for name, url in _provider_urls():
+        for name, url in urls:
             page = await session.new_page(url)
             print(f"Opened {name}: {url}")
             try:
-                await asyncio.to_thread(input, "Log in if needed, then press Enter to open the next site... ")
+                await asyncio.to_thread(input, f"Log in to {name} if needed, then press Enter to continue... ")
             finally:
                 try:
                     await page.close()

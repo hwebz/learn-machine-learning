@@ -11,6 +11,18 @@ from app.adapters.fake import FakeAdapter
 from app.adapters.gemini_ui import GeminiUIAdapter
 from app.adapters.perplexity_api import PerplexityAgentAdapter
 from app.adapters.perplexity_ui import PerplexityUIAdapter
+from app.adapters.chatgpt_ui import ChatGPTUIAdapter
+from app.adapters.claude_ui import ClaudeUIAdapter
+from app.adapters.copilot_ui import CopilotUIAdapter
+from app.adapters.deepseek_ui import DeepSeekUIAdapter
+from app.adapters.grok_ui import GrokUIAdapter
+from app.adapters.kimi_ui import KimiUIAdapter
+from app.adapters.meta_ui import MetaUIAdapter
+from app.adapters.minimax_ui import MinimaxUIAdapter
+from app.adapters.mistral_ui import MistralUIAdapter
+from app.adapters.pi_ui import PiUIAdapter
+from app.adapters.qwen_ui import QwenUIAdapter
+from app.adapters.zhipu_ui import ZhipuUIAdapter
 from app.api.schemas import ResearchRequest
 from app.core.config import settings
 from app.core.db import SessionLocal
@@ -25,15 +37,33 @@ class AdapterNeedsUserAction(RuntimeError):
     pass
 
 
+# Maps provider name -> UI adapter class for browser automation mode.
+_UI_ADAPTERS: dict[str, type] = {
+    "perplexity": PerplexityUIAdapter,
+    "gemini": GeminiUIAdapter,
+    "chatgpt": ChatGPTUIAdapter,
+    "claude": ClaudeUIAdapter,
+    "copilot": CopilotUIAdapter,
+    "deepseek": DeepSeekUIAdapter,
+    "grok": GrokUIAdapter,
+    "kimi": KimiUIAdapter,
+    "meta": MetaUIAdapter,
+    "minimax": MinimaxUIAdapter,
+    "mistral": MistralUIAdapter,
+    "pi": PiUIAdapter,
+    "qwen": QwenUIAdapter,
+    "zhipu": ZhipuUIAdapter,
+}
+
+
 def create_adapter(provider: str) -> ProviderAdapter:
     mode = settings.research_adapter_mode
     if mode == "fake":
         return FakeAdapter(provider)
     if mode == "ui":
-        if provider == "perplexity":
-            return PerplexityUIAdapter()
-        if provider == "gemini":
-            return GeminiUIAdapter()
+        adapter_cls = _UI_ADAPTERS.get(provider)
+        if adapter_cls is not None:
+            return adapter_cls()
         raise AdapterNeedsUserAction(f"No UI adapter configured for provider: {provider}")
     if mode == "official_api":
         if provider == "perplexity":

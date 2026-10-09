@@ -5,7 +5,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-ProviderName = Literal["perplexity", "gemini"]
+ProviderName = Literal[
+    "perplexity", "gemini", "chatgpt", "claude", "copilot",
+    "qwen", "kimi", "deepseek", "zhipu", "grok",
+    "minimax", "meta", "pi", "mistral",
+]
 JobStatus = Literal[
     "queued", "planning", "researching", "extracting", "verifying", "synthesizing",
     "completed", "partial", "failed", "needs_user_action", "cancelled",

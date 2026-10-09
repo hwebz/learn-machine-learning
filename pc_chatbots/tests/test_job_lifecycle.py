@@ -53,6 +53,30 @@ def test_fake_pipeline_completes_and_sse_replays_transitions(monkeypatch: Monkey
             assert f'"status": "{phase}"' in events.text
 
 
+def test_fake_pipeline_with_new_chatbot_providers(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(pipeline, "create_adapter", lambda provider: FakeAdapter(provider))
+    with TestClient(app) as client:
+        providers = ["chatgpt", "claude", "deepseek", "grok", "copilot", "qwen", "kimi"]
+        accepted = client.post(
+            "/research",
+            headers=API_HEADERS,
+            json={"query": "Test across new providers", "providers": providers},
+        )
+        assert accepted.status_code == 202
+        job_id = accepted.json()["job_id"]
+
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            job = client.get(f"/research/{job_id}", headers=API_HEADERS).json()
+            if job["status"] == "completed":
+                break
+            time.sleep(0.02)
+
+        assert job["status"] == "completed"
+        assert job["progress"]["subtasks_total"] == len(providers)
+        assert len(job["provider_runs"]) == len(providers)
+
+
 def test_cancel_unknown_job_returns_not_found() -> None:
     with TestClient(app) as client:
         response = client.post("/research/missing/cancel", headers=API_HEADERS)

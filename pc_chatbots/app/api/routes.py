@@ -14,8 +14,7 @@ from sqlmodel import select
 from app.api.auth import require_api_key
 from app.api.schemas import ResearchAccepted, ResearchRequest, ResearchResponse
 from app.adapters.perplexity_api import PerplexityAgentAdapter
-from app.adapters.gemini_ui import GeminiUIAdapter
-from app.adapters.perplexity_ui import PerplexityUIAdapter
+from app.orchestrator.pipeline import _UI_ADAPTERS
 from app.core.db import SessionLocal
 from app.core.config import settings
 from app.core.models import Job, JobEvent
@@ -73,21 +72,22 @@ async def health(request: Request) -> dict[str, object]:
 
     perplexity_health = await PerplexityAgentAdapter().health()
 
+    # Build per-provider health dict dynamically from the UI adapter registry.
+    adapters_health: dict[str, dict[str, object]] = {}
+    for name, adapter_cls in sorted(_UI_ADAPTERS.items()):
+        entry: dict[str, object] = {"ui": await _safe_ui_health(adapter_cls)}
+        # Attach official API health for providers that have one.
+        if name == "perplexity":
+            entry["api_key_configured"] = perplexity_health.logged_in
+            entry["api_detail"] = perplexity_health.detail
+        entry.setdefault("detail", "Official API adapter not implemented yet")
+        adapters_health[name] = entry
+
     return {
         "status": "ok",
         "router_reachable": router_reachable,
         "adapter_mode": settings.research_adapter_mode,
-        "adapters": {
-            "perplexity": {
-                "api_key_configured": perplexity_health.logged_in,
-                "api_detail": perplexity_health.detail,
-                "ui": await _safe_ui_health(PerplexityUIAdapter),
-            },
-            "gemini": {
-                "ui": await _safe_ui_health(GeminiUIAdapter),
-                "detail": "Official API adapter not implemented yet",
-            },
-        },
+        "adapters": adapters_health,
         "worker_running": request.app.state.worker_task is not None and not request.app.state.worker_task.done(),
     }
 

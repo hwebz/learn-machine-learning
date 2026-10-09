@@ -102,7 +102,12 @@ class BrowserSession:
     # ------------------------------------------------------------------ pages
 
     async def new_page(self, url: str) -> Any:
-        """Open a new tab at ``url`` against the persistent context.
+        """Open a tab at ``url`` against the persistent context.
+
+        Reuses an existing blank/about:blank tab when one is available (the
+        persistent context opens one by default), otherwise creates a new tab.
+        This avoids the two-tab clutter (one idle about:blank + one automation
+        tab) seen in headed runs.
 
         Waits for ``domcontentloaded`` (30s cap) then a short settle delay so
         SPAs (Perplexity, Gemini) can hydrate before the caller probes the DOM.
@@ -112,14 +117,31 @@ class BrowserSession:
 
         await self.start()
         assert self._ctx is not None  # narrowed for type checkers
-        page = await self._ctx.new_page()
+
+        # Reuse an existing blank tab if one is free (single-page, no prior use).
+        page = None
         try:
+            for existing in self._ctx.pages:
+                if existing.url in ("about:blank", "") and not existing.is_closed():
+                    page = existing
+                    logger.info("page_reused_blank_tab")
+                    break
+        except Exception:  # noqa: BLE001 — fall through and just open a new tab
+            page = None
+
+        if page is None:
+            page = await self._ctx.new_page()
+
+        try:
+            # Navigate immediately; the page is already in memory (reused blank tab
+            # or fresh new_page), so we don't wait for browser startup here.
             await page.goto(url, wait_until="domcontentloaded", timeout=30000)
         except Exception as exc:  # noqa: BLE001 — don't hang on slow SPA navigation
             logger.warning("page_goto_slow", url=url, error=str(exc))
         # SPAs with persistent sockets never reach networkidle, so a short
         # settle delay is more reliable than wait_for_load_state here.
-        await asyncio.sleep(2.0)
+        # Reduced from 2s to 1s; most SPAs have hydrated by then.
+        await asyncio.sleep(1.0)
         return page
 
     @asynccontextmanager

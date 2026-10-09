@@ -11,6 +11,10 @@ completion:
   poll_interval_s: 2
   min_poll_s: 1.5
   max_poll_s: 3.0
+  # Optional: delay after done_marker (copy button) appears before considering
+  # the answer complete. Mistral renders the copy button skeleton before the
+  # answer text is populated; 2s lets the content hydrate.
+  done_marker_delay_s: 0
 
 blocking:
   url_patterns:
@@ -18,14 +22,21 @@ blocking:
     - "/auth/login"
     - "/login"
     - "/signin"
+    - "login.microsoftonline.com"
+    - "auth0.com"
+    - "x.com/i/flow/login"
   text_patterns:
     - "Verify you are human"
     - "unusual traffic"
     - "captcha"
     - "Sign in to continue"
     - "rate limit"
+    - "Too many requests"
+    # "Please try again later" is too broad — catches Kimi's "System is currently busy..."
+    # instead of a real CAPTCHA/login wall. Keep per-provider overrides if needed.
 
 providers:
+  # ─────────────────────────────────────── Perplexity
   perplexity:
     new_chat_url: "https://www.perplexity.ai/"
     question_input:
@@ -60,6 +71,8 @@ providers:
       - { css: ".prose a[href^='http']" }
       - { css: "a:has(span.citation)" }
       - { css: "a[href^='http']:has(span.sr-only)" }
+
+  # ─────────────────────────────────────── Gemini
   gemini:
     new_chat_url: "https://gemini.google.com/app"
     question_input:
@@ -91,3 +104,358 @@ providers:
     source_links:
       - { css: "a[data-test-id='cite-link']" }
       - { css: "a[href][target='_blank']:has(.citation-pill)" }
+
+  # ─────────────────────────────────────── ChatGPT
+  chatgpt:
+    new_chat_url: "https://chatgpt.com/"
+    question_input:
+      - { css: "#prompt-textarea" }
+      - { css: "div[contenteditable='true'].ProseMirror" }
+      - { role: textbox }
+      - { css: "[contenteditable='true']" }
+    submit:
+      - { testid: send-button }
+      - { css: "button[data-testid='send-button']" }
+      - { css: "button[aria-label*='Send' i]" }
+    mode_selectors:
+      research_mode:
+        - { role: button, name: "Deep research" }
+        - { css: "button[data-testid='deep-research']" }
+    generating_indicator:
+      - { css: "button[data-testid='stop-button']" }
+      - { css: "button[aria-label*='Stop' i]" }
+      - { role: button, name: "Stop generating" }
+    done_indicator:
+      - { css: "button[aria-label*='Copy' i]" }
+      - { css: "button[data-testid='copy-turn-action-button']" }
+    answer_container:
+      - { css: "div[data-message-author-role='assistant'] .markdown" }
+      - { css: "div[data-message-author-role='assistant']" }
+      - { css: "div.markdown.prose" }
+    source_links:
+      - { css: "div[data-message-author-role='assistant'] a[href^='http']" }
+
+  # ─────────────────────────────────────── Claude
+  claude:
+    new_chat_url: "https://claude.ai/new"
+    question_input:
+      - { css: "div.ProseMirror[contenteditable='true']" }
+      - { css: "[contenteditable='true']" }
+      - { role: textbox }
+    submit:
+      - { css: "button[aria-label*='Send' i]" }
+      - { css: "button[data-testid='send-message']" }
+      - { role: button, name: "Send Message" }
+    mode_selectors:
+      extended_thinking:
+        - { css: "button[data-testid='extended-thinking-toggle']" }
+        - { role: button, name: "Extended thinking" }
+    generating_indicator:
+      - { css: "button[aria-label*='Stop' i]" }
+      - { role: button, name: "Stop Response" }
+    done_indicator:
+      - { css: "button[aria-label*='Copy' i]" }
+      - { css: "button[data-testid='copy-response']" }
+    answer_container:
+      - { css: "div[data-is-streaming] .markdown" }
+      - { css: "div.font-claude-message" }
+      - { css: "div[class*='response'] .markdown" }
+      - { css: ".prose" }
+    source_links:
+      - { css: "div.font-claude-message a[href^='http']" }
+      - { css: ".prose a[href^='http']" }
+
+  # ─────────────────────────────────────── Microsoft 365 Copilot
+  copilot:
+    new_chat_url: "https://m365.cloud.microsoft/chat"
+    question_input:
+      - { role: textbox }
+      - { css: "#searchbox" }
+      - { css: "textarea" }
+      - { css: "[contenteditable='true']" }
+    submit:
+      - { css: "button[aria-label*='Send' i]" }
+      - { css: "button[aria-label*='Submit' i]" }
+      - { role: button, name: "Send" }
+    generating_indicator:
+      - { css: "button[aria-label*='Stop' i]" }
+      - { role: button, name: "Stop responding" }
+    done_indicator:
+      - { css: "button[aria-label*='Copy' i]" }
+    answer_container:
+      - { css: "[data-testid='markdown-reply']" }
+      - { css: "[data-testid='chat-response-message']" }
+      - { css: "[data-testid='lastChatMessage']" }
+      - { css: "div[class*='response'] .markdown" }
+      - { css: "div.ac-textBlock" }
+      - { css: "[data-content='message-content']" }
+      - { css: ".cib-response .prose" }
+    source_links:
+      - { css: "a[href^='http'][target='_blank']" }
+
+  # ─────────────────────────────────────── Qwen
+  qwen:
+    new_chat_url: "https://chat.qwen.ai/"
+    question_input:
+      - { css: "textarea" }
+      - { css: "[contenteditable='true']" }
+      - { role: textbox }
+    submit:
+      - { css: "button[aria-label*='Send' i]" }
+      - { css: "button[class*='send']" }
+      - { role: button, name: "Send" }
+    mode_selectors:
+      thinking_mode:
+        - { role: button, name: "Thinking" }
+        - { css: "button[class*='thinking']" }
+    generating_indicator:
+      # Outer card only — its children (…-content/-title) persist after thinking
+      # completes and must NOT count as "generating". The card gains the
+      # -completed modifier when thinking finishes ("Thinking completed").
+      - { css: "div.qwen-chat-tool-status-card:not([class*='-completed'])" }
+      - { css: "button[aria-label*='Stop' i]" }
+      - { role: button, name: "Stop" }
+    done_indicator:
+      - { css: "div.response-message-footer button[aria-label='Copy']" }
+      - { css: "button[aria-label*='Copy' i]" }
+      # The thinking card's title text flips to "Thinking completed" — extra rung
+      - { css: "div.qwen-chat-thinking-status-card-title-text" }
+    answer_container:
+      - { css: "div.response-message-content.phase-answer" }
+      - { css: "div.response-message-content" }
+      - { css: "div[class*='message-content'] .markdown-body" }
+      - { css: "div[class*='assistant'] .markdown" }
+      - { css: ".markdown-body" }
+    source_links:
+      - { css: ".markdown-body a[href^='http']" }
+
+  # ─────────────────────────────────────── Kimi
+  kimi:
+    new_chat_url: "https://www.kimi.ai/"
+    question_input:
+      - { css: "[contenteditable='true']" }
+      - { role: textbox }
+      - { css: "textarea" }
+    submit:
+      - { css: "button[aria-label*='Send' i]" }
+      - { css: "button[class*='send']:not([class*='disabled'])" }
+      - { role: button, name: "Send" }
+    mode_selectors:
+      search_mode:
+        - { role: button, name: "Search" }
+        - { css: "button[class*='search']" }
+    generating_indicator:
+      - { css: "div[class*='thinking-container']:not([class*='completed'])" }
+      - { css: "button[aria-label*='Stop' i]" }
+      - { role: button, name: "Stop" }
+    done_indicator:
+      - { css: "div.segment-assistant-actions .icon-button:has(svg[name='Copy'])" }
+      - { css: "div.segment-assistant-actions .simple-button:has(svg[name='Copy'])" }
+      - { css: "button[aria-label*='Copy' i]" }
+    answer_container:
+      - { css: "div.segment-assistant .markdown" }
+      - { css: "div[class*='assistant'] .markdown" }
+      - { css: ".markdown-body" }
+      - { css: "div[class*='answer']" }
+    source_links:
+      - { css: "a[class*='reference']" }
+      - { css: "a[href^='http'][target='_blank']" }
+    # Retry button shown when Kimi returns "System is currently busy..."
+    retry_indicator:
+      - { css: "div.segment-assistant-actions .icon-button:has(svg[name='Refresh'])" }
+
+  # ─────────────────────────────────────── DeepSeek
+  deepseek:
+    new_chat_url: "https://chat.deepseek.com/"
+    question_input:
+      - { css: "textarea" }
+      - { css: "#chat-input" }
+      - { role: textbox }
+      - { css: "[contenteditable='true']" }
+    submit:
+      - { css: "div[role='button'][aria-label*='Send' i]" }
+      - { css: "button[aria-label*='Send' i]" }
+      - { css: "div[class*='send'][role='button']" }
+    mode_selectors:
+      deep_think:
+        - { role: button, name: "DeepThink" }
+        - { css: "div[class*='deep-think']" }
+    generating_indicator:
+      - { css: "div[role='button'][class*='stop']" }
+      - { css: "button[aria-label*='Stop' i]" }
+      - { role: button, name: "Stop" }
+    done_indicator:
+      - { css: "button[aria-label*='Copy' i]" }
+      - { css: "div[class*='copy']" }
+    answer_container:
+      - { css: "div[class*='markdown-body']" }
+      - { css: "div[class*='ds-markdown']" }
+      - { css: ".markdown-body" }
+    source_links:
+      - { css: "a[class*='citation']" }
+      - { css: ".markdown-body a[href^='http']" }
+
+  # ─────────────────────────────────────── Zhipu AI (GLM / ChatGLM)
+  zhipu:
+    new_chat_url: "https://chat.z.ai/"
+    question_input:
+      - { css: "textarea" }
+      - { css: "[contenteditable='true']" }
+      - { role: textbox }
+    submit:
+      - { css: "button[aria-label*='Send' i]" }
+      - { role: button, name: "Send" }
+      - { css: "button[class*='send']" }
+    # NOTE: no generating_indicator — the Send button's disabled state is also the
+    # idle state (empty input), so it cannot distinguish "generating" from "done".
+    # Completion relies on done_marker (Copy button) + stable answer text.
+    # Done when Copy button appears (answer rendered)
+    done_indicator:
+      - { css: "button.copy-response-button" }
+      - { css: "div[aria-label='Copy'] button.copy-response-button" }
+    # Answer is in a <p dir="auto"> inside the message area
+    answer_container:
+      - { css: "p[dir='auto']" }
+      - { css: "div[class*='message'] .markdown" }
+      - { css: ".markdown-body" }
+      - { css: "div[class*='answer']" }
+    source_links:
+      - { css: "a[href^='http'][target='_blank']" }
+
+  # ─────────────────────────────────────── Grok
+  grok:
+    new_chat_url: "https://grok.com/"
+    question_input:
+      - { css: "div.tiptap.ProseMirror[contenteditable='true'][role='textbox'][aria-label='Ask Grok anything']" }
+      - { css: "[contenteditable='true'][role='textbox'][aria-label*='Ask' i]" }
+      - { role: textbox }
+      - { css: "textarea" }
+    submit:
+      - { testid: chat-submit }
+      - { css: "button[aria-label='Submit']" }
+      - { css: "button[aria-label*='Send' i]" }
+      - { role: button, name: "Send" }
+    mode_selectors:
+      deep_search:
+        - { role: button, name: "DeepSearch" }
+        - { css: "button[class*='deep-search']" }
+    generating_indicator:
+      - { css: "button[aria-label*='Stop' i]" }
+      - { role: button, name: "Stop" }
+    done_indicator:
+      - { css: "button[aria-label*='Copy' i]" }
+    answer_container:
+      - { css: "div[class*='message-bubble'] .markdown" }
+      - { css: "div[class*='response'] .markdown" }
+      - { css: ".markdown" }
+    source_links:
+      - { css: "a[class*='citation']" }
+      - { css: "a[href^='http'][target='_blank']" }
+
+  # ─────────────────────────────────────── Minimax
+  minimax:
+    new_chat_url: "https://agent.minimax.io/"
+    question_input:
+      - { css: "div.tiptap.ProseMirror[contenteditable='true']" }
+      - { css: "[contenteditable='true']" }
+      - { css: "textarea" }
+      - { role: textbox }
+    submit:
+      - { css: "button[aria-label*='Send' i]" }
+      - { role: button, name: "Send" }
+      - { css: "button[class*='send']" }
+    generating_indicator:
+      - { css: "button[aria-label*='Stop' i]" }
+      - { role: button, name: "Stop" }
+    done_indicator:
+      - { css: "button[aria-label*='Copy' i]" }
+    answer_container:
+      - { css: "div.matrix-markdown" }
+      - { css: "[data-testid='message-item'][data-role='assistant'] .markdown" }
+      - { css: "div[class*='message'] .markdown" }
+      - { css: ".markdown-body" }
+      - { css: "div[class*='response']" }
+    source_links:
+      - { css: "a[href^='http'][target='_blank']" }
+
+  # ─────────────────────────────────────── Meta AI
+  meta:
+    new_chat_url: "https://www.meta.ai/"
+    question_input:
+      - { css: "div[contenteditable='true'][data-testid='composer-input'][data-lexical-editor='true']" }
+      - { css: "div[role='textbox'][data-testid='composer-input'][data-lexical-editor='true']" }
+      - { css: "textarea[placeholder*='Ask Meta AI']" }
+      - { role: textbox }
+    submit:
+      - { testid: composer-send-button }
+      - { css: "button[aria-label*='Send' i]:not([disabled])" }
+      - { role: button, name: "Send" }
+    generating_indicator:
+      - { css: "div[data-testid='assistant-message'][data-streaming-state='IN_PROGRESS']" }
+      - { css: "button[aria-label*='Stop' i]" }
+      - { role: button, name: "Stop" }
+    done_indicator:
+      - { css: "div[data-testid='assistant-message'][data-streaming-complete='true']" }
+      - { css: "button[aria-label*='Copy' i]" }
+    answer_container:
+      - { css: "div[data-testid='assistant-message'] .ur-markdown" }
+      - { css: "div[data-testid='assistant-message'] .markdown-content" }
+      - { css: "div[class*='message'][class*='assistant']" }
+      - { css: "div[class*='response']" }
+      - { css: ".markdown" }
+    source_links:
+      - { css: "a[href^='http'][target='_blank']" }
+
+  # ─────────────────────────────────────── Pi AI
+  pi:
+    new_chat_url: "https://pi.ai/"
+    question_input:
+      - { testid: chat-composer-textbox }
+      - { css: "textarea[aria-label='Chat input']" }
+      - { css: "[contenteditable='true']" }
+      - { role: textbox }
+    submit:
+      - { css: "button[aria-label*='Send' i]" }
+      - { css: "button[aria-label*='Submit' i]" }
+      - { role: button, name: "Send" }
+    generating_indicator:
+      - { css: "button[aria-label*='Stop' i]" }
+    done_indicator:
+      - { css: "button[aria-label*='Copy' i]" }
+    answer_container:
+      - { css: "div[class*='message'][class*='bot']" }
+      - { css: "div[class*='ai-message']" }
+      - { css: "div[class*='response']" }
+    source_links:
+      - { css: "a[href^='http'][target='_blank']" }
+
+  # ─────────────────────────────────────── Mistral AI
+  mistral:
+    new_chat_url: "https://chat.mistral.ai/chat"
+    completion:
+      done_marker_delay_s: 2
+    question_input:
+      - { css: "div.ProseMirror[contenteditable='true']" }
+      - { css: "[contenteditable='true']" }
+      - { css: "textarea" }
+      - { role: textbox }
+    submit:
+      - { css: "button[aria-label*='Send' i]" }
+      - { role: button, name: "Send" }
+      - { css: "button[type='submit']" }
+    generating_indicator:
+      - { css: "button[aria-label='Stop generation']" }
+      - { css: "button[aria-label*='Stop' i]" }
+      - { role: button, name: "Stop" }
+    done_indicator:
+      - { css: "div[data-message-author-role='assistant'] button[aria-label='Copy to clipboard']" }
+      - { css: "button[aria-label='Copy to clipboard']" }
+      - { css: "button[aria-label*='Copy' i]" }
+    answer_container:
+      - { css: "div[data-message-author-role='assistant'] .markdown-container-style" }
+      - { css: "div[data-message-author-role='assistant']" }
+      - { css: "div[class*='prose']" }
+      - { css: ".markdown-body" }
+    source_links:
+      - { css: "div[data-message-author-role='assistant'] a[href^='http']" }
+      - { css: "a[href^='http'][target='_blank']" }

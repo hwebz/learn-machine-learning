@@ -79,13 +79,14 @@ def evaluate_completion(
     done_marker_visible: bool,
     generating: bool = False,
 ) -> tuple[bool, str]:
-    """Complete when a done marker (e.g. Copy button) is visible, or when
-    the model is not generating, the answer text is stable, and input is editable.
+    """Complete when a done marker (e.g. Copy button) is visible AND generation
+    has finished, or when the model is not generating, the answer text is stable,
+    and input is editable.
     """
-    if done_marker_visible:
-        return True, "done_marker"
     if generating:
         return False, "in_progress"
+    if done_marker_visible:
+        return True, "done_marker"
     if input_editable and text_stable:
         return True, "stable"
     return False, "in_progress"
@@ -121,6 +122,31 @@ class StabilityTracker:
 # ---------------------------------------------------------------------------
 # Page-dependent detection
 # ---------------------------------------------------------------------------
+
+
+async def wait_for_input(
+    page: Any,
+    question_input: SelectorChain,
+    *,
+    timeout_s: float = 30,
+    poll_s: float = 1.0,
+) -> Any | None:
+    """Poll until any rung of the input chain matches, network conditions permitting.
+
+    SPAs (e.g., Mistral) hydrate their editors several seconds after page load,
+    and the delay varies with the network — so poll instead of sleeping a fixed
+    amount. Returns the first matching locator, or None on timeout.
+    """
+    import time as _time
+
+    deadline = _time.monotonic() + timeout_s
+    while True:
+        locator, rung = await resolve_locator(page, question_input)
+        if locator is not None:
+            return locator
+        if _time.monotonic() >= deadline:
+            return None
+        await asyncio.sleep(poll_s)
 
 
 async def detect_blocking_state(page: Any, blocking: dict[str, Any]) -> BlockingState | None:
@@ -220,6 +246,9 @@ async def wait_for_completion(
     poll_s = float(completion_cfg.get("poll_interval_s", 2))
     min_poll = float(completion_cfg.get("min_poll_s", poll_s))
     max_poll = float(completion_cfg.get("max_poll_s", poll_s))
+    # Optional per-provider delay after done_marker appears (e.g., Mistral renders
+    # copy button before answer text is populated)
+    done_marker_delay_s = float(completion_cfg.get("done_marker_delay_s", 0))
 
     question_input = provider_cfg.get("question_input", [])
     generating_chain = provider_cfg.get("generating_indicator")
@@ -304,6 +333,12 @@ async def wait_for_completion(
         )
 
         if done:
+            if reason == "done_marker" and done_marker_delay_s > 0:
+                # Mistral renders the copy button skeleton before populating the
+                # answer text — give the UI time to catch up, then re-read.
+                logger.info("done_marker_delay", delay_s=done_marker_delay_s, provider=provider_cfg.get("name", ""))
+                await sleep(done_marker_delay_s)
+                last_text = await _answer_text(page, answer_chain)
             return CompletionResult(done=True, reason=reason, text=last_text)
 
         # jittered poll between min_poll and max_poll
