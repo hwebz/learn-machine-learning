@@ -33,6 +33,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await close_db()
 
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(
     title="Deep Research Local",
     version="0.1.0",
@@ -41,7 +43,17 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(router)
+
 
 
 def proactor_loop_factory():

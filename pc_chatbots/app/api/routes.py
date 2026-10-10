@@ -119,6 +119,49 @@ async def create_research(payload: ResearchRequest, request: Request) -> Researc
     return ResearchAccepted(job_id=job_id)
 
 
+@router.get("/research", response_model=list[dict[str, Any]], dependencies=protected)
+async def list_research(limit: int = 50) -> list[dict[str, Any]]:
+    async with SessionLocal() as session:
+        statement = select(Job).order_by(Job.created_at.desc()).limit(limit)
+        jobs = (await session.exec(statement)).all()
+        result = []
+        for j in jobs:
+            try:
+                config = json.loads(j.config_json) if j.config_json else {}
+            except Exception:
+                config = {}
+            try:
+                sources = json.loads(j.sources_json) if j.sources_json else []
+            except Exception:
+                sources = []
+            try:
+                claims = json.loads(j.claims_json) if j.claims_json else []
+            except Exception:
+                claims = []
+            try:
+                runs = json.loads(j.provider_runs_json) if j.provider_runs_json else {}
+            except Exception:
+                runs = {}
+
+            result.append({
+                "job_id": j.id,
+                "query": j.query,
+                "status": j.status,
+                "subtasks_total": j.subtasks_total,
+                "subtasks_done": j.subtasks_done,
+                "report_markdown": j.report_markdown,
+                "sources": sources,
+                "claims": claims,
+                "provider_runs": runs,
+                "error": j.error,
+                "depth": config.get("depth", "deep"),
+                "providers": config.get("providers", []),
+                "created_at": j.created_at.isoformat() if j.created_at else None,
+                "finished_at": j.finished_at.isoformat() if j.finished_at else None,
+            })
+        return result
+
+
 @router.get("/research/{job_id}", response_model=ResearchResponse, dependencies=protected)
 async def get_research(job_id: str) -> ResearchResponse:
     return _job_response(await _load_job(job_id))
