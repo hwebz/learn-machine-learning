@@ -84,9 +84,39 @@ You will see the headed browser type the prompt, submit it, wait for generation,
 ### Constraints (by design)
 
 - **No CAPTCHA solving, no bot-detection evasion, no rate-limit evasion, no token extraction, no private API calls.** If a login page, CAPTCHA, or verification dialog appears, the adapter stops, screenshots the page, and returns `needs_user_action`. Complete the check manually in the browser window, then retry.
-- Only one browser interaction at a time (global lock).
+- **Execution Mode**:
+  - `WORK_MODE=sync`: Chạy tuần tự từng chatbot một (dùng chung profile `./data/profiles/main`).
+  - `WORK_MODE=async`: Chạy song song nhiều cửa sổ trình duyệt (giới hạn bởi `MAX_CONCURRENT_BROWSERS`, profile riêng biệt theo bot, trích xuất DOM thuần túy).
 - DOM locators only — no screen-coordinate automation.
 - Per-provider hourly cap (`MAX_QUESTIONS_PER_HOUR`) plus random delay between questions.
+
+### Chế độ hoạt động (`WORK_MODE=sync | async`)
+
+Dự án hỗ trợ linh hoạt 2 chế độ điều phối trình duyệt thông qua biến môi trường trong file `.env`:
+
+#### 1. Chế độ tuần tự (`WORK_MODE=sync` - Mặc định)
+- **Cơ chế**: Dùng chung 1 Chromium profile tại `./data/profiles/main`. Server sử dụng một lock duy nhất để tuần tự hỏi từng chatbot.
+- **Ưu điểm**: Nhẹ máy (chỉ tốn RAM cho 1 cửa sổ trình duyệt), chỉ cần đăng nhập 1 lần cho tất cả bot bằng lệnh:
+  ```powershell
+  python scripts/login_profile.py
+  ```
+
+#### 2. Chế độ song song (`WORK_MODE=async`)
+- **Cơ chế**: Khởi chạy đồng thời nhiều chatbot qua `asyncio.gather`, được điều phối an toàn bởi `asyncio.Semaphore(MAX_CONCURRENT_BROWSERS)` (mặc định: `3`).
+- **Profile độc lập**: Mỗi chatbot sở hữu một thư mục profile riêng biệt tại `./data/profiles/<provider>` (ví dụ `./data/profiles/gemini`, `./data/profiles/copilot`), hoàn toàn tránh được xung đột process lock của Chromium.
+- **Pure DOM Extraction**: Tự động vô hiệu hóa việc ghi/đọc OS clipboard để loại trừ 100% nguy cơ race-condition (nhiều bot đè dữ liệu clipboard của nhau). Trích xuất trực tiếp DOM và chuẩn hóa bằng `html_to_markdown()`.
+- **Chống throttle cửa sổ nền**: Bật sẵn các cờ Chromium `--disable-background-timer-throttling`, `--disable-backgrounding-occluded-windows`, `--disable-renderer-backgrounding` giúp tab nền chạy mượt mà không bị đóng băng khi sinh câu trả lời.
+- **Tiện ích sao chép đăng nhập (Clone Profiles)**:
+  Để không phải đăng nhập thủ công lại 14 chatbot khi chuyển từ `sync` sang `async`, chạy script sau để tự động sao chép cookies từ profile chính:
+  ```powershell
+  python scripts/clone_profiles.py
+  # Hoặc clone cho 1 provider cụ thể:
+  python scripts/clone_profiles.py --provider gemini --force
+  ```
+- **Đăng nhập riêng từng bot trong chế độ async**:
+  ```powershell
+  python scripts/login_profile.py --provider copilot
+  ```
 
 ### Provider terms
 

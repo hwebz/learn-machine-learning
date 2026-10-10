@@ -84,7 +84,8 @@ class BrowserProviderAdapter(ABC):
         selectors: dict[str, Any] | None = None,
         artifact_dir: Path | None = None,
     ) -> None:
-        self._session = session or BrowserSession.instance()
+        from app.browser.session import BrowserSessionManager
+        self._session = session or BrowserSessionManager.get_session(self.name)
         self._selectors = selectors if selectors is not None else load_selectors()
         self._artifact_dir = artifact_dir or settings.artifact_dir
         self._cfg = provider_selectors(self._selectors, self.name)
@@ -93,6 +94,8 @@ class BrowserProviderAdapter(ABC):
 
     async def health(self) -> HealthStatus:
         """Static health: selectors present + profile dir exists. Never launches a browser."""
+        from app.core.config import get_provider_profile_dir
+
         try:
             provider_selectors(self._selectors, self.name)
             selectors_ok = True
@@ -100,7 +103,7 @@ class BrowserProviderAdapter(ABC):
         except Exception as exc:  # noqa: BLE001
             selectors_ok = False
             detail = f"Selector config error: {exc}"
-        profile_dir = settings.browser_profile_dir
+        profile_dir = get_provider_profile_dir(self.name)
         logged_in = profile_dir.is_dir() and any(profile_dir.iterdir())
         if not logged_in:
             detail = f"{detail}; profile dir empty or missing — run scripts/login_profile.py"
@@ -114,8 +117,10 @@ class BrowserProviderAdapter(ABC):
 
     async def _extract_answer(self, page: Any, prompt: str = "") -> str:
         # 1. Attempt to use the site's Copy button if available (cleanest Markdown)
+        # In async mode, bypass the OS clipboard entirely to prevent concurrent answer collisions
+        allow_clipboard = (settings.work_mode == "sync")
         done_chain = self._cfg.get("done_indicator", [])
-        if done_chain:
+        if allow_clipboard and done_chain:
             copy_locator, _ = await resolve_locator(page, done_chain)
             if copy_locator is not None:
                 try:

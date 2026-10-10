@@ -144,10 +144,11 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
         runs: list[dict[str, object]] = []
         answers: list[str] = []
         run_statuses: list[str] = []
+        results_lock = asyncio.Lock()
+        total_subtasks = len(subtasks)
 
-        for index, subtask in enumerate(subtasks, start=1):
+        async def _execute_subtask(subtask: Subtask, index: int) -> None:
             if cancel_event.is_set():
-                await _set_status(job_id, "cancelled")
                 return
 
             async def _emit_subtask_step(
@@ -175,8 +176,8 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
 
             await _emit_subtask_step(
                 step_name="provider_start",
-                step_message=f"Bắt đầu nghiên cứu với {subtask.provider} ({index}/{len(subtasks)})...",
-                step_data={"provider": subtask.provider, "index": index, "total": len(subtasks)},
+                step_message=f"Bắt đầu nghiên cứu với {subtask.provider} ({index}/{total_subtasks})...",
+                step_data={"provider": subtask.provider, "index": index, "total": total_subtasks},
             )
 
             adapter = create_adapter(subtask.provider)
@@ -189,7 +190,6 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 result = await adapter.ask(subtask.prompt, **ask_kwargs)
             except (AdapterNeedsUserAction, ProviderNeedsUserAction) as exc:
                 logger.warning("subtask_needs_user_action", provider=subtask.provider, reason=str(exc))
-                run_statuses.append("needs_user_action")
                 run_id = f"{job_id}:{subtask.provider}:run"
                 now = utc_now()
                 await _emit_subtask_step(
@@ -202,34 +202,36 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                         "error_type": type(exc).__name__,
                     },
                 )
-                async with SessionLocal() as session:
-                    db_job = await session.get(Job, job_id)
-                    if db_job is None or db_job.status in TERMINAL_STATUSES:
-                        return
-                    session.add(ProviderRun(
-                        id=run_id, subtask_id=subtask.id, provider=subtask.provider,
-                        answer_md="", started_at=now, finished_at=now, status="needs_user_action",
-                    ))
-                    db_subtask = await session.get(Subtask, subtask.id)
-                    if db_subtask is not None:
-                        db_subtask.status = "failed"
-                    db_job.subtasks_done = index
+                async with results_lock:
+                    run_statuses.append("needs_user_action")
                     runs.append({"provider": subtask.provider, "status": "needs_user_action", "elapsed_ms": 0})
-                    db_job.provider_runs_json = json.dumps(runs)
-                    db_job.updated_at = utc_now()
-                    session.add(JobEvent(
-                        job_id=job_id,
-                        status="researching",
-                        event_type="progress",
-                        message=f"Đã xử lý {index}/{db_job.subtasks_total} chatbot ({subtask.provider}: needs_user_action).",
-                        subtasks_total=db_job.subtasks_total,
-                        subtasks_done=index,
-                    ))
-                    await session.commit()
-                continue
+                    done_count = len(runs)
+                    async with SessionLocal() as session:
+                        db_job = await session.get(Job, job_id)
+                        if db_job is None or db_job.status in TERMINAL_STATUSES:
+                            return
+                        session.add(ProviderRun(
+                            id=run_id, subtask_id=subtask.id, provider=subtask.provider,
+                            answer_md="", started_at=now, finished_at=now, status="needs_user_action",
+                        ))
+                        db_subtask = await session.get(Subtask, subtask.id)
+                        if db_subtask is not None:
+                            db_subtask.status = "failed"
+                        db_job.subtasks_done = done_count
+                        db_job.provider_runs_json = json.dumps(runs)
+                        db_job.updated_at = utc_now()
+                        session.add(JobEvent(
+                            job_id=job_id,
+                            status="researching",
+                            event_type="progress",
+                            message=f"Đã xử lý {done_count}/{db_job.subtasks_total} chatbot ({subtask.provider}: needs_user_action).",
+                            subtasks_total=db_job.subtasks_total,
+                            subtasks_done=done_count,
+                        ))
+                        await session.commit()
+                return
             except Exception as exc:
                 logger.error("subtask_unexpected_error", provider=subtask.provider, error=str(exc))
-                run_statuses.append("error")
                 run_id = f"{job_id}:{subtask.provider}:run"
                 now = utc_now()
                 await _emit_subtask_step(
@@ -242,34 +244,36 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                         "error_type": type(exc).__name__,
                     },
                 )
-                async with SessionLocal() as session:
-                    db_job = await session.get(Job, job_id)
-                    if db_job is None or db_job.status in TERMINAL_STATUSES:
-                        return
-                    session.add(ProviderRun(
-                        id=run_id, subtask_id=subtask.id, provider=subtask.provider,
-                        answer_md="", started_at=now, finished_at=now, status="error",
-                    ))
-                    db_subtask = await session.get(Subtask, subtask.id)
-                    if db_subtask is not None:
-                        db_subtask.status = "failed"
-                    db_job.subtasks_done = index
+                async with results_lock:
+                    run_statuses.append("error")
                     runs.append({"provider": subtask.provider, "status": "error", "elapsed_ms": 0})
-                    db_job.provider_runs_json = json.dumps(runs)
-                    db_job.updated_at = utc_now()
-                    session.add(JobEvent(
-                        job_id=job_id,
-                        status="researching",
-                        event_type="progress",
-                        message=f"Đã xử lý {index}/{db_job.subtasks_total} chatbot ({subtask.provider}: error).",
-                        subtasks_total=db_job.subtasks_total,
-                        subtasks_done=index,
-                    ))
-                    await session.commit()
-                continue
+                    done_count = len(runs)
+                    async with SessionLocal() as session:
+                        db_job = await session.get(Job, job_id)
+                        if db_job is None or db_job.status in TERMINAL_STATUSES:
+                            return
+                        session.add(ProviderRun(
+                            id=run_id, subtask_id=subtask.id, provider=subtask.provider,
+                            answer_md="", started_at=now, finished_at=now, status="error",
+                        ))
+                        db_subtask = await session.get(Subtask, subtask.id)
+                        if db_subtask is not None:
+                            db_subtask.status = "failed"
+                        db_job.subtasks_done = done_count
+                        db_job.provider_runs_json = json.dumps(runs)
+                        db_job.updated_at = utc_now()
+                        session.add(JobEvent(
+                            job_id=job_id,
+                            status="researching",
+                            event_type="progress",
+                            message=f"Đã xử lý {done_count}/{db_job.subtasks_total} chatbot ({subtask.provider}: error).",
+                            subtasks_total=db_job.subtasks_total,
+                            subtasks_done=done_count,
+                        ))
+                        await session.commit()
+                return
 
             elapsed_ms = int((result.finished_at - result.started_at).total_seconds() * 1000)
-            run_statuses.append(result.status)
 
             if result.status == "ok":
                 answer_preview = result.answer_markdown.strip()
@@ -321,54 +325,77 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                     },
                 )
 
-            if result.status not in PROVIDER_RESULT_FAILURE_STATUSES and result.answer_markdown.strip():
-                answers.append(f"## {subtask.provider.title()} response\n\n{result.answer_markdown.strip()}")
             run_id = f"{job_id}:{subtask.provider}:run"
-            async with SessionLocal() as session:
-                db_job = await session.get(Job, job_id)
-                if db_job is None or db_job.status in TERMINAL_STATUSES:
-                    return
-                provider_run = ProviderRun(
-                    id=run_id,
-                    subtask_id=subtask.id,
-                    provider=subtask.provider,
-                    answer_md=result.answer_markdown,
-                    conversation_url=str(result.conversation_url) if result.conversation_url else None,
-                    started_at=result.started_at,
-                    finished_at=result.finished_at,
-                    status=result.status,
-                    artifact_paths_json=json.dumps(result.artifact_paths),
-                )
-                session.add(provider_run)
-                run_sources: list[dict[str, str]] = []
-                for source_index, source in enumerate(result.sources, start=1):
-                    source_public_id = f"S{len(sources) + len(run_sources) + 1}"
-                    db_source = Source(
-                        id=f"{job_id}:{source_public_id}", run_id=run_id, url=str(source.url),
-                        title=source.title, snippet=source.snippet,
-                    )
-                    session.add(db_source)
-                    source_data = {"id": source_public_id, "url": db_source.url, "title": db_source.title or ""}
-                    run_sources.append(source_data)
-                    sources.append(source_data)
-                db_subtask = await session.get(Subtask, subtask.id)
-                if db_subtask is not None:
-                    db_subtask.status = "completed" if result.status == "ok" else "failed"
-                db_job.subtasks_done = index
-                session.add(JobEvent(
-                    job_id=job_id,
-                    status="researching",
-                    event_type="progress",
-                    message=f"Đã hoàn thành {index}/{db_job.subtasks_total} chatbot ({subtask.provider}: {result.status}).",
-                    subtasks_total=db_job.subtasks_total,
-                    subtasks_done=index,
-                ))
-                db_job.sources_json = json.dumps(sources)
+            async with results_lock:
+                run_statuses.append(result.status)
+                if result.status not in PROVIDER_RESULT_FAILURE_STATUSES and result.answer_markdown.strip():
+                    answers.append(f"## {subtask.provider.title()} response\n\n{result.answer_markdown.strip()}")
                 runs.append({"provider": subtask.provider, "status": result.status, "elapsed_ms": elapsed_ms})
-                db_job.claims_json = json.dumps(claims)
-                db_job.provider_runs_json = json.dumps(runs)
-                db_job.updated_at = utc_now()
-                await session.commit()
+                done_count = len(runs)
+
+                async with SessionLocal() as session:
+                    db_job = await session.get(Job, job_id)
+                    if db_job is None or db_job.status in TERMINAL_STATUSES:
+                        return
+                    provider_run = ProviderRun(
+                        id=run_id,
+                        subtask_id=subtask.id,
+                        provider=subtask.provider,
+                        answer_md=result.answer_markdown,
+                        conversation_url=str(result.conversation_url) if result.conversation_url else None,
+                        started_at=result.started_at,
+                        finished_at=result.finished_at,
+                        status=result.status,
+                        artifact_paths_json=json.dumps(result.artifact_paths),
+                    )
+                    session.add(provider_run)
+                    run_sources: list[dict[str, str]] = []
+                    for source_index, source in enumerate(result.sources, start=1):
+                        source_public_id = f"S{len(sources) + len(run_sources) + 1}"
+                        db_source = Source(
+                            id=f"{job_id}:{source_public_id}", run_id=run_id, url=str(source.url),
+                            title=source.title, snippet=source.snippet,
+                        )
+                        session.add(db_source)
+                        source_data = {"id": source_public_id, "url": db_source.url, "title": db_source.title or ""}
+                        run_sources.append(source_data)
+                        sources.append(source_data)
+                    db_subtask = await session.get(Subtask, subtask.id)
+                    if db_subtask is not None:
+                        db_subtask.status = "completed" if result.status == "ok" else "failed"
+                    db_job.subtasks_done = done_count
+                    session.add(JobEvent(
+                        job_id=job_id,
+                        status="researching",
+                        event_type="progress",
+                        message=f"Đã hoàn thành {done_count}/{db_job.subtasks_total} chatbot ({subtask.provider}: {result.status}).",
+                        subtasks_total=db_job.subtasks_total,
+                        subtasks_done=done_count,
+                    ))
+                    db_job.sources_json = json.dumps(sources)
+                    db_job.claims_json = json.dumps(claims)
+                    db_job.provider_runs_json = json.dumps(runs)
+                    db_job.updated_at = utc_now()
+                    await session.commit()
+
+        if settings.work_mode == "async":
+            logger.info("running_pipeline_async", job_id=job_id, max_concurrent=settings.max_concurrent_browsers)
+            semaphore = asyncio.Semaphore(max(1, settings.max_concurrent_browsers))
+
+            async def _worker(st: Subtask, idx: int) -> None:
+                async with semaphore:
+                    if cancel_event.is_set():
+                        return
+                    await _execute_subtask(st, idx)
+
+            await asyncio.gather(*[_worker(st, idx) for idx, st in enumerate(subtasks, start=1)])
+        else:
+            logger.info("running_pipeline_sync", job_id=job_id)
+            for idx, st in enumerate(subtasks, start=1):
+                if cancel_event.is_set():
+                    await _set_status(job_id, "cancelled")
+                    return
+                await _execute_subtask(st, idx)
 
         for phase in ("extracting", "verifying", "synthesizing"):
             if cancel_event.is_set():

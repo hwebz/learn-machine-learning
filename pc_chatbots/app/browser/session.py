@@ -6,7 +6,9 @@ from typing import Any, AsyncIterator, ClassVar
 
 import structlog
 
-from app.core.config import settings
+from pathlib import Path
+
+from app.core.config import get_provider_profile_dir, settings
 
 logger = structlog.get_logger(__name__)
 
@@ -17,24 +19,19 @@ logger = structlog.get_logger(__name__)
 
 
 class BrowserSession:
-    """Singleton persistent Chromium context backed by the dedicated profile dir.
+    """Persistent Chromium context backed by a dedicated profile dir.
 
-    Guarantees (per PLAN.md §6):
-      - One browser session at a time: a single ``asyncio.Lock`` serializes asks.
-      - Persistent profile reused across runs (login persists).
-      - Dedicated automation profile only — never the user's daily profile.
-      - Headed in V1 (``headless=False``), ``channel="chrome"``.
-
-    Usage::
-
-        async with BrowserSession.exclusive() as page_factory:
-            page = await BrowserSession.new_page("https://...")
-            ...
+    Supports:
+      - Dedicated profile directory per session (isolated cookies/storage).
+      - Reusable Chromium context with anti-background-throttling flags.
+      - Per-session lock to prevent concurrent tab collisions within the same profile.
+      - Singleton backward-compatible access via `BrowserSession.instance()`.
     """
 
     _instance: ClassVar[BrowserSession | None] = None
 
-    def __init__(self) -> None:
+    def __init__(self, profile_dir: Path | None = None) -> None:
+        self.profile_dir = profile_dir or settings.browser_profile_dir
         self._lock = asyncio.Lock()
         self._pw: Any = None
         self._ctx: Any = None
@@ -44,41 +41,61 @@ class BrowserSession:
     @classmethod
     def instance(cls) -> BrowserSession:
         if cls._instance is None:
-            cls._instance = cls()
+            cls._instance = cls(profile_dir=settings.browser_profile_dir)
         return cls._instance
 
     async def start(self) -> None:
-        """Idempotently launch the persistent context if not already running.
-
-        Safe to call from inside ``exclusive()`` (which already holds the lock):
-        the lock is only taken when the context needs to be created, and the
-        early-return path does not block on it.
-        """
+        """Idempotently launch the persistent context if not already running."""
         if self._ctx is not None:
-            return  # already started — no lock needed (re-entrant safe)
+            return
         async with self._lock:
-            # Re-check inside the lock: another task may have started it.
             if self._ctx is not None:
                 return
             from playwright.async_api import async_playwright
 
-            profile_dir = settings.browser_profile_dir
-            profile_dir.mkdir(parents=True, exist_ok=True)
+            self.profile_dir.mkdir(parents=True, exist_ok=True)
             logger.info(
                 "browser_session_starting",
-                profile=str(profile_dir),
+                profile=str(self.profile_dir),
                 channel=settings.browser_channel,
                 headless=settings.browser_headless,
             )
             pw = await async_playwright().start()
-            ctx = await pw.chromium.launch_persistent_context(
-                user_data_dir=str(profile_dir),
-                channel=settings.browser_channel,
-                headless=settings.browser_headless,
-                args=["--disable-blink-features=AutomationControlled"],
-                permissions=["clipboard-read", "clipboard-write"],
-                viewport={"width": 1280, "height": 900},
-            )
+            max_attempts = 3
+            ctx = None
+            last_err: Exception | None = None
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    ctx = await pw.chromium.launch_persistent_context(
+                        user_data_dir=str(self.profile_dir),
+                        channel=settings.browser_channel,
+                        headless=settings.browser_headless,
+                        args=[
+                            "--disable-blink-features=AutomationControlled",
+                            "--disable-background-timer-throttling",
+                            "--disable-backgrounding-occluded-windows",
+                            "--disable-renderer-backgrounding",
+                        ],
+                        permissions=["clipboard-read", "clipboard-write"],
+                        viewport={"width": 1280, "height": 900},
+                    )
+                    break
+                except Exception as exc:  # noqa: BLE001
+                    last_err = exc
+                    logger.warning(
+                        "browser_launch_retry",
+                        profile=str(self.profile_dir),
+                        attempt=attempt,
+                        max_attempts=max_attempts,
+                        error=str(exc),
+                    )
+                    if attempt < max_attempts:
+                        await asyncio.sleep(1.5)
+
+            if ctx is None:
+                await pw.stop()
+                raise last_err or RuntimeError(f"Failed to launch browser persistent context for {self.profile_dir}")
+
             ctx.on("close", lambda: setattr(self, "_ctx", None))
             self._pw = pw
             self._ctx = ctx
@@ -103,69 +120,77 @@ class BrowserSession:
     # ------------------------------------------------------------------ pages
 
     async def new_page(self, url: str) -> Any:
-        """Open a tab at ``url`` against the persistent context.
-
-        Reuses an existing blank/about:blank tab when one is available (the
-        persistent context opens one by default), otherwise creates a new tab.
-        This avoids the two-tab clutter (one idle about:blank + one automation
-        tab) seen in headed runs.
-
-        Waits for ``domcontentloaded`` (30s cap) then a short settle delay so
-        SPAs (Perplexity, Gemini) can hydrate before the caller probes the DOM.
-        Never hangs: navigation timeouts are logged, not raised.
-        """
-        import asyncio
-
+        """Open a tab at ``url`` against the persistent context."""
         await self.start()
-        # Check if the existing context is still alive; if dead/closed, restart it.
         try:
             assert self._ctx is not None
             _ = self._ctx.pages
         except Exception:
-            logger.warning("browser_context_dead_restarting")
+            logger.warning("browser_context_dead_restarting", profile=str(self.profile_dir))
             await self.close()
             await self.start()
 
-        assert self._ctx is not None  # narrowed for type checkers
+        assert self._ctx is not None
 
-        # Reuse an existing blank tab if one is free (single-page, no prior use).
         page = None
         try:
             for existing in self._ctx.pages:
                 if existing.url in ("about:blank", "") and not existing.is_closed():
                     page = existing
-                    logger.info("page_reused_blank_tab")
+                    logger.info("page_reused_blank_tab", profile=str(self.profile_dir))
                     break
-        except Exception:  # noqa: BLE001 — fall through and just open a new tab
+        except Exception:  # noqa: BLE001
             page = None
 
         if page is None:
             page = await self._ctx.new_page()
 
         try:
-            # Navigate immediately; the page is already in memory (reused blank tab
-            # or fresh new_page), so we don't wait for browser startup here.
             await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-        except Exception as exc:  # noqa: BLE001 — don't hang on slow SPA navigation
+        except Exception as exc:  # noqa: BLE001
             logger.warning("page_goto_slow", url=url, error=str(exc))
-        # SPAs with persistent sockets never reach networkidle, so a short
-        # settle delay is more reliable than wait_for_load_state here.
-        # Reduced from 2s to 1s; most SPAs have hydrated by then.
         await asyncio.sleep(1.0)
         return page
 
     @asynccontextmanager
     async def exclusive(self) -> AsyncIterator[None]:
-        """Hold the global lock for the duration of one provider ask().
-
-        Ensures only one browser interaction runs at a time. The persistent
-        context is started (if needed) before acquiring the lock.
-        """
+        """Hold the session lock for the duration of one provider ask()."""
         await self.start()
         async with self._lock:
             yield
 
 
+class BrowserSessionManager:
+    """Manages browser sessions across providers and execution modes."""
+
+    _sessions: ClassVar[dict[str, BrowserSession]] = {}
+    _lock: ClassVar[asyncio.Lock] = asyncio.Lock()
+
+    @classmethod
+    def get_session(cls, provider: str = "main") -> BrowserSession:
+        """Return the appropriate BrowserSession based on WORK_MODE and provider."""
+        if settings.work_mode == "sync":
+            return BrowserSession.instance()
+
+        key = provider.lower()
+        session = cls._sessions.get(key)
+        if session is None:
+            profile = get_provider_profile_dir(key, mode="async")
+            session = BrowserSession(profile_dir=profile)
+            cls._sessions[key] = session
+        return session
+
+    @classmethod
+    async def close_all(cls) -> None:
+        """Close all pooled sessions and the singleton session."""
+        async with cls._lock:
+            for session in list(cls._sessions.values()):
+                await session.close()
+            cls._sessions.clear()
+            if BrowserSession._instance is not None:
+                await BrowserSession._instance.close()
+
+
 async def close_browser_session() -> None:
     """Convenience hook used by the app lifespan shutdown."""
-    await BrowserSession.instance().close()
+    await BrowserSessionManager.close_all()

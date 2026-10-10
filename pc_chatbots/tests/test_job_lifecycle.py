@@ -176,3 +176,88 @@ def test_sse_emits_failure_step_when_adapter_fails(monkeypatch: MonkeyPatch) -> 
         assert '"step": "failed"' in text
         assert "Simulated login failure on test provider" in text
         assert '"status": "needs_user_action"' in text
+
+
+def test_async_work_mode_executes_concurrently(monkeypatch: MonkeyPatch) -> None:
+    import dataclasses
+
+    async_settings = dataclasses.replace(settings, work_mode="async", max_concurrent_browsers=3)
+    monkeypatch.setattr("app.orchestrator.pipeline.settings", async_settings)
+    monkeypatch.setattr(pipeline, "create_adapter", lambda provider: FakeAdapter(provider))
+
+    start_times: list[float] = []
+
+    original_ask = FakeAdapter.ask
+
+    async def tracked_ask(self: FakeAdapter, prompt: str, *, timeout_s: int, mode: str = "default", on_step=None) -> ProviderResult:
+        start_times.append(time.monotonic())
+        await asyncio.sleep(0.1)
+        return await original_ask(self, prompt, timeout_s=timeout_s, mode=mode, on_step=on_step)
+
+    monkeypatch.setattr(FakeAdapter, "ask", tracked_ask)
+
+    with TestClient(app) as client:
+        start_wall = time.monotonic()
+        accepted = client.post(
+            "/research",
+            headers=API_HEADERS,
+            json={"query": "Test async concurrent providers", "providers": ["copilot", "gemini", "qwen"]},
+        )
+        assert accepted.status_code == 202
+        job_id = accepted.json()["job_id"]
+
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            job = client.get(f"/research/{job_id}", headers=API_HEADERS).json()
+            if job["status"] == "completed":
+                break
+            time.sleep(0.02)
+
+        total_elapsed = time.monotonic() - start_wall
+        assert job["status"] == "completed"
+        assert len(job["provider_runs"]) == 3
+
+        # In concurrent mode with 0.1s sleep each, total elapsed should be well below sequential sum (0.3s)
+        # Verify that start times overlap (start of last provider is before end of first provider)
+        assert len(start_times) == 3
+        # First and last started within 0.08s of each other (concurrent launch)
+        assert (start_times[-1] - start_times[0]) < 0.08
+
+
+def test_sync_work_mode_executes_sequentially(monkeypatch: MonkeyPatch) -> None:
+    import dataclasses
+
+    sync_settings = dataclasses.replace(settings, work_mode="sync")
+    monkeypatch.setattr("app.orchestrator.pipeline.settings", sync_settings)
+    monkeypatch.setattr(pipeline, "create_adapter", lambda provider: FakeAdapter(provider))
+
+    start_times: list[float] = []
+    original_ask = FakeAdapter.ask
+
+    async def tracked_ask(self: FakeAdapter, prompt: str, *, timeout_s: int, mode: str = "default", on_step=None) -> ProviderResult:
+        start_times.append(time.monotonic())
+        await asyncio.sleep(0.05)
+        return await original_ask(self, prompt, timeout_s=timeout_s, mode=mode, on_step=on_step)
+
+    monkeypatch.setattr(FakeAdapter, "ask", tracked_ask)
+
+    with TestClient(app) as client:
+        accepted = client.post(
+            "/research",
+            headers=API_HEADERS,
+            json={"query": "Test sync sequential providers", "providers": ["copilot", "gemini"]},
+        )
+        assert accepted.status_code == 202
+        job_id = accepted.json()["job_id"]
+
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            job = client.get(f"/research/{job_id}", headers=API_HEADERS).json()
+            if job["status"] == "completed":
+                break
+            time.sleep(0.02)
+
+        assert job["status"] == "completed"
+        assert len(start_times) == 2
+        # In sequential mode, second provider starts after the first completes (at least 0.045s apart)
+        assert (start_times[1] - start_times[0]) >= 0.045

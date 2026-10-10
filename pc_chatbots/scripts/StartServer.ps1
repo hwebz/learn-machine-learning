@@ -20,7 +20,8 @@
 param(
     [string]$HostAddress = "127.0.0.1",
     [int]$Port = 8000,
-    [switch]$Reload
+    [switch]$Reload,
+    [switch]$KillExisting
 )
 
 $ErrorActionPreference = "Stop"
@@ -45,10 +46,20 @@ if (Test-Path $VenvActivate) {
 }
 
 # 2. Kiểm tra xung đột cổng
-$ExistingConn = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($ExistingConn) {
-    Write-Host "[CẢNH BÁO] Cổng $Port đang được sử dụng bởi Process ID: $($ExistingConn.OwningProcess)" -ForegroundColor Yellow
-    Write-Host "           Nếu là server cũ, hãy tắt process đó hoặc chọn cổng khác với tham số -Port <number>." -ForegroundColor Yellow
+$ExistingConns = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
+if ($ExistingConns) {
+    $Pids = $ExistingConns | Select-Object -ExpandProperty OwningProcess -Unique
+    if ($KillExisting) {
+        Write-Host "[XỬ LÝ] Tự động giải phóng cổng $Port (PID: $($Pids -join ', '))..." -ForegroundColor Yellow
+        foreach ($p in $Pids) {
+            Stop-Process -Id $p -Force -ErrorAction SilentlyContinue
+        }
+        Start-Sleep -Seconds 1
+    } else {
+        Write-Host "[LỖI/CẢNH BÁO] Cổng $Port đang được sử dụng bởi Process ID: $($Pids -join ', ')" -ForegroundColor Red
+        Write-Host "             Bạn có thể chạy lại với cờ -KillExisting để tự động tắt process cũ:" -ForegroundColor Yellow
+        Write-Host "             .\scripts\StartServer.ps1 -KillExisting`n" -ForegroundColor Yellow
+    }
 }
 
 # 3. Khởi động Uvicorn
@@ -58,6 +69,10 @@ Write-Host "[3/3] Bắt đầu chạy Uvicorn..." -ForegroundColor Green
 Write-Host "      (Nhấn Ctrl + C để dừng server)`n" -ForegroundColor DarkGray
 
 $UvicornArgs = @("app.main:app", "--host", $HostAddress, "--port", "$Port")
+# Bắt buộc dùng ProactorEventLoop trên Windows để hỗ trợ subprocess cho Playwright browser automation
+if ($env:OS -like "*Windows*" -or $IsWindows -or $env:PROCESSOR_ARCHITECTURE) {
+    $UvicornArgs += @("--loop", "asyncio:ProactorEventLoop")
+}
 if ($Reload) {
     $UvicornArgs += "--reload"
 }

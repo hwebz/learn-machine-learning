@@ -44,7 +44,16 @@ app = FastAPI(
 app.include_router(router)
 
 
+def proactor_loop_factory():
+    """Event loop factory ensuring Playwright subprocess support on Windows."""
+    import asyncio
+
+    return asyncio.ProactorEventLoop()
+
+
 if __name__ == "__main__":
+    import sys
     import uvicorn
 
-    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=False)
+    loop_arg = "asyncio:ProactorEventLoop" if sys.platform == "win32" else "auto"
+    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=False, loop=loop_arg)
