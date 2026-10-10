@@ -16,18 +16,47 @@ class GeminiUIAdapter(BrowserProviderAdapter):
     name = "gemini"
 
     async def _select_mode(self, page: Any, mode: str) -> None:
-        """Best-effort mode switch (deep research). Failure is non-fatal."""
-        if mode not in {"deep", "deep_research"}:
+        """Configure Gemini model (Pro vs Flash) and thinking effort (Cao vs Thấp)."""
+        import asyncio
+
+        cfg_modes = self._cfg.get("mode_selectors") or {}
+        dropdown_chain = cfg_modes.get("mode_dropdown")
+        if not dropdown_chain:
             return
-        chain = (self._cfg.get("mode_selectors") or {}).get("deep_research")
-        if not chain:
+        btn, _ = await resolve_locator(page, dropdown_chain)
+        if btn is None:
+            logger.info("gemini_mode_dropdown_not_found")
             return
-        locator, _ = await resolve_locator(page, chain)
-        if locator is None:
-            logger.info("gemini_mode_skipped", mode=mode)
-            return
+        is_deep = mode in {"deep", "deep_research"}
         try:
-            await locator.click(timeout=3000)
-            logger.info("gemini_mode_selected", mode=mode)
-        except Exception as exc:  # noqa: BLE001 — mode switch is optional
+            curr_text = (await btn.inner_text()).strip().lower()
+
+            # 1. Select Pro / Flash if needed
+            target_model = "pro_model" if is_deep else "flash_model"
+            need_model_switch = (is_deep and "pro" not in curr_text) or (not is_deep and "flash" not in curr_text and "pro" in curr_text)
+            if need_model_switch:
+                await btn.click(timeout=4000)
+                await asyncio.sleep(0.5)
+                m_loc, _ = await resolve_locator(page, cfg_modes.get(target_model, []))
+                if m_loc is not None:
+                    await m_loc.click(timeout=4000)
+                    logger.info("gemini_model_selected", target=target_model)
+                    await asyncio.sleep(1.0)
+                else:
+                    await page.keyboard.press("Escape")
+
+            # 2. Select Thinking effort Cao (High) if deep mode is requested
+            if is_deep:
+                curr_text = (await btn.inner_text()).strip().lower()
+                if "cao" not in curr_text and "high" not in curr_text:
+                    await btn.click(timeout=4000)
+                    await asyncio.sleep(0.5)
+                    t_loc, _ = await resolve_locator(page, cfg_modes.get("thinking_high", []))
+                    if t_loc is not None:
+                        await t_loc.click(timeout=4000)
+                        logger.info("gemini_thinking_selected", target="thinking_high")
+                        await asyncio.sleep(1.0)
+                    else:
+                        await page.keyboard.press("Escape")
+        except Exception as exc:  # noqa: BLE001 — mode switch is best-effort
             logger.warning("gemini_mode_click_failed", error=str(exc))

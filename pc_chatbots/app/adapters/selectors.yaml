@@ -50,8 +50,17 @@ providers:
       - { testid: submit-button }
       - { css: "button[aria-label='Submit']" }
     mode_selectors:
-      pro_toggle: { testid: pro-toggle }
-      research_mode: { role: button, name: "Pro" }
+      pro_toggle:
+        - { testid: pro-toggle }
+        - { css: "button[aria-label='Pro']" }
+        - { role: button, name: "Pro" }
+      research_mode:
+        - { role: button, name: "Pro" }
+        - { css: "button:has-text('Pro')" }
+      model_dropdown:
+        - { css: "button[aria-label='Model']" }
+        - { css: "button:has-text('Model')" }
+
     generating_indicator:
       - { css: "button[aria-label*='Stop' i]" }
       - { css: "button[aria-label*='Ngừng' i]" }
@@ -84,7 +93,26 @@ providers:
       - { role: button, name: "Send" }
       - { css: "button[aria-label='Send message']" }
     mode_selectors:
-      deep_research: { role: button, name: "Deep Research" }
+      mode_dropdown:
+        - { css: "button[data-test-id='bard-mode-menu-button']" }
+        - { css: "button.input-area-switch" }
+        - { css: "button[aria-label*='chọn chế độ' i]" }
+      pro_model:
+        - { css: "[role='menuitem']:has-text('Pro')" }
+        - { css: ".mat-mdc-menu-item:has-text('Pro')" }
+      flash_model:
+        - { css: "[role='menuitem']:has-text('Flash')" }
+        - { css: ".mat-mdc-menu-item:has-text('Flash')" }
+      thinking_high:
+        - { css: "[role='menuitem']:has-text('Cao')" }
+        - { css: "[role='menuitem']:has-text('High')" }
+        - { css: ".mat-mdc-menu-item:has-text('Cao')" }
+        - { css: ".mat-mdc-menu-item:has-text('High')" }
+      thinking_low:
+        - { css: "[role='menuitem']:has-text('Thấp')" }
+        - { css: "[role='menuitem']:has-text('Low')" }
+        - { css: ".mat-mdc-menu-item:has-text('Thấp')" }
+        - { css: ".mat-mdc-menu-item:has-text('Low')" }
     generating_indicator:
       - { css: "button[aria-label*='Ngừng' i]" }
       - { css: "button[aria-label*='Stop' i]" }
@@ -120,9 +148,14 @@ providers:
       - { css: "button[data-testid='send-button']" }
       - { css: "button[aria-label*='Send' i]" }
     mode_selectors:
+      think_toggle:
+        - { css: "button.__composer-pill:has-text('Think')" }
+        - { css: "button:has-text('Think')" }
+        - { role: button, name: "Think" }
       research_mode:
         - { role: button, name: "Deep research" }
         - { css: "button[data-testid='deep-research']" }
+
     generating_indicator:
       - { css: "button[data-testid='stop-button']" }
       - { css: "button[aria-label*='Stop' i]" }
@@ -149,9 +182,20 @@ providers:
       - { css: "button[data-testid='send-message']" }
       - { role: button, name: "Send Message" }
     mode_selectors:
+      model_dropdown:
+        - { css: "button[data-testid='model-selector-dropdown']" }
+        - { css: "button[aria-label*='Model:']" }
       extended_thinking:
         - { css: "button[data-testid='extended-thinking-toggle']" }
         - { role: button, name: "Extended thinking" }
+        - { css: "[role='menuitem']:has-text('Thinking')" }
+      sonnet_model:
+        - { css: "[role='menuitem']:has-text('Sonnet')" }
+        - { css: "div:has-text('Sonnet')" }
+      haiku_model:
+        - { css: "[role='menuitem']:has-text('Haiku')" }
+        - { css: "div:has-text('Haiku')" }
+
     generating_indicator:
       - { css: "button[aria-label*='Stop' i]" }
       - { role: button, name: "Stop Response" }
@@ -179,6 +223,19 @@ providers:
       - { css: "button[aria-label*='Send' i]" }
       - { css: "button[aria-label*='Submit' i]" }
       - { role: button, name: "Send" }
+    mode_selectors:
+      mode_dropdown:
+        - { css: "#gptModeSwitcher" }
+        - { css: "button[aria-label*='Model Selector' i]" }
+      deep_mode:
+        - { css: "[role='menuitem']:has-text('Think deeper')" }
+        - { css: ".fui-MenuItem:has-text('Think deeper')" }
+      standard_mode:
+        - { css: "[role='menuitem']:has-text('Auto')" }
+        - { css: ".fui-MenuItem:has-text('Auto')" }
+      fast_mode:
+        - { css: "[role='menuitem']:has-text('Quick response')" }
+        - { css: ".fui-MenuItem:has-text('Quick response')" }
     generating_indicator:
       - { css: "button[aria-label*='Stop' i]" }
       - { role: button, name: "Stop responding" }
@@ -207,9 +264,27 @@ providers:
       - { css: "button[class*='send']" }
       - { role: button, name: "Send" }
     mode_selectors:
-      thinking_mode:
-        - { role: button, name: "Thinking" }
-        - { css: "button[class*='thinking']" }
+      model_dropdown:
+        - { css: "div.wms-trigger" }
+        - { css: "[class*='mode-select'] div.wms-trigger" }
+      max_model:
+        - { css: "[class*='option']:has-text('Max')" }
+        - { css: "div:has-text('Qwen3.8-Max')" }
+      plus_model:
+        - { css: "[class*='option']:has-text('Plus')" }
+        - { css: "div:has-text('Qwen3.7-Plus')" }
+      thinking_dropdown:
+        - { css: ".qwen-thinking-selector .qwen-chat-v2-dropdown-menu-select" }
+        - { css: ".qwen-thinking-selector" }
+      thinking_option:
+        - { css: ".qwen-chat-v2-dropdown-menu-item:has-text('Thinking')" }
+        - { css: "[role='menuitem']:has-text('Thinking')" }
+      auto_option:
+        - { css: ".qwen-chat-v2-dropdown-menu-item:has-text('Auto')" }
+        - { css: "[role='menuitem']:has-text('Auto')" }
+      fast_option:
+        - { css: ".qwen-chat-v2-dropdown-menu-item:has-text('Fast')" }
+        - { css: "[role='menuitem']:has-text('Fast')" }
     generating_indicator:
       # Outer card only — its children (…-content/-title) persist after thinking
       # completes and must NOT count as "generating". The card gains the
@@ -243,9 +318,20 @@ providers:
       - { css: "button[class*='send']:not([class*='disabled'])" }
       - { role: button, name: "Send" }
     mode_selectors:
+      model_dropdown:
+        - { css: "[data-testid='model-select-trigger']" }
+        - { css: ".current-model" }
+      deep_mode:
+        - { css: "[role='menuitem']:has-text('Thinking')" }
+        - { css: "[role='menuitem']:has-text('K1.5')" }
+        - { css: "div:has-text('Deep Research')" }
+      standard_mode:
+        - { css: "[role='menuitem']:has-text('Instant')" }
+        - { css: "[role='menuitem']:has-text('Standard')" }
       search_mode:
         - { role: button, name: "Search" }
         - { css: "button[class*='search']" }
+
     generating_indicator:
       - { css: "div[class*='thinking-container']:not([class*='completed'])" }
       - { css: "button[aria-label*='Stop' i]" }
@@ -280,8 +366,12 @@ providers:
       - { css: "div[class*='send'][role='button']" }
     mode_selectors:
       deep_think:
+        - { css: ".ds-toggle-button:has-text('DeepThink')" }
+        - { css: "div.ds-toggle-button:has-text('DeepThink')" }
         - { role: button, name: "DeepThink" }
-        - { css: "div[class*='deep-think']" }
+      search_toggle:
+        - { css: ".ds-toggle-button:has-text('Search')" }
+
     generating_indicator:
       - { css: "div[role='button'][class*='stop']" }
       - { css: "button[aria-label*='Stop' i]" }
@@ -308,6 +398,18 @@ providers:
       - { css: "button[aria-label*='Send' i]" }
       - { role: button, name: "Send" }
       - { css: "button[class*='send']" }
+    mode_selectors:
+      thought_toggle:
+        - { css: "button:has-text('Thought Process')" }
+      model_dropdown:
+        - { css: "#model-selector-x-preview-l-button" }
+        - { css: "button[aria-label='Select a model']" }
+      deep_model:
+        - { css: "[role='menuitem']:has-text('GLM-5')" }
+        - { css: "[role='menuitem']:has-text('Pro')" }
+      standard_model:
+        - { css: "[role='menuitem']:has-text('Flash')" }
+
     # NOTE: no generating_indicator — the Send button's disabled state is also the
     # idle state (empty input), so it cannot distinguish "generating" from "done".
     # Completion relies on done_marker (Copy button) + stable answer text.
@@ -338,9 +440,20 @@ providers:
       - { css: "button[aria-label*='Send' i]" }
       - { role: button, name: "Send" }
     mode_selectors:
+      model_dropdown:
+        - { css: "#model-select-trigger" }
+        - { css: "button[aria-label*='Model:']" }
+      deep_mode:
+        - { css: "[role='menuitem']:has-text('Expert')" }
+        - { css: "[role='menuitem']:has-text('Heavy')" }
+        - { css: "button[class*='deep-search']" }
+      standard_mode:
+        - { css: "[role='menuitem']:has-text('Fast')" }
+        - { css: "[role='menuitem']:has-text('Auto')" }
       deep_search:
         - { role: button, name: "DeepSearch" }
         - { css: "button[class*='deep-search']" }
+
     generating_indicator:
       - { css: "button[aria-label*='Stop' i]" }
       - { role: button, name: "Stop" }
@@ -366,6 +479,17 @@ providers:
       - { css: "button[aria-label*='Send' i]" }
       - { role: button, name: "Send" }
       - { css: "button[class*='send']" }
+    mode_selectors:
+      model_dropdown:
+        - { css: "button[data-testid='model-selector-trigger']" }
+        - { css: "button[data-composer-model-trigger='true']" }
+      deep_model:
+        - { css: "[role='menuitem']:has-text('Pro')" }
+        - { css: "[role='menuitem']:has-text('M3.1-Pro')" }
+      standard_model:
+        - { css: "[role='menuitem']:has-text('Flash')" }
+        - { css: "[role='menuitem']:has-text('M3.1-Flash-Preview')" }
+
     generating_indicator:
       - { css: "button[aria-label*='Stop' i]" }
       - { role: button, name: "Stop" }
@@ -392,6 +516,16 @@ providers:
       - { testid: composer-send-button }
       - { css: "button[aria-label*='Send' i]:not([disabled])" }
       - { role: button, name: "Send" }
+    mode_selectors:
+      mode_dropdown:
+        - { css: "button[data-testid='composer-mode-dropdown-button']" }
+      deep_mode:
+        - { css: "[role='menuitem']:has-text('Thinking')" }
+        - { css: "div:has-text('Thinking')" }
+      standard_mode:
+        - { css: "[role='menuitem']:has-text('Standard')" }
+        - { css: "[role='menuitem']:has-text('Normal')" }
+
     generating_indicator:
       - { css: "div[data-testid='assistant-message'][data-streaming-state='IN_PROGRESS']" }
       - { css: "button[aria-label*='Stop' i]" }
@@ -445,6 +579,17 @@ providers:
       - { css: "button[aria-label*='Send' i]" }
       - { role: button, name: "Send" }
       - { css: "button[type='submit']" }
+    mode_selectors:
+      model_dropdown:
+        - { css: "button[aria-label='Choose model']" }
+        - { css: "button:has-text('Fast')" }
+      deep_mode:
+        - { css: "[role='menuitem']:has-text('Think')" }
+        - { css: "div:has-text('Think')" }
+      standard_mode:
+        - { css: "[role='menuitem']:has-text('Fast')" }
+        - { css: "div:has-text('Fast')" }
+
     generating_indicator:
       - { css: "button[aria-label='Stop generation']" }
       - { css: "button[aria-label*='Stop' i]" }
