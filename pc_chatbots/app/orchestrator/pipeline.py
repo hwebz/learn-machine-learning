@@ -10,6 +10,7 @@ import structlog
 from app.adapters.base import ProviderAdapter
 from app.adapters.browser_base import ProviderNeedsUserAction
 from app.adapters.fake import FakeAdapter
+from app.browser.session import BrowserSessionManager
 from app.adapters.gemini_ui import GeminiUIAdapter
 from app.adapters.perplexity_api import PerplexityAgentAdapter
 from app.adapters.perplexity_ui import PerplexityUIAdapter
@@ -147,7 +148,7 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
         results_lock = asyncio.Lock()
         total_subtasks = len(subtasks)
 
-        async def _execute_subtask(subtask: Subtask, index: int) -> None:
+        async def _run_subtask_core(subtask: Subtask, index: int) -> None:
             if cancel_event.is_set():
                 return
 
@@ -378,24 +379,36 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                     db_job.updated_at = utc_now()
                     await session.commit()
 
-        if settings.work_mode == "async":
-            logger.info("running_pipeline_async", job_id=job_id, max_concurrent=settings.max_concurrent_browsers)
-            semaphore = asyncio.Semaphore(max(1, settings.max_concurrent_browsers))
+        async def _execute_subtask(subtask: Subtask, index: int) -> None:
+            if cancel_event.is_set():
+                return
+            try:
+                await _run_subtask_core(subtask, index)
+            finally:
+                if settings.work_mode == "async":
+                    await BrowserSessionManager.close_session(subtask.provider)
 
-            async def _worker(st: Subtask, idx: int) -> None:
-                async with semaphore:
+        try:
+            if settings.work_mode == "async":
+                logger.info("running_pipeline_async", job_id=job_id, max_concurrent=settings.max_concurrent_browsers)
+                semaphore = asyncio.Semaphore(max(1, settings.max_concurrent_browsers))
+
+                async def _worker(st: Subtask, idx: int) -> None:
+                    async with semaphore:
+                        if cancel_event.is_set():
+                            return
+                        await _execute_subtask(st, idx)
+
+                await asyncio.gather(*[_worker(st, idx) for idx, st in enumerate(subtasks, start=1)])
+            else:
+                logger.info("running_pipeline_sync", job_id=job_id)
+                for idx, st in enumerate(subtasks, start=1):
                     if cancel_event.is_set():
+                        await _set_status(job_id, "cancelled")
                         return
                     await _execute_subtask(st, idx)
-
-            await asyncio.gather(*[_worker(st, idx) for idx, st in enumerate(subtasks, start=1)])
-        else:
-            logger.info("running_pipeline_sync", job_id=job_id)
-            for idx, st in enumerate(subtasks, start=1):
-                if cancel_event.is_set():
-                    await _set_status(job_id, "cancelled")
-                    return
-                await _execute_subtask(st, idx)
+        finally:
+            await BrowserSessionManager.close_all()
 
         for phase in ("extracting", "verifying", "synthesizing"):
             if cancel_event.is_set():

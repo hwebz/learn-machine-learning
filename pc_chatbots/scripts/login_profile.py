@@ -56,7 +56,7 @@ async def main() -> int:
         print(f"[Sync mode] Using shared profile: {profile_dir.resolve()}\n")
         session = BrowserSession.instance()
         try:
-            await session.start()
+            await session.start(headless=False)
             for name, url in urls:
                 page = await session.new_page(url)
                 print(f"Opened {name}: {url}")
@@ -75,7 +75,7 @@ async def main() -> int:
             session = BrowserSessionManager.get_session(name)
             print(f"[{name}] Profile dir: {session.profile_dir.resolve()}")
             try:
-                await session.start()
+                await session.start(headless=False)
                 page = await session.new_page(url)
                 print(f"Opened {name}: {url}")
                 try:

@@ -44,7 +44,7 @@ class BrowserSession:
             cls._instance = cls(profile_dir=settings.browser_profile_dir)
         return cls._instance
 
-    async def start(self) -> None:
+    async def start(self, headless: bool | None = None) -> None:
         """Idempotently launch the persistent context if not already running."""
         if self._ctx is not None:
             return
@@ -54,11 +54,12 @@ class BrowserSession:
             from playwright.async_api import async_playwright
 
             self.profile_dir.mkdir(parents=True, exist_ok=True)
+            use_headless = settings.browser_headless if headless is None else headless
             logger.info(
                 "browser_session_starting",
                 profile=str(self.profile_dir),
                 channel=settings.browser_channel,
-                headless=settings.browser_headless,
+                headless=use_headless,
             )
             pw = await async_playwright().start()
             max_attempts = 3
@@ -69,7 +70,7 @@ class BrowserSession:
                     ctx = await pw.chromium.launch_persistent_context(
                         user_data_dir=str(self.profile_dir),
                         channel=settings.browser_channel,
-                        headless=settings.browser_headless,
+                        headless=use_headless,
                         args=[
                             "--disable-blink-features=AutomationControlled",
                             "--disable-background-timer-throttling",
@@ -179,6 +180,17 @@ class BrowserSessionManager:
             session = BrowserSession(profile_dir=profile)
             cls._sessions[key] = session
         return session
+
+    @classmethod
+    async def close_session(cls, provider: str = "main") -> None:
+        """Close and remove a specific session from the pool."""
+        if settings.work_mode == "sync":
+            return
+        key = provider.lower()
+        async with cls._lock:
+            session = cls._sessions.pop(key, None)
+        if session is not None:
+            await session.close()
 
     @classmethod
     async def close_all(cls) -> None:
