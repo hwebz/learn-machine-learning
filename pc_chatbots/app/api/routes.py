@@ -13,13 +13,12 @@ from fastapi.responses import StreamingResponse
 from sqlmodel import select
 
 from app.api.auth import require_api_key
-from app.api.schemas import ResearchAccepted, ResearchRequest, ResearchResponse
+from app.api.schemas import JobUpdateRequest, ResearchAccepted, ResearchRequest, ResearchResponse
 from app.adapters.perplexity_api import PerplexityAgentAdapter
 from app.orchestrator.pipeline import _UI_ADAPTERS
 from app.core.db import SessionLocal
 from app.core.config import settings
-from app.core.models import Job, JobEvent
-from app.core.models import utc_now
+from app.core.models import Claim, Job, JobEvent, ProviderRun, Report, Source, Subtask, utc_now
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -146,6 +145,8 @@ async def list_research(limit: int = 50) -> list[dict[str, Any]]:
             result.append({
                 "job_id": j.id,
                 "query": j.query,
+                "title": getattr(j, "title", None) or j.query,
+                "pinned": bool(getattr(j, "pinned", False)),
                 "status": j.status,
                 "subtasks_total": j.subtasks_total,
                 "subtasks_done": j.subtasks_done,
@@ -165,6 +166,62 @@ async def list_research(limit: int = 50) -> list[dict[str, Any]]:
 @router.get("/research/{job_id}", response_model=ResearchResponse, dependencies=protected)
 async def get_research(job_id: str) -> ResearchResponse:
     return _job_response(await _load_job(job_id))
+
+
+@router.patch("/research/{job_id}", dependencies=protected)
+async def update_research(job_id: str, payload: JobUpdateRequest) -> dict[str, Any]:
+    async with SessionLocal() as session:
+        job = await session.get(Job, job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Research job not found")
+        if payload.title is not None:
+            job.title = payload.title
+        if payload.pinned is not None:
+            job.pinned = payload.pinned
+        job.updated_at = utc_now()
+        session.add(job)
+        await session.commit()
+        return {
+            "job_id": job.id,
+            "title": getattr(job, "title", None) or job.query,
+            "pinned": bool(getattr(job, "pinned", False)),
+        }
+
+
+@router.delete("/research/{job_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=protected)
+async def delete_research(job_id: str) -> Response:
+    async with SessionLocal() as session:
+        job = await session.get(Job, job_id)
+        if job is not None:
+            # 1. Delete events
+            events = (await session.exec(select(JobEvent).where(JobEvent.job_id == job_id))).all()
+            for ev in events:
+                await session.delete(ev)
+
+            # 2. Delete subtasks, runs, sources
+            subtasks = (await session.exec(select(Subtask).where(Subtask.job_id == job_id))).all()
+            for st in subtasks:
+                runs = (await session.exec(select(ProviderRun).where(ProviderRun.subtask_id == st.id))).all()
+                for run in runs:
+                    sources = (await session.exec(select(Source).where(Source.run_id == run.id))).all()
+                    for src in sources:
+                        await session.delete(src)
+                    await session.delete(run)
+                await session.delete(st)
+
+            # 3. Delete claims and reports
+            claims = (await session.exec(select(Claim).where(Claim.job_id == job_id))).all()
+            for cl in claims:
+                await session.delete(cl)
+
+            reports = (await session.exec(select(Report).where(Report.job_id == job_id))).all()
+            for rep in reports:
+                await session.delete(rep)
+
+            # 4. Delete the job record
+            await session.delete(job)
+            await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/research/{job_id}/events", dependencies=protected)

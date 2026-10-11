@@ -84,3 +84,8 @@ class ResearchResponse(BaseModel):
     created_at: datetime
     finished_at: datetime | None
 
+
+class JobUpdateRequest(BaseModel):
+    title: str | None = None
+    pinned: bool | None = None
+

@@ -53,6 +53,7 @@ export interface ChatSession {
   title: string;
   pinned: boolean;
   createdAt: string;
+  createdTimestamp?: number;
   messages: Message[];
   selectedProviders: string[];
   selectedProvider?: string;

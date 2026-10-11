@@ -26,6 +26,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+if ($HostAddress -eq "--Reload" -or $HostAddress -eq "-Reload") {
+    $Reload = $true
+    $HostAddress = "127.0.0.1"
+}
+
 # Định vị thư mục gốc pc_chatbots (thư mục cha của thư mục chứa script này)
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir

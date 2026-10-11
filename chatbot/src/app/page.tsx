@@ -1,18 +1,49 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { INITIAL_CHAT_SESSIONS, PROVIDERS_LIST, DEFAULT_SELECTED_PROVIDERS } from "../lib/constants";
+import { PROVIDERS_LIST, DEFAULT_SELECTED_PROVIDERS } from "../lib/constants";
 import { ChatSession, DepthMode, Message, StepLog, ProviderInfo } from "../types/chat";
 import { LeftSidebar } from "../components/sidebar/LeftSidebar";
 import { ChatArea } from "../components/chat/ChatArea";
 import { RightSidebar } from "../components/inspector/RightSidebar";
 import { ProviderModal } from "../components/providers/ProviderModal";
 import { JobsModal } from "../components/jobs/JobsModal";
-import { createResearchJob, subscribeJobEvents, fetchResearchHistory, getResearchResult } from "../lib/api";
+import {
+  createResearchJob,
+  subscribeJobEvents,
+  fetchResearchHistory,
+  getResearchResult,
+  updateResearchJob,
+  deleteResearchJob,
+} from "../lib/api";
+
+const DELETED_SESSIONS_KEY = "deep_research_deleted_sessions";
+
+function getDeletedSessionIds(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = localStorage.getItem(DELETED_SESSIONS_KEY);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function markSessionAsDeleted(id: string, jobId?: string) {
+  if (typeof window === "undefined") return;
+  try {
+    const set = getDeletedSessionIds();
+    set.add(id);
+    if (jobId) set.add(jobId);
+    localStorage.setItem(DELETED_SESSIONS_KEY, JSON.stringify(Array.from(set)));
+  } catch (err) {
+    console.warn("Could not save deleted session id to localStorage:", err);
+  }
+}
 
 export default function Home() {
-  const [sessions, setSessions] = useState<ChatSession[]>(INITIAL_CHAT_SESSIONS);
-  const [activeSessionId, setActiveSessionId] = useState<string>("session-overview");
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [activeSteps, setActiveSteps] = useState<StepLog[]>([]);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(true);
@@ -24,14 +55,16 @@ export default function Home() {
   const loadHistoryFromBackend = useCallback(async () => {
     setIsLoadingHistory(true);
     try {
-      const historyJobs = await fetchResearchHistory(40);
+      const historyJobs = await fetchResearchHistory(50);
+      const deletedIds = getDeletedSessionIds();
+
       if (historyJobs && historyJobs.length > 0) {
         setSessions((prev) => {
           const existingJobIds = new Set(prev.map((s) => s.jobId || s.id));
           const newSessions: ChatSession[] = [];
 
           for (const job of historyJobs) {
-            if (existingJobIds.has(job.job_id)) {
+            if (deletedIds.has(job.job_id) || existingJobIds.has(job.job_id)) {
               continue;
             }
 
@@ -70,14 +103,18 @@ export default function Home() {
               });
             }
 
+            const initialTitle = (job as any).title || (job.query.length > 36 ? job.query.slice(0, 36) + "..." : job.query);
+            const isPinned = Boolean((job as any).pinned);
+
             newSessions.push({
               id: job.job_id,
               jobId: job.job_id,
-              title: job.query.length > 36 ? job.query.slice(0, 36) + "..." : job.query,
-              pinned: false,
+              title: initialTitle,
+              pinned: isPinned,
               createdAt: job.created_at
                 ? new Date(job.created_at).toLocaleDateString([], { month: "short", day: "numeric" })
                 : "Gần đây",
+              createdTimestamp: job.created_at ? new Date(job.created_at).getTime() : Date.now(),
               selectedProviders: jobProviders,
               selectedProvider: jobProviders[0] || "copilot",
               depth: job.depth || "deep",
@@ -86,10 +123,51 @@ export default function Home() {
             });
           }
 
-          if (newSessions.length > 0) {
-            return [...prev, ...newSessions];
+          const combined = [...prev, ...newSessions];
+          if (combined.length > 0) {
+            setActiveSessionId((curr) => {
+              if (!curr || !combined.some((s) => s.id === curr)) {
+                return combined[0].id;
+              }
+              return curr;
+            });
+            return combined;
           }
-          return prev;
+
+          const freshId = `session-${Date.now()}`;
+          setActiveSessionId(freshId);
+          return [
+            {
+              id: freshId,
+              title: "Phiên nghiên cứu mới",
+              pinned: false,
+              createdAt: "Vừa xong",
+              createdTimestamp: Date.now(),
+              selectedProviders: DEFAULT_SELECTED_PROVIDERS,
+              selectedProvider: DEFAULT_SELECTED_PROVIDERS[0],
+              depth: "deep",
+              messages: [],
+            },
+          ];
+        });
+      } else {
+        setSessions((prev) => {
+          if (prev.length > 0) return prev;
+          const freshId = `session-${Date.now()}`;
+          setActiveSessionId(freshId);
+          return [
+            {
+              id: freshId,
+              title: "Phiên nghiên cứu mới",
+              pinned: false,
+              createdAt: "Vừa xong",
+              createdTimestamp: Date.now(),
+              selectedProviders: DEFAULT_SELECTED_PROVIDERS,
+              selectedProvider: DEFAULT_SELECTED_PROVIDERS[0],
+              depth: "deep",
+              messages: [],
+            },
+          ];
         });
       }
     } catch (err) {
@@ -106,9 +184,10 @@ export default function Home() {
   const activeSession: ChatSession =
     sessions.find((s) => s.id === activeSessionId) || sessions[0] || {
       id: "session-fallback",
-      title: "New Research Chat",
+      title: "Phiên nghiên cứu mới",
       pinned: false,
       createdAt: "Vừa xong",
+      createdTimestamp: Date.now(),
       selectedProviders: DEFAULT_SELECTED_PROVIDERS,
       selectedProvider: "copilot",
       depth: "deep",
@@ -168,6 +247,7 @@ export default function Home() {
       title: "Phiên nghiên cứu mới",
       pinned: false,
       createdAt: "Vừa xong",
+      createdTimestamp: Date.now(),
       selectedProviders: DEFAULT_SELECTED_PROVIDERS,
       selectedProvider: DEFAULT_SELECTED_PROVIDERS[0],
       depth: activeSession.depth || "deep",
@@ -176,6 +256,54 @@ export default function Home() {
     setSessions([newSession, ...sessions]);
     setActiveSessionId(newId);
     setActiveSteps([]);
+  };
+
+  const handleTogglePin = (id: string) => {
+    const session = sessions.find((s) => s.id === id);
+    const newPinned = session ? !session.pinned : true;
+    const targetJobId = session?.jobId || (!id.startsWith("session-") ? id : undefined);
+    if (targetJobId) {
+      updateResearchJob(targetJobId, { pinned: newPinned });
+    }
+    setSessions((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, pinned: newPinned } : s))
+    );
+  };
+
+  const handleRenameSession = (id: string, newTitle: string) => {
+    if (!newTitle.trim()) return;
+    const trimmed = newTitle.trim();
+    const session = sessions.find((s) => s.id === id);
+    const targetJobId = session?.jobId || (!id.startsWith("session-") ? id : undefined);
+    if (targetJobId) {
+      updateResearchJob(targetJobId, { title: trimmed });
+    }
+    setSessions((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, title: trimmed } : s))
+    );
+  };
+
+  const handleDeleteSession = async (id: string) => {
+    const session = sessions.find((s) => s.id === id);
+    const targetJobId = session?.jobId || (!id.startsWith("session-") ? id : undefined);
+
+    // Persist deleted state immediately to localStorage so it never resurfaces on refresh
+    markSessionAsDeleted(id, targetJobId);
+
+    if (targetJobId) {
+      await deleteResearchJob(targetJobId);
+    }
+    setSessions((prev) => {
+      const remaining = prev.filter((s) => s.id !== id);
+      if (activeSessionId === id) {
+        if (remaining.length > 0) {
+          setActiveSessionId(remaining[0].id);
+        } else {
+          setTimeout(() => handleNewChat(), 0);
+        }
+      }
+      return remaining;
+    });
   };
 
   const handleToggleProvider = (providerId: string) => {
@@ -437,6 +565,9 @@ Hệ thống sẵn sàng hỗ trợ các câu hỏi đào sâu tiếp theo của
         onOpenJobsModal={() => setIsJobsModalOpen(true)}
         onRefreshHistory={loadHistoryFromBackend}
         isLoadingHistory={isLoadingHistory}
+        onTogglePin={handleTogglePin}
+        onRenameSession={handleRenameSession}
+        onDeleteSession={handleDeleteSession}
       />
 
       {/* 2. Center Chat Area */}

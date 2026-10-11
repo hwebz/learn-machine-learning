@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { ChatSession, DepthMode, ProviderInfo, StepLog } from "../../types/chat";
 import { SUGGESTED_PROMPTS } from "../../lib/constants";
 import { MarkdownContent } from "./MarkdownContent";
@@ -22,6 +22,8 @@ import {
   SendIcon,
   BrainIcon,
   ModelBadgeLogo,
+  ArrowUpCircleIcon,
+  ArrowDownCircleIcon,
 } from "../icons/Icons";
 
 interface ChatAreaProps {
@@ -59,7 +61,54 @@ export function ChatArea({
   const [isCopied, setIsCopied] = useState<string | null>(null);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const [canScrollTop, setCanScrollTop] = useState(false);
+  const [canScrollBottom, setCanScrollBottom] = useState(false);
+  const [showScrollNav, setShowScrollNav] = useState(false);
+
+  const checkScrollState = useCallback(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const isScrollable = scrollHeight > clientHeight + 30;
+    setShowScrollNav(isScrollable);
+    setCanScrollTop(scrollTop > 40);
+    setCanScrollBottom(scrollHeight - scrollTop - clientHeight > 40);
+  }, []);
+
+  useEffect(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    checkScrollState();
+    el.addEventListener("scroll", checkScrollState, { passive: true });
+    window.addEventListener("resize", checkScrollState);
+    return () => {
+      el.removeEventListener("scroll", checkScrollState);
+      window.removeEventListener("resize", checkScrollState);
+    };
+  }, [checkScrollState, session.messages, isGenerating, activeSteps]);
+
+  const scrollToTop = () => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+    }
+  };
+
+  const scrollToBottom = () => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: "smooth",
+      });
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  };
 
   // Auto-scroll to bottom on new message
   useEffect(() => {
@@ -290,7 +339,7 @@ export function ChatArea({
       </header>
 
       {/* Message Stream */}
-      <div className="messages-scroll-container">
+      <div ref={messagesContainerRef} className="messages-scroll-container">
         {/* Empty State / Welcome Screen when session has no messages */}
         {session.messages.length === 0 && (
           <div
@@ -680,6 +729,32 @@ export function ChatArea({
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Floating Scroll Navigation: Scroll to Top / Bottom */}
+      {showScrollNav && (
+        <div className="chat-scroll-nav">
+          <button
+            type="button"
+            className={`scroll-nav-btn ${!canScrollTop ? "disabled" : ""}`}
+            onClick={scrollToTop}
+            disabled={!canScrollTop}
+            title="Cuộn lên đầu trang (Scroll to top)"
+            aria-label="Scroll to top"
+          >
+            <ArrowUpCircleIcon size={20} />
+          </button>
+          <button
+            type="button"
+            className={`scroll-nav-btn ${!canScrollBottom ? "disabled" : ""}`}
+            onClick={scrollToBottom}
+            disabled={!canScrollBottom}
+            title="Cuộn xuống cuối trang (Scroll to bottom)"
+            aria-label="Scroll to bottom"
+          >
+            <ArrowDownCircleIcon size={20} />
+          </button>
+        </div>
+      )}
 
       {/* Floating Composer Card */}
       <div className="composer-floating-container">

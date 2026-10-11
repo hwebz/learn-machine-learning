@@ -43,7 +43,19 @@ async def init_db() -> None:
                 if col_name not in cols:
                     sync_conn.execute(text(f"ALTER TABLE jobevent ADD COLUMN {col_name} {col_type}"))
 
+        def _migrate_job(sync_conn) -> None:
+            result = sync_conn.execute(text("PRAGMA table_info(job)"))
+            cols = [row[1] for row in result.fetchall()]
+            new_cols = {
+                "title": "VARCHAR",
+                "pinned": "BOOLEAN DEFAULT 0",
+            }
+            for col_name, col_type in new_cols.items():
+                if col_name not in cols:
+                    sync_conn.execute(text(f"ALTER TABLE job ADD COLUMN {col_name} {col_type}"))
+
         await connection.run_sync(_migrate_jobevent)
+        await connection.run_sync(_migrate_job)
 
 
 async def close_db() -> None:

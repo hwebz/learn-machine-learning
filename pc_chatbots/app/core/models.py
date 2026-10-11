@@ -12,6 +12,8 @@ def utc_now() -> datetime:
 class Job(SQLModel, table=True):
     id: str = Field(primary_key=True)
     query: str
+    title: str | None = None
+    pinned: bool = False
     status: str = "queued"
     config_json: str
     created_at: datetime = Field(default_factory=utc_now, index=True)
