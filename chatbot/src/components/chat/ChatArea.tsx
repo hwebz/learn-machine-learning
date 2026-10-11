@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { ChatSession, DepthMode, ProviderInfo, StepLog } from "../../types/chat";
+import { ChatSession, DepthMode, ProviderInfo, StepLog, ThinkingStep, SourceLink, Message } from "../../types/chat";
 import { SUGGESTED_PROMPTS } from "../../lib/constants";
+import { extractProviderResponse } from "../../lib/providerResponse";
 import { MarkdownContent } from "./MarkdownContent";
 import {
   PlusIcon,
   SettingsIcon,
   SidebarCollapseIcon,
-  FactCheckIcon,
   ShareIcon,
   RefreshIcon,
   CopyIcon,
@@ -20,27 +20,496 @@ import {
   MicIcon,
   GridIcon,
   SendIcon,
+  StopIcon,
   BrainIcon,
+  ChevronRightIcon,
   ModelBadgeLogo,
   ArrowUpCircleIcon,
   ArrowDownCircleIcon,
   ExternalLinkIcon,
 } from "../icons/Icons";
 
+function normalizeProvider(name: string): string {
+  const s = name.trim().toLowerCase();
+  if (s.includes("qwen")) return "qwen";
+  if (s.includes("copilot")) return "copilot";
+  if (s.includes("gemini")) return "gemini";
+  if (s.includes("deepseek")) return "deepseek";
+  if (s.includes("chatgpt") || s.includes("openai")) return "chatgpt";
+  if (s.includes("grok")) return "grok";
+  if (s.includes("claude")) return "claude";
+  if (s.includes("perplexity")) return "perplexity";
+  if (s.includes("mistral")) return "mistral";
+  return s;
+}
+
+function extractProvider(st: StepLog): string {
+  if (st.provider) return normalizeProvider(st.provider);
+  if (st.data?.provider) return normalizeProvider(String(st.data.provider));
+  const match = st.message.match(
+    /\b(qwen|copilot|gemini|deepseek|chatgpt|openai|grok|perplexity|claude|mistral)\b/i
+  );
+  if (match) return normalizeProvider(match[1]);
+  return "";
+}
+
+function isThinkingEvent(st: StepLog): boolean {
+  if (st.step === "thinking_progress") return true;
+  if (st.isThinking || st.data?.is_thinking) return true;
+  if (/đang suy luận/i.test(st.message)) return true;
+  return false;
+}
+
+interface TimelineLogItem {
+  kind: "log";
+  key: string;
+  message: string;
+  timestamp: string;
+  isLatest?: boolean;
+}
+
+interface TimelineThinkingItem {
+  kind: "thinking";
+  key: string;
+  provider: string;
+  steps: ThinkingStep[];
+  text?: string;
+  citations: SourceLink[];
+  isRunning: boolean;
+  timestamp: string;
+}
+
+type TimelineItem = TimelineLogItem | TimelineThinkingItem;
+
+function buildChronologicalTimeline(
+  steps: StepLog[],
+  isLive: boolean,
+  message?: Message
+): TimelineItem[] {
+  if (!steps || steps.length === 0) return [];
+
+  // 1. Identify all providers in order of appearance
+  const providersOrder: string[] = [];
+  for (const st of steps) {
+    const p = extractProvider(st);
+    if (p && !providersOrder.includes(p)) {
+      providersOrder.push(p);
+    }
+  }
+  if (providersOrder.length === 0) {
+    providersOrder.push("");
+  }
+
+  // 2. Pre-aggregate thinking details per provider
+  const providerDataMap = new Map<
+    string,
+    {
+      thinkingSteps: ThinkingStep[];
+      thinkingText: string;
+      citations: SourceLink[];
+      hasThinking: boolean;
+      isRunning: boolean;
+    }
+  >();
+
+  for (const p of providersOrder) {
+    const pSteps = steps.filter((st) => {
+      const sp = extractProvider(st);
+      return sp === p || (providersOrder.length === 1 && !sp);
+    });
+
+    const stepMap = new Map<string, ThinkingStep>();
+    for (const st of pSteps) {
+      const raw = st.thinkingSteps || st.data?.thinking_steps || [];
+      for (const item of raw) {
+        if (!item || !item.title) continue;
+        const normKey = item.title.trim().toLowerCase();
+        const existing = stepMap.get(normKey);
+        if (!existing) {
+          stepMap.set(normKey, { ...item });
+        } else {
+          existing.status = item.status || existing.status;
+          if (item.description && item.description.trim()) {
+            existing.description = item.description;
+          }
+        }
+      }
+    }
+    const accumulatedSteps = Array.from(stepMap.values());
+
+    const citMap = new Map<string, SourceLink>();
+    for (const st of pSteps) {
+      const rawCits = st.citations || st.data?.citations || [];
+      for (const c of rawCits) {
+        if (c && c.url && !citMap.has(c.url)) {
+          citMap.set(c.url, {
+            title: c.title || c.url,
+            url: c.url,
+            domain: c.domain,
+          });
+        }
+      }
+    }
+    const accumulatedCitations = Array.from(citMap.values());
+
+    let accumulatedText = "";
+    for (const st of [...pSteps].reverse()) {
+      const t = st.thinkingText || st.data?.thinking_text;
+      if (t && typeof t === "string" && t.trim().length > 0) {
+        accumulatedText = t;
+        break;
+      }
+    }
+
+    const isProviderFinished = pSteps.some(
+      (st) =>
+        st.step === "response_valid" ||
+        st.step === "response_partial" ||
+        st.step === "completed" ||
+        st.step === "failed" ||
+        st.status === "completed" ||
+        (st.data && (st.data.status === "ok" || st.data.status === "partial" || Boolean(st.data.response_markdown))) ||
+        /hoàn thành|phản hồi hợp lệ|kết quả một phần|thất bại|đã trả về|response_valid/i.test(st.message)
+    );
+    const isRunning = isLive && !isProviderFinished;
+
+    if (!isRunning) {
+      for (const s of accumulatedSteps) {
+        s.status = "completed";
+      }
+    } else {
+      const lastRunningIdx = accumulatedSteps.map((s) => s.status).lastIndexOf("running");
+      if (lastRunningIdx >= 0) {
+        for (let idx = 0; idx < lastRunningIdx; idx++) {
+          accumulatedSteps[idx].status = "completed";
+        }
+      }
+    }
+
+    const providerResp = extractProviderResponse(p, pSteps, message);
+    if (providerResp) {
+      const filtered = accumulatedSteps.filter(
+        (s) => !s.title.toLowerCase().includes("response generated")
+      );
+      filtered.push({
+        title: "Response generated",
+        description: providerResp,
+        status: "completed",
+      });
+      accumulatedSteps.length = 0;
+      accumulatedSteps.push(...filtered);
+    }
+
+    const hasThinking =
+      accumulatedSteps.length > 0 ||
+      Boolean(accumulatedText) ||
+      accumulatedCitations.length > 0 ||
+      (isLive && pSteps.some(isThinkingEvent));
+
+    providerDataMap.set(p, {
+      thinkingSteps: accumulatedSteps,
+      thinkingText: accumulatedText,
+      citations: accumulatedCitations,
+      hasThinking,
+      isRunning,
+    });
+  }
+
+  // 3. Assemble chronological timeline
+  const timeline: TimelineItem[] = [];
+  const placedThinking = new Set<string>();
+  let lastLogMessage = "";
+
+  for (let i = 0; i < steps.length; i++) {
+    const st = steps[i];
+    const p = extractProvider(st);
+    const pData =
+      providerDataMap.get(p) ||
+      (providersOrder.length === 1 ? providerDataMap.get(providersOrder[0]) : undefined);
+
+    // If pure thinking event, skip adding as log line and insert thinking item if not yet placed
+    if (isThinkingEvent(st)) {
+      if (pData && pData.hasThinking && !placedThinking.has(p)) {
+        timeline.push({
+          kind: "thinking",
+          key: `thinking-${p || "default"}-${i}`,
+          provider: p,
+          steps: pData.thinkingSteps,
+          text: pData.thinkingText,
+          citations: pData.citations,
+          isRunning: pData.isRunning,
+          timestamp: st.timestamp,
+        });
+        placedThinking.add(p);
+      }
+      continue;
+    }
+
+    // If generating step and thinking block has not been placed yet, insert thinking before generating
+    if (
+      pData &&
+      pData.hasThinking &&
+      !placedThinking.has(p) &&
+      (st.step === "generating" || /đang đợi.*sinh câu trả lời/i.test(st.message))
+    ) {
+      timeline.push({
+        kind: "thinking",
+        key: `thinking-${p || "default"}-${i}`,
+        provider: p,
+        steps: pData.thinkingSteps,
+        text: pData.thinkingText,
+        citations: pData.citations,
+        isRunning: pData.isRunning,
+        timestamp: st.timestamp,
+      });
+      placedThinking.add(p);
+    }
+
+    // Normal pipeline log line (deduplicating consecutive identical messages)
+    if (st.message && st.message !== lastLogMessage) {
+      timeline.push({
+        kind: "log",
+        key: st.id || `log-${i}-${st.message}`,
+        message: st.message,
+        timestamp: st.timestamp,
+      });
+      lastLogMessage = st.message;
+    }
+
+    // If submitting step and thinking block has not been placed yet, insert thinking right after submitting
+    if (
+      pData &&
+      pData.hasThinking &&
+      !placedThinking.has(p) &&
+      (st.step === "submitting" || /đã gửi câu hỏi/i.test(st.message))
+    ) {
+      timeline.push({
+        kind: "thinking",
+        key: `thinking-${p || "default"}-${i}`,
+        provider: p,
+        steps: pData.thinkingSteps,
+        text: pData.thinkingText,
+        citations: pData.citations,
+        isRunning: pData.isRunning,
+        timestamp: st.timestamp,
+      });
+      placedThinking.add(p);
+    }
+  }
+
+  // 4. Fallback: Place any unplaced provider thinking block
+  for (const [prov, data] of providerDataMap.entries()) {
+    if (data.hasThinking && !placedThinking.has(prov)) {
+      timeline.push({
+        kind: "thinking",
+        key: `thinking-${prov || "default"}-end`,
+        provider: prov,
+        steps: data.thinkingSteps,
+        text: data.thinkingText,
+        citations: data.citations,
+        isRunning: data.isRunning,
+        timestamp: "",
+      });
+      placedThinking.add(prov);
+    }
+  }
+
+  // Mark latest item for live spinner
+  if (isLive && timeline.length > 0) {
+    const lastItem = timeline[timeline.length - 1];
+    if (lastItem.kind === "log") {
+      lastItem.isLatest = true;
+    }
+  }
+
+  return timeline;
+}
+
+function ProviderThinkingHeader({
+  item,
+  isLive,
+  onClick,
+}: {
+  item: TimelineThinkingItem;
+  isLive: boolean;
+  onClick?: () => void;
+}) {
+  const stepCount = item.steps.length || (item.text ? 1 : 0);
+  const providerLabel = item.provider ? item.provider.toUpperCase() : "";
+
+  return (
+    <div
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick?.();
+        }
+      }}
+      className="provider-thinking-header-btn"
+      style={{
+        backgroundColor: item.isRunning ? "#f0f7ff" : "#ffffff",
+        borderRadius: 8,
+        border: item.isRunning ? "1.5px solid #93c5fd" : "1px solid #cbd5e1",
+        margin: "3px 0",
+        padding: "8px 12px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        cursor: "pointer",
+        userSelect: "none",
+        outline: "none",
+        boxShadow: item.isRunning
+          ? "0 2px 6px rgba(59, 130, 246, 0.08)"
+          : "0 1px 2px rgba(0, 0, 0, 0.03)",
+        transition: "all 0.15s ease",
+      }}
+      title="Nhấn để xem chi tiết các bước suy luận trên thanh bên phải"
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+        <BrainIcon size={14} color="var(--brand-blue)" />
+        <span style={{ color: "var(--brand-blue)", fontWeight: 700, fontSize: 12 }}>
+          ✦ Các bước suy luận & tìm kiếm ({stepCount}){providerLabel ? ` — ${providerLabel}` : ""}:
+        </span>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {isLive && item.isRunning ? (
+          <span
+            style={{
+              fontSize: 10.5,
+              color: "#059669",
+              backgroundColor: "#ecfdf5",
+              padding: "2px 8px",
+              borderRadius: 12,
+              border: "1px solid #a7f3d0",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              fontWeight: 600,
+            }}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                backgroundColor: "#059669",
+              }}
+            />
+            Live DOM
+          </span>
+        ) : null}
+        <span
+          style={{
+            fontSize: 11,
+            color: "var(--brand-blue)",
+            fontWeight: 600,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 3,
+            backgroundColor: "#eff6ff",
+            padding: "3px 8px",
+            borderRadius: 6,
+            border: "1px solid #bfdbfe",
+          }}
+        >
+          <span>Xem chi tiết</span>
+          <ChevronRightIcon size={12} color="var(--brand-blue)" />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ChronologicalTimeline({
+  steps,
+  isLive = false,
+  message,
+  onSelectThinking,
+}: {
+  steps: StepLog[];
+  isLive?: boolean;
+  message?: Message;
+  onSelectThinking?: (provider?: string, message?: Message) => void;
+}) {
+  const items = buildChronologicalTimeline(steps, isLive, message);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      {items.map((item) => {
+        if (item.kind === "thinking") {
+          return (
+            <ProviderThinkingHeader
+              key={item.key}
+              item={item}
+              isLive={isLive}
+              onClick={() => onSelectThinking?.(item.provider, message)}
+            />
+          );
+        }
+
+        return (
+          <div
+            key={item.key}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 12,
+              color: item.isLatest ? "var(--text-primary)" : "var(--text-secondary)",
+              fontWeight: item.isLatest ? 600 : 400,
+              padding: "2px 4px",
+              borderRadius: 4,
+              backgroundColor: item.isLatest ? "var(--brand-blue-light)" : "transparent",
+            }}
+          >
+            {item.isLatest ? (
+              <div
+                style={{
+                  width: 11,
+                  height: 11,
+                  border: "2px solid #3b82f6",
+                  borderTopColor: "transparent",
+                  borderRadius: "50%",
+                  animation: "spin 0.8s linear infinite",
+                  flexShrink: 0,
+                }}
+              />
+            ) : (
+              <span style={{ color: "#059669", fontWeight: 700, flexShrink: 0 }}>✓</span>
+            )}
+            <span style={{ flex: 1 }}>{item.message}</span>
+            {item.timestamp && (
+              <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
+                {item.timestamp}
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 interface ChatAreaProps {
   session: ChatSession;
   providers: ProviderInfo[];
   selectedProvider: ProviderInfo;
   selectedProviders: ProviderInfo[];
-  onSelectProvider: (providerId: string) => void;
   onToggleProvider: (providerId: string) => void;
   onToggleDepth: (depth: DepthMode) => void;
   onSendMessage: (content: string) => void;
-  onNewChat: () => void;
   onToggleRightSidebar: () => void;
   isGenerating: boolean;
   onOpenProvidersModal: () => void;
   activeSteps?: StepLog[];
+  onSelectThinking?: (provider?: string, message?: Message) => void;
+  onStopResearch?: () => void;
 }
 
 export function ChatArea({
@@ -48,15 +517,15 @@ export function ChatArea({
   providers,
   selectedProvider,
   selectedProviders,
-  onSelectProvider,
   onToggleProvider,
   onToggleDepth,
   onSendMessage,
-  onNewChat,
   onToggleRightSidebar,
   isGenerating,
   onOpenProvidersModal,
   activeSteps = [],
+  onSelectThinking,
+  onStopResearch,
 }: ChatAreaProps) {
   const [inputText, setInputText] = useState("");
   const [isCopied, setIsCopied] = useState<string | null>(null);
@@ -153,7 +622,7 @@ export function ChatArea({
       {/* Top Header Bar */}
       <header className="chat-header">
         <div className="chat-title-group">
-          <h1 className="chat-title">{session.title}</h1>
+          {/* <h1 className="chat-title">{session.title}</h1> */}
 
           {/* Model Selector Pill / Multi-Model Dropdown */}
           <div style={{ position: "relative" }}>
@@ -316,18 +785,6 @@ export function ChatArea({
 
         {/* Right Header Actions */}
         <div className="chat-header-actions">
-          <button className="btn-new-chat-outline" onClick={onNewChat}>
-            <PlusIcon size={14} />
-            <span>New chat</span>
-          </button>
-          <button
-            className="icon-btn"
-            title="Model and System Settings"
-            onClick={onOpenProvidersModal}
-            aria-label="Settings"
-          >
-            <SettingsIcon size={16} />
-          </button>
           <button
             className="icon-btn"
             title="Inspect Details / Citations"
@@ -377,8 +834,7 @@ export function ChatArea({
                 AI Deep Research Hub
               </h2>
               <p style={{ fontSize: 13.5, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                Nghiên cứu đa mô hình cùng lúc với <strong>{selectedCount}</strong> providers đang kích hoạt (
-                {selectedProviders.map((p) => p.name).join(", ")}). Nhập câu hỏi bên dưới hoặc chọn gợi ý nghiên cứu:
+                Nghiên cứu bằng việc sử dụng đa mô hình cùng lúc. Nhập câu hỏi bên dưới hoặc chọn gợi ý nghiên cứu:
               </p>
             </div>
 
@@ -495,42 +951,31 @@ export function ChatArea({
             ) : (
               <div className="message-card-assistant">
                 {/* Assistant Top Tool Badges */}
-                <div className="assistant-card-top-bar">
-                  <button className="tool-badge-btn" title="Kiểm tra đối chiếu thực tế">
-                    <FactCheckIcon size={13} />
-                    <span>Fact check</span>
-                  </button>
-                  <button
-                    className="tool-badge-btn"
-                    title="Sao chép nội dung"
-                    onClick={() => copyToClipboard(msg.content, msg.id)}
-                  >
-                    <ShareIcon size={13} />
-                    <span>Chia sẻ</span>
-                  </button>
-                </div>
 
                 {/* Real-time Thinking Process & Pipeline Steps Accordion */}
                 {msg.steps && msg.steps.length > 0 && (
-                  <div
+                  <details
+                    className="message-steps-accordion"
                     style={{
                       backgroundColor: "#f8fafc",
                       borderRadius: "var(--radius-md)",
                       border: "1px solid #e2e8f0",
                       padding: "10px 14px",
                       display: "flex",
-                      flexDirection: "column",
-                      gap: 6,
+                      flexDirection: "column"
                     }}
                   >
-                    <div
+                    <summary
                       style={{
+                        cursor: "pointer",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
                         fontSize: 12,
                         fontWeight: 700,
                         color: "var(--brand-blue)",
+                        userSelect: "none",
+                        outline: "none",
                       }}
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -540,155 +985,17 @@ export function ChatArea({
                       <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>
                         SSE Pipeline Log
                       </span>
+                    </summary>
+
+                    <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+                      <ChronologicalTimeline
+                        steps={msg.steps}
+                        isLive={false}
+                        message={msg}
+                        onSelectThinking={onSelectThinking}
+                      />
                     </div>
-
-                    {(() => {
-                      // Extract latest thinking steps once to avoid duplicating under every step
-                      const latestThinkingStep = [...msg.steps].reverse().find(
-                        (s) =>
-                          (s.thinkingSteps && s.thinkingSteps.length > 0) ||
-                          (s.data?.thinking_steps && s.data.thinking_steps.length > 0) ||
-                          s.thinkingText ||
-                          s.data?.thinking_text
-                      );
-                      const rawSteps = latestThinkingStep?.thinkingSteps || latestThinkingStep?.data?.thinking_steps || [];
-                      const seenStepKeys = new Set<string>();
-                      const uniqueThinkingSteps = rawSteps.filter((step: any) => {
-                        const k = `${(step.title || "").trim()}::${(step.description || "").trim()}`;
-                        if (seenStepKeys.has(k)) return false;
-                        seenStepKeys.add(k);
-                        return true;
-                      });
-                      const thoughtContent = latestThinkingStep?.thinkingText || latestThinkingStep?.data?.thinking_text || "";
-
-                      // Deduplicate pipeline log messages:
-                      // If structured thinking steps are present, exclude individual thinking_progress updates to avoid duplicating steps
-                      const allSteps = msg.steps || [];
-                      const distinctSteps = allSteps.filter((st, sidx) => {
-                        if (
-                          uniqueThinkingSteps.length > 0 &&
-                          (st.step === "thinking_progress" || st.isThinking || /đang suy luận/i.test(st.message))
-                        ) {
-                          return false;
-                        }
-                        if (sidx === 0) return true;
-                        return st.message !== allSteps[sidx - 1]?.message;
-                      });
-
-                      return (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
-                          {/* Consolidated Thinking Process */}
-                          {uniqueThinkingSteps.length > 0 ? (
-                            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 4 }}>
-                              <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--brand-blue)" }}>
-                                ✦ Các bước suy luận & tìm kiếm ({uniqueThinkingSteps.length}):
-                              </div>
-                              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                                {uniqueThinkingSteps.map((stepItem: any, stIdx: number) => (
-                                  <details
-                                    key={stIdx}
-                                    style={{
-                                      fontSize: 11.5,
-                                      backgroundColor: "#ffffff",
-                                      padding: "6px 10px",
-                                      borderRadius: 6,
-                                      border: "1px solid #e2e8f0",
-                                    }}
-                                  >
-                                    <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-primary)" }}>
-                                      <span style={{ color: "#059669", marginRight: 6 }}>✓</span>
-                                      <span style={{ color: "var(--brand-blue)" }}>{stepItem.title}</span>
-                                      {stepItem.description ? (
-                                        <span style={{ color: "var(--text-secondary)", fontWeight: 400, marginLeft: 6 }}>
-                                          — {stepItem.description.slice(0, 75)}{stepItem.description.length > 75 ? "..." : ""}
-                                        </span>
-                                      ) : null}
-                                    </summary>
-                                    {stepItem.description && (
-                                      <div
-                                        style={{
-                                          marginTop: 6,
-                                          whiteSpace: "pre-wrap",
-                                          fontFamily: "var(--font-geist-mono, monospace)",
-                                          maxHeight: 160,
-                                          overflowY: "auto",
-                                          lineHeight: 1.5,
-                                          fontSize: 11,
-                                          color: "var(--text-secondary)",
-                                          backgroundColor: "#f8fafc",
-                                          padding: "6px 8px",
-                                          borderRadius: 4,
-                                        }}
-                                      >
-                                        {stepItem.description}
-                                      </div>
-                                    )}
-                                  </details>
-                                ))}
-                              </div>
-                            </div>
-                          ) : (
-                            thoughtContent && (
-                              <details
-                                style={{
-                                  fontSize: 11.5,
-                                  color: "var(--text-secondary)",
-                                  backgroundColor: "#ffffff",
-                                  padding: "6px 10px",
-                                  borderRadius: 6,
-                                  border: "1px solid #e2e8f0",
-                                  marginBottom: 4,
-                                }}
-                              >
-                                <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--brand-blue)" }}>
-                                  Xem nội dung suy luận chi tiết ({thoughtContent.length} ký tự)
-                                </summary>
-                                <div
-                                  style={{
-                                    marginTop: 4,
-                                    whiteSpace: "pre-wrap",
-                                    fontFamily: "var(--font-geist-mono, monospace)",
-                                    maxHeight: 140,
-                                    overflowY: "auto",
-                                    lineHeight: 1.5,
-                                    fontSize: 11,
-                                    color: "var(--text-secondary)",
-                                    backgroundColor: "#f8fafc",
-                                    padding: "6px 8px",
-                                    borderRadius: 4,
-                                  }}
-                                >
-                                  {thoughtContent}
-                                </div>
-                              </details>
-                            )
-                          )}
-
-                          {/* Pipeline Step Log List (Clean without repeating thinking tree) */}
-                          {distinctSteps.length > 0 && (
-                            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                              {distinctSteps.map((st, sidx) => (
-                                <div
-                                  key={sidx}
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: 8,
-                                    fontSize: 12,
-                                    color: "var(--text-secondary)",
-                                  }}
-                                >
-                                  <span style={{ color: "#059669", fontWeight: 700 }}>✓</span>
-                                  <span style={{ flex: 1 }}>{st.message}</span>
-                                  <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>{st.timestamp}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
+                  </details>
                 )}
 
                 {/* Main Content Body with Full Markdown & Syntax Highlighter */}
@@ -713,15 +1020,17 @@ export function ChatArea({
                         } catch {
                           domain = src.url || "source";
                         }
-                        const displayTitle = src.title && src.title !== src.url ? src.title : domain;
+                        const rawTitle = src.title && src.title !== src.url ? src.title : domain;
+                        const displayTitle = rawTitle.replace(/^\[[a-zA-Z0-9_\-:]+\]\s*/, "");
+                        const loopKey = (src as any).id || src.url || `source-${sIdx}`;
                         return (
                           <a
-                            key={sIdx}
+                            key={loopKey}
                             href={src.url}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="message-source-chip"
-                            title={`${src.title || src.url}\n${src.url}`}
+                            title={`${displayTitle}\n${src.url}`}
                           >
                             <span className="message-source-index">{sIdx + 1}</span>
                             <span className="message-source-domain">{domain}</span>
@@ -753,10 +1062,18 @@ export function ChatArea({
                     </button>
                     <button
                       className="icon-btn"
-                      title="Chia sẻ"
-                      onClick={() => copyToClipboard(msg.content, msg.id)}
+                      title={isCopied === `share-${msg.id}` ? "Đã sao chép liên kết hội thoại!" : "Chia sẻ liên kết hội thoại (/chat/...)"}
+                      onClick={() => {
+                        const targetId = session.jobId || session.id;
+                        const shareUrl = typeof window !== "undefined"
+                          ? `${window.location.origin}/chat/${targetId}`
+                          : `/chat/${targetId}`;
+                        navigator.clipboard.writeText(shareUrl);
+                        setIsCopied(`share-${msg.id}`);
+                        setTimeout(() => setIsCopied(null), 2500);
+                      }}
                     >
-                      <ShareIcon size={15} />
+                      <ShareIcon size={15} color={isCopied === `share-${msg.id}` ? "var(--brand-blue)" : "currentColor"} />
                     </button>
                     <button className="icon-btn" title="Đánh dấu">
                       <BookmarkIcon size={15} />
@@ -766,10 +1083,12 @@ export function ChatArea({
                     </button>
                   </div>
 
-                  <span className="card-footer-token">
-                    {msg.tokens ? `${msg.tokens} tokens` : ""}
-                    {msg.latencySeconds ? ` · ${msg.latencySeconds}s` : ""}
-                  </span>
+                  {(!!msg.tokens || !!msg.latencySeconds) && (
+                    <span className="card-footer-token">
+                      {msg.tokens ? `${msg.tokens} tokens` : ""}
+                      {msg.latencySeconds ? ` · ${msg.latencySeconds}s` : ""}
+                    </span>
+                  )}
                 </div>
               </div>
             )}
@@ -833,291 +1152,28 @@ export function ChatArea({
                 </div>
               </div>
 
-              {/* Real-time Thinking Process & DOM Citations Display */}
-              {(() => {
-                const latestThinkingStep = [...activeSteps].reverse().find(
-                  (s) =>
-                    (s.thinkingSteps && s.thinkingSteps.length > 0) ||
-                    (s.data?.thinking_steps && s.data.thinking_steps.length > 0) ||
-                    s.thinkingText ||
-                    s.data?.thinking_text ||
-                    s.isThinking ||
-                    s.data?.is_thinking
-                );
-                const rawCurrentSteps = latestThinkingStep?.thinkingSteps || latestThinkingStep?.data?.thinking_steps || [];
-                const seenCurrentKeys = new Set<string>();
-                const currentThinkingSteps = rawCurrentSteps.filter((step: any) => {
-                  const k = `${(step.title || "").trim()}::${(step.description || "").trim()}`;
-                  if (seenCurrentKeys.has(k)) return false;
-                  seenCurrentKeys.add(k);
-                  return true;
-                });
-                const currentThinkingText = latestThinkingStep?.thinkingText || latestThinkingStep?.data?.thinking_text || "";
-                const activeThinkingProvider = latestThinkingStep?.provider || latestThinkingStep?.data?.provider || "";
-                const hasThinkingData = currentThinkingSteps.length > 0 || Boolean(currentThinkingText);
-
-                const liveCitationsList: any[] = [];
-                const seenCitationUrls = new Set<string>();
-                for (const st of activeSteps) {
-                  const stepCitations: any[] = st.citations || st.data?.citations || [];
-                  for (const c of stepCitations) {
-                    if (c && c.url && !seenCitationUrls.has(c.url)) {
-                      seenCitationUrls.add(c.url);
-                      liveCitationsList.push(c);
-                    }
-                  }
-                }
-
-                return (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "4px 0" }}>
-                    {/* Live Thinking Process Content Card */}
-                    {hasThinkingData && (
-                      <div
-                        style={{
-                          backgroundColor: "#f8fafc",
-                          borderRadius: "var(--radius-md)",
-                          border: "1.5px solid #93c5fd",
-                          padding: "12px 14px",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 8,
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            fontSize: 12.5,
-                            fontWeight: 700,
-                            color: "var(--brand-blue)",
-                          }}
-                        >
-                          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                            <BrainIcon size={16} color="var(--brand-blue)" />
-                            <span>
-                              Tiến trình suy luận (Thinking Process) — {activeThinkingProvider ? activeThinkingProvider.toUpperCase() : "Live Chatbot"}
-                            </span>
-                          </div>
-                          <span
-                            style={{
-                              fontSize: 11,
-                              color: "#059669",
-                              backgroundColor: "#ecfdf5",
-                              padding: "2px 8px",
-                              borderRadius: 12,
-                              border: "1px solid #a7f3d0",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 4,
-                            }}
-                          >
-                            <span style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: "#059669" }} />
-                            Live DOM
-                          </span>
-                        </div>
-
-                        {/* If structured steps are available (e.g. Qwen status cards: Searching web, Reading sources, etc.) */}
-                        {currentThinkingSteps.length > 0 ? (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 2 }}>
-                            {currentThinkingSteps.map((stepItem: any, sIdx: number) => {
-                              const isStepRunning = stepItem.status === "running";
-                              return (
-                                <div
-                                  key={sIdx}
-                                  style={{
-                                    backgroundColor: "#ffffff",
-                                    borderRadius: 6,
-                                    border: isStepRunning ? "1px solid #93c5fd" : "1px solid #e2e8f0",
-                                    padding: "8px 12px",
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    gap: 4,
-                                  }}
-                                >
-                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "var(--text-primary)" }}>
-                                      {isStepRunning ? (
-                                        <div
-                                          style={{
-                                            width: 10,
-                                            height: 10,
-                                            border: "2px solid #3b82f6",
-                                            borderTopColor: "transparent",
-                                            borderRadius: "50%",
-                                            animation: "spin 0.8s linear infinite",
-                                          }}
-                                        />
-                                      ) : (
-                                        <span style={{ color: "#059669", fontWeight: 700 }}>✓</span>
-                                      )}
-                                      <span>{stepItem.title}</span>
-                                    </div>
-                                    <span
-                                      style={{
-                                        fontSize: 10.5,
-                                        padding: "1px 6px",
-                                        borderRadius: 10,
-                                        backgroundColor: isStepRunning ? "#eff6ff" : "#f0fdf4",
-                                        color: isStepRunning ? "#1d4ed8" : "#15803d",
-                                        fontWeight: 500,
-                                      }}
-                                    >
-                                      {isStepRunning ? "Đang xử lý..." : "Hoàn thành"}
-                                    </span>
-                                  </div>
-                                  {stepItem.description && (
-                                    <div
-                                      style={{
-                                        fontSize: 11.5,
-                                        lineHeight: 1.5,
-                                        color: "var(--text-secondary)",
-                                        backgroundColor: "#f8fafc",
-                                        padding: "6px 8px",
-                                        borderRadius: 4,
-                                        whiteSpace: "pre-wrap",
-                                        fontFamily: "var(--font-geist-mono, monospace)",
-                                        maxHeight: 140,
-                                        overflowY: "auto",
-                                      }}
-                                    >
-                                      {stepItem.description}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          currentThinkingText && (
-                            <div
-                              style={{
-                                fontSize: 12,
-                                lineHeight: 1.6,
-                                color: "var(--text-secondary)",
-                                backgroundColor: "#ffffff",
-                                padding: "10px 12px",
-                                borderRadius: 6,
-                                border: "1px solid #e2e8f0",
-                                maxHeight: 160,
-                                overflowY: "auto",
-                                whiteSpace: "pre-wrap",
-                                fontFamily: "var(--font-geist-mono, monospace)",
-                              }}
-                            >
-                              {currentThinkingText}
-                            </div>
-                          )
-                        )}
-
-                        {liveCitationsList.length > 0 && (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 2 }}>
-                            <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-primary)" }}>
-                              ✦ Nguồn trích dẫn tìm thấy từ DOM ({liveCitationsList.length}):
-                            </div>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                              {liveCitationsList.map((c, cIdx) => (
-                                <a
-                                  key={cIdx}
-                                  href={c.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  style={{
-                                    fontSize: 11,
-                                    padding: "3px 8px",
-                                    borderRadius: 4,
-                                    backgroundColor: "#f1f5f9",
-                                    color: "var(--brand-blue)",
-                                    border: "1px solid #cbd5e1",
-                                    textDecoration: "none",
-                                    maxWidth: 240,
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                  title={c.title || c.url}
-                                >
-                                  🔗 {c.title || c.url}
-                                </a>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Dynamic Step Logs Feed */}
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      {(() => {
-                        const distinctActive = activeSteps.filter((st, i) => {
-                          if (
-                            currentThinkingSteps.length > 0 &&
-                            (st.step === "thinking_progress" || st.isThinking || /đang suy luận/i.test(st.message))
-                          ) {
-                            return false;
-                          }
-                          if (i === 0) return true;
-                          return st.message !== activeSteps[i - 1].message;
-                        });
-                        return distinctActive.length > 0 ? (
-                          distinctActive.map((st, idx) => {
-                            const isLatest = idx === distinctActive.length - 1;
-                            return (
-                              <div
-                                key={idx}
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 10,
-                                  fontSize: 12.5,
-                                  color: isLatest ? "var(--text-primary)" : "var(--text-secondary)",
-                                  fontWeight: isLatest ? 600 : 400,
-                                  padding: "4px 8px",
-                                  borderRadius: 6,
-                                  backgroundColor: isLatest ? "var(--brand-blue-light)" : "transparent",
-                                }}
-                              >
-                                {isLatest ? (
-                                  <div
-                                    style={{
-                                      width: 12,
-                                      height: 12,
-                                      border: "2px solid #3b82f6",
-                                      borderTopColor: "transparent",
-                                      borderRadius: "50%",
-                                      animation: "spin 0.8s linear infinite",
-                                    }}
-                                  />
-                                ) : (
-                                  <span style={{ color: "#059669", fontWeight: 700 }}>✓</span>
-                                )}
-                                <span style={{ flex: 1 }}>{st.message}</span>
-                                <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>{st.timestamp}</span>
-                              </div>
-                            );
-                          })
-                        ) : (
-                          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
-                          <div
-                            style={{
-                              width: 14,
-                              height: 14,
-                              border: "2px solid #cbd5e1",
-                              borderTopColor: "var(--brand-blue)",
-                              borderRadius: "50%",
-                              animation: "spin 1s linear infinite",
-                            }}
-                          />
-                          <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-                            Khởi tạo phiên nghiên cứu và kết nối tới {selectedCount} trình duyệt...
-                          </span>
-                          </div>
-                        );
-                      })()}
-                    </div>
+              {/* Real-time Chronological Timeline Feed */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "4px 0" }}>
+                {activeSteps.length > 0 ? (
+                  <ChronologicalTimeline steps={activeSteps} isLive={true} onSelectThinking={onSelectThinking} />
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
+                    <div
+                      style={{
+                        width: 14,
+                        height: 14,
+                        border: "2px solid #cbd5e1",
+                        borderTopColor: "var(--brand-blue)",
+                        borderRadius: "50%",
+                        animation: "spin 1s linear infinite",
+                      }}
+                    />
+                    <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+                      Khởi tạo phiên nghiên cứu và kết nối tới {selectedCount} trình duyệt...
+                    </span>
                   </div>
-                );
-              })()}
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -1184,24 +1240,30 @@ export function ChatArea({
               <button className="icon-btn" title="Nhập liệu giọng nói" aria-label="Nhập liệu giọng nói">
                 <MicIcon size={17} />
               </button>
-              <button
-                className="icon-btn"
-                title="Multi-Provider Matrix"
-                onClick={onOpenProvidersModal}
-                aria-label="Multi-Provider Matrix"
-              >
-                <GridIcon size={17} />
-              </button>
             </div>
 
-            <button
-              className="btn-composer-send"
-              onClick={handleSend}
-              disabled={!inputText.trim() || isGenerating}
-            >
-              <SendIcon size={14} />
-              <span>Gửi câu hỏi</span>
-            </button>
+            {isGenerating ? (
+              <button
+                className="btn-composer-send btn-composer-stop"
+                onClick={onStopResearch}
+                type="button"
+                title="Dừng phiên nghiên cứu ngay"
+              >
+                <StopIcon size={14} />
+                <span>Dừng</span>
+              </button>
+            ) : (
+              <button
+                className="btn-composer-send"
+                onClick={handleSend}
+                disabled={!inputText.trim()}
+                type="button"
+                title="Gửi câu hỏi"
+              >
+                <SendIcon size={14} />
+                <span>Gửi câu hỏi</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

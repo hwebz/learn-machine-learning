@@ -88,6 +88,14 @@ export function SendIcon({ className = "", size = 16, color = "currentColor" }: 
   );
 }
 
+export function StopIcon({ className = "", size = 16, color = "currentColor" }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} className={className}>
+      <rect x="5" y="5" width="14" height="14" rx="2.5" />
+    </svg>
+  );
+}
+
 export function PaperclipIcon({ className = "", size = 18, color = "currentColor" }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>

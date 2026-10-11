@@ -76,7 +76,7 @@ Write-Host "      (Nhấn Ctrl + C để dừng server)`n" -ForegroundColor Dark
 $UvicornArgs = @("app.main:app", "--host", $HostAddress, "--port", "$Port")
 # Bắt buộc dùng ProactorEventLoop trên Windows để hỗ trợ subprocess cho Playwright browser automation
 if ($env:OS -like "*Windows*" -or $IsWindows -or $env:PROCESSOR_ARCHITECTURE) {
-    $UvicornArgs += @("--loop", "asyncio:ProactorEventLoop")
+    $UvicornArgs += @("--loop", "app.main:proactor_loop_factory")
 }
 if ($Reload) {
     $UvicornArgs += "--reload"

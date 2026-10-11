@@ -158,12 +158,16 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 step_data: dict[str, Any] | None = None,
                 event_type: str = "step",
             ) -> None:
+                if cancel_event.is_set():
+                    raise asyncio.CancelledError("Job cancelled by user")
                 if step_name == "thinking_progress":
                     event_type = "thinking"
 
                 async with SessionLocal() as s:
                     db_j = await s.get(Job, job_id)
-                    if db_j is None or db_j.status in TERMINAL_STATUSES:
+                    if db_j is None or db_j.status == "cancelled":
+                        raise asyncio.CancelledError("Job cancelled by user")
+                    if db_j.status in TERMINAL_STATUSES:
                         return
 
                     # Live citation discovery and DB persistence
@@ -371,7 +375,12 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 run_statuses.append(result.status)
                 if result.status not in PROVIDER_RESULT_FAILURE_STATUSES and result.answer_markdown.strip():
                     answers.append(f"## {subtask.provider.title()} response\n\n{result.answer_markdown.strip()}")
-                runs.append({"provider": subtask.provider, "status": result.status, "elapsed_ms": elapsed_ms})
+                runs.append({
+                    "provider": subtask.provider,
+                    "status": result.status,
+                    "elapsed_ms": elapsed_ms,
+                    "answer_markdown": result.answer_markdown.strip() if result.answer_markdown else "",
+                })
                 done_count = len(runs)
 
                 async with SessionLocal() as session:
@@ -434,6 +443,9 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 return
             try:
                 await _run_subtask_core(subtask, index)
+            except asyncio.CancelledError:
+                logger.info("subtask_cancelled_gracefully", provider=subtask.provider, job_id=job_id)
+                return
             finally:
                 if settings.work_mode == "async":
                     await BrowserSessionManager.close_session(subtask.provider)
@@ -488,7 +500,7 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             report += "No provider returned a usable answer.\n"
         if sources:
             report += "\n\n## Sources\n\n"
-            report += "\n".join(f"- [{source['id']}] [{source['title'] or source['url']}]({source['url']})" for source in sources)
+            report += "\n".join(f"- [{source['title'] or source['url']}]({source['url']})" for source in sources)
         failed_runs = [run for run in runs if run.get("status") != "ok"]
         if failed_runs:
             report += "\n\n## Provider issues\n\n"

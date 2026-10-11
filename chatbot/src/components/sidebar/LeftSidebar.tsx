@@ -295,19 +295,21 @@ export function LeftSidebar({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
-          <span className="shortcut-kbd">⌘ K</span>
         </div>
       </div>
 
       {/* Nav Menu */}
       <nav className="nav-menu">
         <button
-          className={`nav-item ${activeNav === "chats" ? "active" : ""}`}
-          onClick={() => setActiveNav("chats")}
+          className="nav-item"
+          onClick={() => {
+            setActiveNav("chats");
+            onNewChat();
+          }}
+          title="Tạo phiên nghiên cứu mới (New Chat)"
         >
-          <ChatIcon size={16} />
-          <span>Chats ({sessions.length})</span>
-          <span className="nav-item-kbd">⌘ 1</span>
+          <PlusIcon size={16} />
+          <span>New Chat</span>
         </button>
 
         <button
@@ -319,7 +321,6 @@ export function LeftSidebar({
         >
           <LibraryIcon size={16} />
           <span>Library</span>
-          <span className="nav-item-kbd">⌘ 2</span>
         </button>
 
         <button
@@ -331,7 +332,6 @@ export function LeftSidebar({
         >
           <AppsIcon size={16} />
           <span>Live Jobs</span>
-          <span className="nav-item-kbd">⌘ 3</span>
         </button>
       </nav>
 
@@ -387,14 +387,6 @@ export function LeftSidebar({
             Không tìm thấy phiên chat nào
           </div>
         )}
-      </div>
-
-      {/* Bottom Start New Chat Button */}
-      <div className="sidebar-bottom">
-        <button className="btn-start-chat" onClick={onNewChat}>
-          <PlusIcon size={16} />
-          <span>Bắt đầu phiên nghiên cứu mới</span>
-        </button>
       </div>
 
       {/* Delete Confirmation Modal Dialog */}

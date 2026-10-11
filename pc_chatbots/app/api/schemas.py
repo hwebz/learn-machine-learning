@@ -69,10 +69,15 @@ class ProviderRunResponse(BaseModel):
     provider: str
     status: str
     elapsed_ms: int = 0
+    answer_markdown: str | None = None
 
 
 class ResearchResponse(BaseModel):
     job_id: str
+    query: str | None = None
+    title: str | None = None
+    depth: str | None = None
+    providers: list[str] = Field(default_factory=list)
     status: JobStatus
     progress: Progress
     report_markdown: str | None

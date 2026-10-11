@@ -425,6 +425,11 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
                 });
             }
         }
+
+        // Sequential thinking: all steps prior to the latest active card are completed
+        for (let sIdx = 0; sIdx < thinkingSteps.length - 1; sIdx++) {
+            thinkingSteps[sIdx].status = "completed";
+        }
     } catch (e) {}
 
     // 3. Fallback: query general thinking containers across other providers

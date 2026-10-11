@@ -1,8 +1,17 @@
 from __future__ import annotations
 
+import sys
 import asyncio
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    try:
+        import uvicorn.loops.asyncio as _u_asyncio
+        _u_asyncio.asyncio_loop_factory = lambda use_subprocess=False: asyncio.ProactorEventLoop
+    except ImportError:
+        pass
 
 import structlog
 from fastapi import FastAPI
@@ -59,8 +68,13 @@ app.include_router(router)
 def proactor_loop_factory():
     """Event loop factory ensuring Playwright subprocess support on Windows."""
     import asyncio
+    import sys
 
-    return asyncio.ProactorEventLoop()
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    loop = asyncio.ProactorEventLoop()
+    asyncio.set_event_loop(loop)
+    return loop
 
 
 if __name__ == "__main__":

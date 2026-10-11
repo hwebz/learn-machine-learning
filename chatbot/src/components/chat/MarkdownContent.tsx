@@ -87,9 +87,16 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       breaks: true,
     });
 
+    // Strip ID prefix in source markdown lists like:
+    // "- [4705a475-e12d-434c-8d0b-ff25bb9ed5c1:S1] [Title](url)" -> "- [Title](url)"
+    const sanitizedContent = (content || "").replace(
+      /^(\s*[-*]\s*)\[[a-zA-Z0-9_\-:]+\]\s*(\[[^\]]+\]\([^\)]+\))/gm,
+      "$1$2"
+    );
+
     let rawHtml = "";
     try {
-      rawHtml = marked.parse(content) as string;
+      rawHtml = marked.parse(sanitizedContent) as string;
     } catch (err) {
       console.warn("Markdown parse error, falling back to raw text:", err);
       rawHtml = `<p>${content}</p>`;

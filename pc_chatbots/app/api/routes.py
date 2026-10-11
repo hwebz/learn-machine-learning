@@ -47,9 +47,17 @@ def _job_response(
         disagreements = json.loads(job.disagreements_json) if job.disagreements_json else []
     except Exception:
         disagreements = []
+    try:
+        config = json.loads(job.config_json) if job.config_json else {}
+    except Exception:
+        config = {}
 
     return ResearchResponse(
         job_id=job.id,
+        query=job.query,
+        title=getattr(job, "title", None) or job.query,
+        depth=config.get("depth", "deep"),
+        providers=config.get("providers", []),
         status=job.status,
         progress={"subtasks_total": job.subtasks_total, "subtasks_done": job.subtasks_done},
         report_markdown=job.report_markdown,
@@ -435,16 +443,16 @@ async def cancel_research(job_id: str, request: Request) -> Response:
             raise HTTPException(status_code=404, detail="Research job not found")
         if job.status in {"completed", "partial", "failed", "needs_user_action", "cancelled"}:
             return Response(status_code=status.HTTP_204_NO_CONTENT)
-        event = queue.cancel(job_id)
-        if job.status == "queued":
-            job.status = "cancelled"
-            job.finished_at = utc_now()
-            job.updated_at = utc_now()
-        elif event is None:
-            job.status = "cancelled"
-            job.finished_at = utc_now()
-            job.updated_at = utc_now()
-        if job.status == "cancelled":
-            session.add(JobEvent(job_id=job_id, status="cancelled", subtasks_total=job.subtasks_total, subtasks_done=job.subtasks_done))
+        queue.cancel(job_id)
+        job.status = "cancelled"
+        job.finished_at = utc_now()
+        job.updated_at = utc_now()
+        session.add(JobEvent(
+            job_id=job_id,
+            status="cancelled",
+            message="Người dùng đã dừng phiên nghiên cứu.",
+            subtasks_total=job.subtasks_total,
+            subtasks_done=job.subtasks_done,
+        ))
         await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
