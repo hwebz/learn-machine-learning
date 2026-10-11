@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -80,6 +80,7 @@ class ResearchResponse(BaseModel):
     claims: list[ClaimResponse]
     disagreements: list[DisagreementResponse]
     provider_runs: list[ProviderRunResponse]
+    steps: list[dict[str, Any]] = Field(default_factory=list)
     error: str | None
     created_at: datetime
     finished_at: datetime | None

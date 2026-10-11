@@ -177,6 +177,9 @@ class BrowserProviderAdapter(ABC):
                     text = (await item.inner_text(timeout=2000)).strip()
                 except Exception:  # noqa: BLE001
                     pass
+                if not href and text.startswith(("http://", "https://")):
+                    href = text
+                    text = ""
                 if href:
                     pairs.append((href, text or None))
         except Exception:  # noqa: BLE001
@@ -247,6 +250,7 @@ class BrowserProviderAdapter(ABC):
         answer = ""
         completion_text = ""
         sources: list[Source] = []
+        live_polled_citations: list[dict[str, Any]] = []
         conversation_url: str | None = None
 
         try:
@@ -325,12 +329,108 @@ class BrowserProviderAdapter(ABC):
                                 # done_marker_delay_s) take precedence over global defaults.
                                 completion_cfg = {**self._selectors.get("completion", {}),
                                                   **(self._cfg.get("completion") or {})}
+
+                                last_thinking_snapshot: dict[str, Any] | None = None
+
+                                async def _on_thinking_poll(
+                                    state: str,
+                                    generating: bool,
+                                    is_thinking: bool,
+                                    thinking_text: str,
+                                    citations: list[dict[str, Any]],
+                                    last_text: str,
+                                    poll_count: int,
+                                    elapsed_s: float,
+                                    thinking_steps: list[dict[str, Any]] | None = None,
+                                    **kwargs: Any,
+                                ) -> None:
+                                    nonlocal last_thinking_snapshot
+
+                                    steps_list = thinking_steps or []
+                                    cits_list = citations or []
+
+                                    # Accumulate live citations
+                                    if cits_list:
+                                        for c in cits_list:
+                                            c_url = c.get("url")
+                                            if c_url and not any(existing.get("url") == c_url for existing in live_polled_citations):
+                                                live_polled_citations.append(c)
+
+                                    # Build normalized snapshot to compare against previous status
+                                    norm_steps = [
+                                        (
+                                            s.get("title", "").strip(),
+                                            s.get("description", "").strip(),
+                                            s.get("status", "").strip(),
+                                        )
+                                        for s in steps_list
+                                        if isinstance(s, dict)
+                                    ]
+                                    norm_citations = sorted([
+                                        str(c.get("url", "")).strip()
+                                        for c in cits_list
+                                        if isinstance(c, dict) and c.get("url")
+                                    ])
+                                    current_snapshot = {
+                                        "is_thinking": bool(is_thinking),
+                                        "steps": norm_steps,
+                                        "thinking_text": (thinking_text or "").strip(),
+                                        "citations": norm_citations,
+                                    }
+
+                                    # Deduplication: If thinking steps and citations have not changed, do NOT push new event to SSE
+                                    if last_thinking_snapshot is not None and current_snapshot == last_thinking_snapshot:
+                                        return
+
+                                    last_thinking_snapshot = current_snapshot
+
+                                    # Compose descriptive message without time counter so message is stable
+                                    if steps_list:
+                                        active_step = steps_list[-1]
+                                        step_title = (active_step.get("title") or "").strip() or "Thinking..."
+                                        step_desc = (active_step.get("description") or "").strip()
+                                        if step_desc:
+                                            desc_preview = step_desc[:120] + "..." if len(step_desc) > 120 else step_desc
+                                            msg = f"{self.name} đang suy luận: {step_title} — {desc_preview}"
+                                        else:
+                                            msg = f"{self.name} đang suy luận: {step_title}"
+                                    elif thinking_text:
+                                        text_preview = thinking_text[:140] + "..." if len(thinking_text) > 140 else thinking_text
+                                        msg = f"{self.name} đang suy luận: {text_preview}"
+                                    elif cits_list:
+                                        msg = f"{self.name} đang đối chiếu {len(cits_list)} nguồn tài liệu ({state})..."
+                                    elif generating:
+                                        msg = f"{self.name} đang sinh câu trả lời ({state})..."
+                                    else:
+                                        msg = f"{self.name}: {state}"
+
+                                    await _notify(
+                                        "thinking_progress",
+                                        msg,
+                                        {
+                                            "provider": self.name,
+                                            "state": state,
+                                            "generating": generating,
+                                            "is_thinking": is_thinking,
+                                            "thinking_text": thinking_text,
+                                            "thinking_steps": steps_list,
+                                            "citations": cits_list,
+                                            "citations_count": len(cits_list),
+                                            "text_preview": last_text[-250:] if last_text else "",
+                                            "elapsed_s": elapsed_s,
+                                            "poll_count": poll_count,
+                                        },
+                                    )
+
                                 completion = await wait_for_completion(
                                     page,
+                                    provider=self.name,
                                     provider_cfg=self._cfg,
                                     blocking=self._selectors.get("blocking", {}),
                                     completion_cfg=completion_cfg,
                                     timeout_s=timeout_s,
+                                    on_poll=_on_thinking_poll,
+                                    thinking_interval_s=settings.thinking_interval_check,
                                 )
                                 # Some sites (e.g., Kimi) finish with "System is
                                 # currently busy..." and a Retry button — retry a
@@ -345,12 +445,16 @@ class BrowserProviderAdapter(ABC):
                                     retries += 1
                                     logger.info("answer_retry", provider=self.name, attempt=retries)
                                     await _notify("retrying", f"{self.name} thông báo bận, đang thử lại (lần {retries}/{max_retries})...")
+                                    last_thinking_snapshot = None
                                     completion = await wait_for_completion(
                                         page,
+                                        provider=self.name,
                                         provider_cfg=self._cfg,
                                         blocking=self._selectors.get("blocking", {}),
                                         completion_cfg=completion_cfg,
                                         timeout_s=timeout_s,
+                                        on_poll=_on_thinking_poll,
+                                        thinking_interval_s=settings.thinking_interval_check,
                                     )
                                 completion_text = completion.text
                                 if completion.reason == "blocked":
@@ -371,8 +475,52 @@ class BrowserProviderAdapter(ABC):
                     if status in {"ok", "partial"}:
                         try:
                             await _notify("extracting", f"Đang trích xuất nội dung câu trả lời và nguồn trích dẫn từ {self.name}...")
+
+                            # Qwen-specific: Ensure the sources / thinking drawer is open before extracting
+                            if self.name == "qwen":
+                                try:
+                                    drawer_present = await page.locator(".qwen-chat-thinking-and-sources-content").count() > 0
+                                    if not drawer_present:
+                                        drawer_btn = page.locator(
+                                            "button.qwen-chat-package-comp-source-list, "
+                                            ".anticon.qwen-chat-status-card-after, "
+                                            ".qwen-chat-tool-status-card"
+                                        ).first
+                                        if await drawer_btn.is_visible(timeout=1000):
+                                            await drawer_btn.click(timeout=2000)
+                                            await page.wait_for_timeout(600)
+                                except Exception:  # noqa: BLE001
+                                    pass
+
                             answer = await self._extract_answer(page, prompt=prompt) or completion_text
+
+                            # Perform a final DOM scan to catch any citations loaded when drawer opened
+                            try:
+                                final_scan = await page.evaluate(DOM_SCAN_THINKING_AND_CITATIONS, self.name)
+                                if isinstance(final_scan, dict) and final_scan.get("citations"):
+                                    for c in final_scan["citations"]:
+                                        c_url = c.get("url")
+                                        if c_url and not any(existing.get("url") == c_url for existing in live_polled_citations):
+                                            live_polled_citations.append(c)
+                            except Exception:  # noqa: BLE001
+                                pass
+
                             sources = await self._extract_sources(page)
+                            if live_polled_citations:
+                                known_urls = {str(s.url) for s in sources}
+                                # Backfill titles for existing sources if extracted without title
+                                for s in sources:
+                                    if not s.title:
+                                        matching = next((c for c in live_polled_citations if c.get("url") == str(s.url)), None)
+                                        if matching and matching.get("title"):
+                                            s.title = matching["title"]
+                                pairs_to_add = [
+                                    (str(c["url"]), c.get("title"))
+                                    for c in live_polled_citations
+                                    if c.get("url") and str(c["url"]) not in known_urls
+                                ]
+                                if pairs_to_add:
+                                    sources.extend(normalize_sources(pairs_to_add))
                             if not answer.strip():
                                 status = "partial" if status == "partial" else "error"
                                 error = error or "Extracted answer was empty"

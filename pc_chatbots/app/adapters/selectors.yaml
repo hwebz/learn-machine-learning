@@ -304,6 +304,13 @@ providers:
       - { css: "div[class*='assistant'] .markdown" }
       - { css: ".markdown-body" }
     source_links:
+      - { css: ".custom-web-search-origins .sources-item .host-name-text" }
+      - { css: ".sources-item .host-name-text" }
+      - { css: ".sources-item a[href^='http']" }
+      - { css: "a.qwen-markdown-link" }
+      - { css: ".response-message-content a[href^='http']" }
+      - { css: ".custom-qwen-markdown a[href^='http']" }
+      - { css: ".qwen-markdown a[href^='http']" }
       - { css: ".markdown-body a[href^='http']" }
 
   # ─────────────────────────────────────── Kimi

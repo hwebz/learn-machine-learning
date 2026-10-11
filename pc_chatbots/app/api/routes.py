@@ -25,21 +25,101 @@ router = APIRouter()
 protected = [Depends(require_api_key)]
 
 
-def _job_response(job: Job) -> ResearchResponse:
-    runs = json.loads(job.provider_runs_json)
+def _job_response(
+    job: Job,
+    steps: list[dict[str, Any]] | None = None,
+    sources: list[dict[str, Any]] | None = None,
+) -> ResearchResponse:
+    try:
+        runs = json.loads(job.provider_runs_json) if job.provider_runs_json else {}
+    except Exception:
+        runs = {}
+    if sources is None:
+        try:
+            sources = json.loads(job.sources_json) if job.sources_json else []
+        except Exception:
+            sources = []
+    try:
+        claims = json.loads(job.claims_json) if job.claims_json else []
+    except Exception:
+        claims = []
+    try:
+        disagreements = json.loads(job.disagreements_json) if job.disagreements_json else []
+    except Exception:
+        disagreements = []
+
     return ResearchResponse(
         job_id=job.id,
         status=job.status,
         progress={"subtasks_total": job.subtasks_total, "subtasks_done": job.subtasks_done},
         report_markdown=job.report_markdown,
-        sources=json.loads(job.sources_json),
-        claims=json.loads(job.claims_json),
-        disagreements=json.loads(job.disagreements_json),
+        sources=sources,
+        claims=claims,
+        disagreements=disagreements,
         provider_runs=runs,
+        steps=steps or [],
         error=job.error,
         created_at=job.created_at,
         finished_at=job.finished_at,
     )
+
+
+async def _load_job_steps(job_id: str) -> list[dict[str, Any]]:
+    async with SessionLocal() as session:
+        events = (await session.exec(
+            select(JobEvent).where(JobEvent.job_id == job_id).order_by(JobEvent.id)
+        )).all()
+        steps: list[dict[str, Any]] = []
+        for ev in events:
+            ev_data = None
+            if ev.data_json:
+                try:
+                    ev_data = json.loads(ev.data_json)
+                except Exception:
+                    ev_data = ev.data_json
+            steps.append({
+                "id": f"event-{ev.id}",
+                "timestamp": ev.created_at.strftime("%H:%M:%S") if ev.created_at else "",
+                "provider": ev.provider,
+                "step": ev.step or ev.event_type or "progress",
+                "message": ev.message or f"Event {ev.event_type}",
+                "status": "completed" if ev.status == "completed" else "running",
+                "data": ev_data,
+                "thinkingText": ev_data.get("thinking_text") if isinstance(ev_data, dict) else None,
+                "thinkingSteps": ev_data.get("thinking_steps") if isinstance(ev_data, dict) else None,
+                "citations": ev_data.get("citations") if isinstance(ev_data, dict) else None,
+                "isThinking": bool(ev.event_type == "thinking" or (isinstance(ev_data, dict) and ev_data.get("is_thinking"))),
+            })
+        return steps
+
+
+async def _load_job_sources(job: Job) -> list[dict[str, Any]]:
+    try:
+        sources = json.loads(job.sources_json) if job.sources_json else []
+    except Exception:
+        sources = []
+    if not sources:
+        async with SessionLocal() as session:
+            db_sources = list((await session.exec(
+                select(Source).where(Source.job_id == job.id)
+            )).all())
+            if not db_sources:
+                subtasks = (await session.exec(select(Subtask).where(Subtask.job_id == job.id))).all()
+                for st in subtasks:
+                    runs = (await session.exec(select(ProviderRun).where(ProviderRun.subtask_id == st.id))).all()
+                    for run in runs:
+                        db_sources.extend((await session.exec(select(Source).where(Source.run_id == run.id))).all())
+            sources = [
+                {
+                    "id": s.id,
+                    "url": s.url,
+                    "title": s.title or s.url,
+                    "snippet": s.snippet or "",
+                    "provider": s.provider,
+                }
+                for s in db_sources
+            ]
+    return sources
 
 
 async def _load_job(job_id: str) -> Job:
@@ -123,6 +203,15 @@ async def list_research(limit: int = 50) -> list[dict[str, Any]]:
     async with SessionLocal() as session:
         statement = select(Job).order_by(Job.created_at.desc()).limit(limit)
         jobs = (await session.exec(statement)).all()
+        job_ids = [j.id for j in jobs]
+
+        # Batch-load all events for these jobs to reconstruct steps
+        events_by_job: dict[str, list[JobEvent]] = {jid: [] for jid in job_ids}
+        if job_ids:
+            ev_statement = select(JobEvent).where(JobEvent.job_id.in_(job_ids)).order_by(JobEvent.id)
+            for ev in (await session.exec(ev_statement)).all():
+                events_by_job.setdefault(ev.job_id, []).append(ev)
+
         result = []
         for j in jobs:
             try:
@@ -133,6 +222,16 @@ async def list_research(limit: int = 50) -> list[dict[str, Any]]:
                 sources = json.loads(j.sources_json) if j.sources_json else []
             except Exception:
                 sources = []
+
+            # Fallback to Source table if sources_json was empty
+            if not sources:
+                src_records = (await session.exec(select(Source).where(Source.job_id == j.id))).all()
+                if src_records:
+                    sources = [
+                        {"id": s.id, "url": s.url, "title": s.title or s.url, "snippet": s.snippet or "", "provider": s.provider}
+                        for s in src_records
+                    ]
+
             try:
                 claims = json.loads(j.claims_json) if j.claims_json else []
             except Exception:
@@ -141,6 +240,28 @@ async def list_research(limit: int = 50) -> list[dict[str, Any]]:
                 runs = json.loads(j.provider_runs_json) if j.provider_runs_json else {}
             except Exception:
                 runs = {}
+
+            job_steps: list[dict[str, Any]] = []
+            for ev in events_by_job.get(j.id, []):
+                ev_data = None
+                if ev.data_json:
+                    try:
+                        ev_data = json.loads(ev.data_json)
+                    except Exception:
+                        ev_data = ev.data_json
+                job_steps.append({
+                    "id": f"event-{ev.id}",
+                    "timestamp": ev.created_at.strftime("%H:%M:%S") if ev.created_at else "",
+                    "provider": ev.provider,
+                    "step": ev.step or ev.event_type or "progress",
+                    "message": ev.message or f"Event {ev.event_type}",
+                    "status": "completed" if ev.status == "completed" else "running",
+                    "data": ev_data,
+                    "thinkingText": ev_data.get("thinking_text") if isinstance(ev_data, dict) else None,
+                    "thinkingSteps": ev_data.get("thinking_steps") if isinstance(ev_data, dict) else None,
+                    "citations": ev_data.get("citations") if isinstance(ev_data, dict) else None,
+                    "isThinking": bool(ev.event_type == "thinking" or (isinstance(ev_data, dict) and ev_data.get("is_thinking"))),
+                })
 
             result.append({
                 "job_id": j.id,
@@ -152,6 +273,7 @@ async def list_research(limit: int = 50) -> list[dict[str, Any]]:
                 "subtasks_done": j.subtasks_done,
                 "report_markdown": j.report_markdown,
                 "sources": sources,
+                "steps": job_steps,
                 "claims": claims,
                 "provider_runs": runs,
                 "error": j.error,
@@ -165,7 +287,10 @@ async def list_research(limit: int = 50) -> list[dict[str, Any]]:
 
 @router.get("/research/{job_id}", response_model=ResearchResponse, dependencies=protected)
 async def get_research(job_id: str) -> ResearchResponse:
-    return _job_response(await _load_job(job_id))
+    job = await _load_job(job_id)
+    steps = await _load_job_steps(job_id)
+    sources = await _load_job_sources(job)
+    return _job_response(job, steps=steps, sources=sources)
 
 
 @router.patch("/research/{job_id}", dependencies=protected)
@@ -209,6 +334,11 @@ async def delete_research(job_id: str) -> Response:
                     await session.delete(run)
                 await session.delete(st)
 
+            # Direct job-level sources
+            direct_sources = (await session.exec(select(Source).where(Source.job_id == job_id))).all()
+            for src in direct_sources:
+                await session.delete(src)
+
             # 3. Delete claims and reports
             claims = (await session.exec(select(Claim).where(Claim.job_id == job_id))).all()
             for cl in claims:
@@ -222,6 +352,33 @@ async def delete_research(job_id: str) -> Response:
             await session.delete(job)
             await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/research/{job_id}/sources", dependencies=protected)
+async def get_research_sources(job_id: str) -> list[dict[str, Any]]:
+    await _load_job(job_id)
+    async with SessionLocal() as session:
+        statement = select(Source).where(Source.job_id == job_id)
+        sources = list((await session.exec(statement)).all())
+        # Fallback to run sources if job_id was not populated on legacy sources
+        if not sources:
+            subtasks = (await session.exec(select(Subtask).where(Subtask.job_id == job_id))).all()
+            for st in subtasks:
+                runs = (await session.exec(select(ProviderRun).where(ProviderRun.subtask_id == st.id))).all()
+                for run in runs:
+                    sources.extend((await session.exec(select(Source).where(Source.run_id == run.id))).all())
+        return [
+            {
+                "id": s.id,
+                "job_id": s.job_id or job_id,
+                "provider": getattr(s, "provider", None),
+                "url": s.url,
+                "title": s.title,
+                "snippet": s.snippet,
+                "created_at": s.created_at.isoformat() if hasattr(s, "created_at") and s.created_at else None,
+            }
+            for s in sources
+        ]
 
 
 @router.get("/research/{job_id}/events", dependencies=protected)

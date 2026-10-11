@@ -158,10 +158,50 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 step_data: dict[str, Any] | None = None,
                 event_type: str = "step",
             ) -> None:
+                if step_name == "thinking_progress":
+                    event_type = "thinking"
+
                 async with SessionLocal() as s:
                     db_j = await s.get(Job, job_id)
                     if db_j is None or db_j.status in TERMINAL_STATUSES:
                         return
+
+                    # Live citation discovery and DB persistence
+                    if step_name == "thinking_progress" and step_data and step_data.get("citations"):
+                        try:
+                            live_citations = step_data.get("citations", [])
+                            async with results_lock:
+                                cur_sources = json.loads(db_j.sources_json) if db_j.sources_json else []
+                                known_urls = {str(cs.get("url")) for cs in cur_sources}
+                                new_source_added = False
+                                for c in live_citations:
+                                    c_url = str(c.get("url") or "")
+                                    if c_url and c_url not in known_urls:
+                                        known_urls.add(c_url)
+                                        s_id = f"{job_id}:S{len(sources) + 1}"
+                                        s_item = {
+                                            "id": s_id,
+                                            "url": c_url,
+                                            "title": c.get("title") or "",
+                                            "provider": subtask.provider,
+                                        }
+                                        cur_sources.append(s_item)
+                                        sources.append(s_item)
+                                        s.add(Source(
+                                            id=s_id,
+                                            run_id=f"{job_id}:{subtask.provider}:run",
+                                            job_id=job_id,
+                                            provider=subtask.provider,
+                                            url=c_url,
+                                            title=c.get("title") or None,
+                                        ))
+                                        new_source_added = True
+                                if new_source_added:
+                                    db_j.sources_json = json.dumps(cur_sources)
+                                    db_j.updated_at = utc_now()
+                        except Exception as c_err:
+                            logger.debug("live_citation_persist_skipped", error=str(c_err))
+
                     s.add(JobEvent(
                         job_id=job_id,
                         status=db_j.status,
@@ -352,13 +392,23 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                     session.add(provider_run)
                     run_sources: list[dict[str, str]] = []
                     for source_index, source in enumerate(result.sources, start=1):
-                        source_public_id = f"S{len(sources) + len(run_sources) + 1}"
+                        source_url_str = str(source.url)
+                        # Check if already added during live thinking stream
+                        existing = next((s for s in sources if s.get("url") == source_url_str), None)
+                        if existing:
+                            continue
+                        source_public_id = f"S{len(sources) + 1}"
                         db_source = Source(
-                            id=f"{job_id}:{source_public_id}", run_id=run_id, url=str(source.url),
-                            title=source.title, snippet=source.snippet,
+                            id=f"{job_id}:{source_public_id}",
+                            run_id=run_id,
+                            job_id=job_id,
+                            provider=subtask.provider,
+                            url=source_url_str,
+                            title=source.title,
+                            snippet=source.snippet,
                         )
                         session.add(db_source)
-                        source_data = {"id": source_public_id, "url": db_source.url, "title": db_source.title or ""}
+                        source_data = {"id": source_public_id, "url": db_source.url, "title": db_source.title or "", "provider": subtask.provider}
                         run_sources.append(source_data)
                         sources.append(source_data)
                     db_subtask = await session.get(Subtask, subtask.id)

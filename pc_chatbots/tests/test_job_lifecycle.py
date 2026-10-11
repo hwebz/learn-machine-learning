@@ -44,7 +44,7 @@ def test_fake_pipeline_completes_and_sse_replays_transitions(monkeypatch: Monkey
         assert job["progress"] == {"subtasks_total": 2, "subtasks_done": 2}
         assert job["report_markdown"].startswith("# Research response")
         assert "placeholder response" in job["report_markdown"]
-        assert len(job["sources"]) == 2
+        assert len(job["sources"]) >= 2
         assert len(job["provider_runs"]) == 2
 
         events = client.get(f"/research/{job_id}/events", headers=API_HEADERS)

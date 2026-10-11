@@ -231,13 +231,359 @@ async def _input_editable(page: Any, question_input: SelectorChain) -> bool:
         return False
 
 
+DOM_SCAN_THINKING_AND_CITATIONS = """
+(provider) => {
+    let thinkingText = "";
+    let isThinking = false;
+    const thinkingSteps = [];
+
+    const clean = (txt) => (txt || "").trim().replace(/\\s+/g, " ");
+
+    const triggerClick = (el) => {
+        if (!el) return;
+        try { el.click(); } catch (e) {}
+        try {
+            const evt = new MouseEvent("click", {
+                bubbles: true,
+                cancelable: true,
+                view: window
+            });
+            el.dispatchEvent(evt);
+        } catch (e) {}
+    };
+
+    // 1. Qwen-specific: Open the "Thinking and Search" detailed right sidebar if closed
+    if (provider === "qwen" || !provider) {
+        try {
+            const sidebar = document.querySelector(".qwen-chat-thinking-and-sources-content");
+            if (!sidebar) {
+                const toggleIcons = document.querySelectorAll(
+                    ".anticon.qwen-chat-status-card-after, " +
+                    "[class*='qwen-chat-status-card-after'], " +
+                    ".qwen-chat-package-comp-source-list, " +
+                    "button.qwen-chat-package-comp-source-list, " +
+                    ".qwen-chat-tool-status-card"
+                );
+                for (const icon of toggleIcons) {
+                    const attempts = parseInt(icon.dataset.expandAttempts || "0", 10);
+                    if (attempts < 5) {
+                        icon.dataset.expandAttempts = (attempts + 1).toString();
+                        triggerClick(icon);
+                        const parentCard = icon.closest(".qwen-chat-tool-status-card, [class*='status-card']");
+                        if (parentCard && parentCard !== icon) {
+                            triggerClick(parentCard);
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    // 2. Extract structured thinking steps without duplicates
+    const seenStepKeys = new Set();
+    try {
+        let statusCards = [];
+        const sidebar = document.querySelector(".qwen-chat-thinking-and-sources-content");
+        if (sidebar) {
+            const phaseCards = sidebar.querySelectorAll("div.qwen-chat-thinking-status-card[data-phase-id]");
+            if (phaseCards && phaseCards.length > 0) {
+                statusCards = Array.from(phaseCards);
+            } else {
+                const container = sidebar.querySelector(".qwen-chat-thinking-and-sources-content-thinking-container");
+                if (container && container.children.length > 0) {
+                    statusCards = Array.from(container.children);
+                } else {
+                    statusCards = Array.from(sidebar.querySelectorAll("div.qwen-chat-thinking-status-card"));
+                }
+            }
+        }
+
+        // Fallback: main chat thinking cards (filter out nested cards to avoid duplicates)
+        if (statusCards.length === 0) {
+            const mainContainer = document.querySelector(".qwen-chat-thinking-tool-status-card-wraper");
+            if (mainContainer) {
+                const topCards = mainContainer.querySelectorAll("div.qwen-chat-tool-status-card, div.qwen-chat-thinking-status-card");
+                if (topCards && topCards.length > 0) {
+                    statusCards = Array.from(topCards);
+                }
+            } else {
+                const rawCards = document.querySelectorAll(
+                    "div.qwen-chat-thinking-status-card[data-phase-id], " +
+                    "div.qwen-chat-thinking-status-card, " +
+                    "div.thinking-chain-container"
+                );
+                const topLevel = [];
+                for (const el of rawCards) {
+                    if (!topLevel.some(parent => parent.contains(el) && parent !== el)) {
+                        topLevel.push(el);
+                    }
+                }
+                statusCards = topLevel;
+            }
+        }
+
+        for (const card of statusCards) {
+            let title = "";
+            const titleEl = card.querySelector(
+                "div[class*='thinking-status-card-title-text'], " +
+                "div[class*='status-card-title-text'], " +
+                "div[class*='qwen-chat-thinking-status-card-title'], " +
+                "div[class*='status-card-title'], " +
+                "div[class*='tool-status-card-title']"
+            );
+            if (titleEl) {
+                const clone = titleEl.cloneNode(true);
+                clone.querySelectorAll(".anticon, svg, button").forEach(i => i.remove());
+                title = clean(clone.innerText || clone.textContent);
+            } else {
+                const headerEl = card.querySelector("div[class*='header']");
+                if (headerEl) {
+                    const clone = headerEl.cloneNode(true);
+                    clone.querySelectorAll(".anticon, svg, button").forEach(i => i.remove());
+                    title = clean(clone.innerText || clone.textContent);
+                }
+            }
+
+            // Skip summary/completion footer
+            if (!title || /^(Thinking and Searching Completed|Thinking completed)$/i.test(title)) {
+                if (title) isThinking = true;
+                continue;
+            }
+
+            let description = "";
+            // A. Markdown text: only take top container to avoid duplicating inner spans
+            const mdEl = card.querySelector(".qwen-markdown, .markdown-body, .markdown");
+            if (mdEl) {
+                description = clean(mdEl.innerText || mdEl.textContent);
+            } else {
+                const textEl = card.querySelector(".qwen-markdown-text");
+                if (textEl) {
+                    description = clean(textEl.innerText || textEl.textContent);
+                }
+            }
+
+            // B. Search domain pills for search/source cards
+            if (!description) {
+                const searchCardEls = card.querySelectorAll(".qwen-chat-search-card, [class*='search-card']");
+                if (searchCardEls && searchCardEls.length > 0) {
+                    const domains = [];
+                    for (const sc of searchCardEls) {
+                        const divs = sc.querySelectorAll("div");
+                        let d = "";
+                        if (divs.length > 0) {
+                            d = clean(divs[divs.length - 1].innerText || divs[divs.length - 1].textContent);
+                        }
+                        if (!d) {
+                            d = clean(sc.innerText || sc.textContent);
+                        }
+                        if (d && !d.startsWith("#") && !domains.includes(d)) {
+                            domains.push(d);
+                        }
+                    }
+                    if (domains.length > 0) {
+                        if (/source|nguồn/i.test(title)) {
+                            description = "Nguồn đã đọc: " + domains.join(", ");
+                        } else {
+                            description = "Đã tìm kiếm: " + domains.join(", ");
+                        }
+                    }
+                }
+            }
+
+            // C. Generic content fallback
+            if (!description) {
+                const descEl = card.querySelector(
+                    "div[class*='status-card-content'], " +
+                    "div[class*='thinking-status-card-content'], " +
+                    "div[class*='tool-status-card-content'], " +
+                    "div[class*='status-card-body'], " +
+                    "div[class*='status-card-detail']"
+                );
+                if (descEl) {
+                    const clone = descEl.cloneNode(true);
+                    clone.querySelectorAll("[class*='title'], .anticon, svg").forEach(i => i.remove());
+                    description = clean(clone.innerText || clone.textContent);
+                }
+            }
+
+            const cardClass = card.className || "";
+            const isCompleted = cardClass.includes("-completed") ||
+                                cardClass.includes("completed") ||
+                                card.querySelector(".anticon-circleCheck, .anticon-check, [class*='circleCheck'], [class*='check'], [class*='success']") !== null;
+            const isRunning = card.querySelector(".anticon-spin, .anticon-loading, [class*='loading'], [class*='spin']") !== null;
+            const stepStatus = isCompleted ? "completed" : (isRunning ? "running" : (description ? "completed" : "running"));
+
+            // Deduplicate: avoid pushing identical (title, description)
+            const dedupeKey = title + "::" + description;
+            if (!seenStepKeys.has(dedupeKey)) {
+                seenStepKeys.add(dedupeKey);
+                isThinking = true;
+                thinkingSteps.push({
+                    title: title,
+                    description: description || "",
+                    status: stepStatus
+                });
+            }
+        }
+    } catch (e) {}
+
+    // 3. Fallback: query general thinking containers across other providers
+    const thinkingSelectors = [
+        ".ds-markdown--thought",
+        "div[class*='thinking-status-card-content']",
+        "div[class*='thinking-content']",
+        "div[class*='thought-content']",
+        "div[data-testid*='thought']",
+        "div[class*='reasoning']",
+        "div[class*='thinking_content']",
+        "div[class*='thinking-container']",
+        "div[class*='thinking-process']",
+        "div[class*='model-thought']",
+        "details[class*='thought']",
+        "details[class*='thinking']",
+        "div[aria-label*='Thought' i]",
+        "div[aria-label*='Thinking' i]"
+    ];
+
+    for (const sel of thinkingSelectors) {
+        try {
+            const els = document.querySelectorAll(sel);
+            if (els && els.length > 0) {
+                const target = els[els.length - 1];
+                const txt = (target.innerText || target.textContent || "").trim();
+                if (txt) {
+                    thinkingText = txt;
+                    isThinking = true;
+                    break;
+                }
+            }
+        } catch (e) {}
+    }
+
+    if (!thinkingText && thinkingSteps.length > 0) {
+        const fullDesc = thinkingSteps.map(s => {
+            return s.description ? `${s.title}:\\n${s.description}` : s.title;
+        }).join("\\n\\n");
+        if (fullDesc) {
+            thinkingText = fullDesc;
+        }
+    }
+
+    if (!thinkingText && !isThinking) {
+        try {
+            const allBlocks = document.querySelectorAll("details, blockquote, div[role='region'], div[class*='thought']");
+            for (const el of allBlocks) {
+                const txt = (el.innerText || "").trim();
+                if (txt && (/^(thought|thinking|reasoning|suy nghĩ)/i.test(txt) || txt.includes("Thought Process") || txt.includes("Thinking Process"))) {
+                    thinkingText = txt;
+                    isThinking = true;
+                    break;
+                }
+            }
+        } catch (e) {}
+    }
+
+    // 4. Citations and external source links in DOM
+    const citations = [];
+    const seenUrls = new Set();
+
+    // 4.1. Qwen-specific: Extract from .sources-item, .custom-web-search-origins, .content-list
+    try {
+        const sourceItems = document.querySelectorAll(
+            ".sources-item, " +
+            ".custom-web-search-origins .content-list-item, " +
+            "div[class*='sources-item']"
+        );
+        for (const item of sourceItems) {
+            let url = "";
+            const hostEl = item.querySelector(".host-name-text, [class*='host-name']");
+            if (hostEl) {
+                url = (hostEl.innerText || hostEl.textContent || "").trim();
+            }
+            if (!url) {
+                const aTag = item.querySelector("a[href^='http']");
+                if (aTag) {
+                    url = aTag.href || aTag.getAttribute("href") || "";
+                }
+            }
+
+            const titleEl = item.querySelector(".content-item-des-title, [class*='des-title']");
+            const title = clean(titleEl ? (titleEl.innerText || titleEl.textContent) : "");
+            const snipEl = item.querySelector(".content-item-des, [class*='snippet']");
+            const snippet = clean(snipEl ? (snipEl.innerText || snipEl.textContent) : "");
+
+            if (url && url.startsWith("http") && !seenUrls.has(url)) {
+                seenUrls.add(url);
+                citations.push({
+                    url: url,
+                    title: title || url,
+                    snippet: snippet
+                });
+            }
+        }
+    } catch (e) {}
+
+    // 4.2. General link selectors for citations across providers
+    const linkSelectors = [
+        "a[data-testid='citation']",
+        "a.citation",
+        "a[data-citation]",
+        "a.qwen-markdown-link",
+        "div.response-message-content a[href^='http']",
+        ".custom-qwen-markdown a[href^='http']",
+        ".qwen-markdown a[href^='http']",
+        ".markdown-body a[href^='http']",
+        ".prose a[href^='http']",
+        "article a[href^='http']",
+        "div[class*='source'] a[href^='http']",
+        "div[class*='citation'] a[href^='http']",
+        "ul[class*='source'] a[href^='http']",
+        "ol[class*='source'] a[href^='http']",
+        "div[class*='references'] a[href^='http']",
+        "sup a[href^='http']",
+        "div[class*='status-card'] a[href^='http']"
+    ];
+
+    for (const sel of linkSelectors) {
+        try {
+            const links = document.querySelectorAll(sel);
+            for (const a of links) {
+                const href = a.href || a.getAttribute("href");
+                if (href && href.startsWith("http") && !seenUrls.has(href)) {
+                    if (!href.includes("login") && !href.includes("auth") && !href.includes("accounts.google")) {
+                        seenUrls.add(href);
+                        let title = (a.innerText || a.textContent || a.getAttribute("title") || "").trim();
+                        citations.push({
+                            url: href,
+                            title: title || null,
+                            snippet: ""
+                        });
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    return {
+        is_thinking: isThinking,
+        thinking_text: thinkingText ? thinkingText.slice(-4000) : "",
+        thinking_steps: thinkingSteps,
+        citations: citations
+    };
+}
+"""
+
+
 async def wait_for_completion(
     page: Any,
     *,
+    provider: str = "",
     provider_cfg: dict[str, Any],
     blocking: dict[str, Any],
     completion_cfg: dict[str, Any],
     timeout_s: float,
+    on_poll: Any | None = None,
+    thinking_interval_s: float | None = None,
     clock: Any = time.monotonic,
     sleep: Any = asyncio.sleep,
 ) -> CompletionResult:
@@ -321,12 +667,46 @@ async def wait_for_completion(
         else:
             state_desc = "waiting for response"
 
+        # Check thinking & citations in DOM with provider-specific logic
+        scan_data: dict[str, Any] = {"is_thinking": False, "thinking_text": "", "thinking_steps": [], "citations": []}
+        try:
+            raw_scan = await page.evaluate(DOM_SCAN_THINKING_AND_CITATIONS, provider)
+            if isinstance(raw_scan, dict):
+                scan_data = raw_scan
+        except Exception as exc:
+            if is_target_closed_error(exc):
+                return CompletionResult(done=False, reason="page_closed", text=last_text, blocking_detail=str(exc))
+            logger.debug("dom_scan_eval_failed", error=str(exc))
+
+        is_thinking = bool(scan_data.get("is_thinking") or generating)
+        thinking_text = str(scan_data.get("thinking_text") or "")
+        thinking_steps = list(scan_data.get("thinking_steps") or [])
+        citations = scan_data.get("citations", [])
+
+        if on_poll is not None:
+            try:
+                await on_poll(
+                    state=state_desc,
+                    generating=generating,
+                    is_thinking=is_thinking,
+                    thinking_text=thinking_text,
+                    thinking_steps=thinking_steps,
+                    citations=citations,
+                    last_text=last_text,
+                    poll_count=poll_count,
+                    elapsed_s=round(elapsed, 1),
+                )
+            except Exception as exc:
+                logger.debug("on_poll_callback_failed", error=str(exc))
+
         logger.info(
             "wait_for_completion_poll",
             poll=poll_count,
             elapsed_s=round(elapsed, 1),
             state=state_desc,
             generating=generating,
+            is_thinking=is_thinking,
+            citations_count=len(citations),
             done_marker=done_marker,
             text_len=len(last_text),
             text_stable=text_stable,
@@ -341,7 +721,11 @@ async def wait_for_completion(
                 last_text = await _answer_text(page, answer_chain)
             return CompletionResult(done=True, reason=reason, text=last_text)
 
-        # jittered poll between min_poll and max_poll
-        await sleep(random.uniform(min_poll, max_poll))
+        # In thinking/generating mode, use thinking_interval_s (default 1.0s from THINKING_INTERVAL_CHECK=1s)
+        effective_interval = thinking_interval_s if thinking_interval_s is not None else 1.0
+        if generating or is_thinking:
+            await sleep(effective_interval)
+        else:
+            await sleep(random.uniform(min_poll, max_poll))
 
     return CompletionResult(done=False, reason="timeout", text=last_text)

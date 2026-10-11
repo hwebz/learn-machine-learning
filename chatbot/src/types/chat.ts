@@ -18,6 +18,12 @@ export interface DisagreementItem {
   viewpoints: Record<string, string>;
 }
 
+export interface ThinkingStep {
+  title: string;
+  description?: string;
+  status?: "running" | "completed" | "pending";
+}
+
 export interface StepLog {
   id: string;
   timestamp: string;
@@ -26,6 +32,10 @@ export interface StepLog {
   message: string;
   status: "pending" | "running" | "completed" | "error";
   data?: any;
+  thinkingText?: string;
+  thinkingSteps?: ThinkingStep[];
+  citations?: SourceLink[];
+  isThinking?: boolean;
 }
 
 export interface Message {

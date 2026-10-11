@@ -31,7 +31,28 @@ class FakeAdapter:
         on_step: StepCallback | None = None,
     ) -> ProviderResult:
         if on_step is not None:
-            await on_step("generating", f"Fake adapter {self.name} đang sinh dữ liệu phản hồi...", None)
+            await on_step(
+                "generating",
+                f"{self.name} đang sinh câu trả lời...",
+                {"provider": self.name},
+            )
+            await on_step(
+                "thinking_progress",
+                f"{self.name} đang suy luận: Phân tích chuyên sâu câu hỏi '{prompt[:50]}...'",
+                {
+                    "provider": self.name,
+                    "state": "thinking / generating",
+                    "generating": True,
+                    "is_thinking": True,
+                    "thinking_text": f"1. Phân tích câu hỏi '{prompt}'.\n2. Tra cứu dữ liệu và đối chiếu các nguồn thông tin thực tế.\n3. Tổng hợp luận cứ và trích dẫn bằng chứng.",
+                    "citations": [
+                        {"url": "https://en.wikipedia.org/wiki/Machine_learning", "title": "Machine Learning Overview - Wikipedia"},
+                        {"url": "https://arxiv.org/abs/2303.08774", "title": "GPT-4 Technical Report - arXiv"},
+                    ],
+                    "citations_count": 2,
+                    "elapsed_s": 1.0,
+                },
+            )
         started = datetime.now(timezone.utc)
         source = "https://example.com/research-method"
         title = "Example research method"

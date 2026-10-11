@@ -24,6 +24,7 @@ import {
   ModelBadgeLogo,
   ArrowUpCircleIcon,
   ArrowDownCircleIcon,
+  ExternalLinkIcon,
 } from "../icons/Icons";
 
 interface ChatAreaProps {
@@ -541,24 +542,152 @@ export function ChatArea({
                       </span>
                     </div>
 
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
-                      {msg.steps.map((st, sidx) => (
-                        <div
-                          key={sidx}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            fontSize: 12,
-                            color: "var(--text-secondary)",
-                          }}
-                        >
-                          <span style={{ color: "#059669", fontWeight: 700 }}>✓</span>
-                          <span style={{ flex: 1 }}>{st.message}</span>
-                          <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>{st.timestamp}</span>
+                    {(() => {
+                      // Extract latest thinking steps once to avoid duplicating under every step
+                      const latestThinkingStep = [...msg.steps].reverse().find(
+                        (s) =>
+                          (s.thinkingSteps && s.thinkingSteps.length > 0) ||
+                          (s.data?.thinking_steps && s.data.thinking_steps.length > 0) ||
+                          s.thinkingText ||
+                          s.data?.thinking_text
+                      );
+                      const rawSteps = latestThinkingStep?.thinkingSteps || latestThinkingStep?.data?.thinking_steps || [];
+                      const seenStepKeys = new Set<string>();
+                      const uniqueThinkingSteps = rawSteps.filter((step: any) => {
+                        const k = `${(step.title || "").trim()}::${(step.description || "").trim()}`;
+                        if (seenStepKeys.has(k)) return false;
+                        seenStepKeys.add(k);
+                        return true;
+                      });
+                      const thoughtContent = latestThinkingStep?.thinkingText || latestThinkingStep?.data?.thinking_text || "";
+
+                      // Deduplicate pipeline log messages:
+                      // If structured thinking steps are present, exclude individual thinking_progress updates to avoid duplicating steps
+                      const allSteps = msg.steps || [];
+                      const distinctSteps = allSteps.filter((st, sidx) => {
+                        if (
+                          uniqueThinkingSteps.length > 0 &&
+                          (st.step === "thinking_progress" || st.isThinking || /đang suy luận/i.test(st.message))
+                        ) {
+                          return false;
+                        }
+                        if (sidx === 0) return true;
+                        return st.message !== allSteps[sidx - 1]?.message;
+                      });
+
+                      return (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
+                          {/* Consolidated Thinking Process */}
+                          {uniqueThinkingSteps.length > 0 ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 4 }}>
+                              <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--brand-blue)" }}>
+                                ✦ Các bước suy luận & tìm kiếm ({uniqueThinkingSteps.length}):
+                              </div>
+                              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                {uniqueThinkingSteps.map((stepItem: any, stIdx: number) => (
+                                  <details
+                                    key={stIdx}
+                                    style={{
+                                      fontSize: 11.5,
+                                      backgroundColor: "#ffffff",
+                                      padding: "6px 10px",
+                                      borderRadius: 6,
+                                      border: "1px solid #e2e8f0",
+                                    }}
+                                  >
+                                    <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-primary)" }}>
+                                      <span style={{ color: "#059669", marginRight: 6 }}>✓</span>
+                                      <span style={{ color: "var(--brand-blue)" }}>{stepItem.title}</span>
+                                      {stepItem.description ? (
+                                        <span style={{ color: "var(--text-secondary)", fontWeight: 400, marginLeft: 6 }}>
+                                          — {stepItem.description.slice(0, 75)}{stepItem.description.length > 75 ? "..." : ""}
+                                        </span>
+                                      ) : null}
+                                    </summary>
+                                    {stepItem.description && (
+                                      <div
+                                        style={{
+                                          marginTop: 6,
+                                          whiteSpace: "pre-wrap",
+                                          fontFamily: "var(--font-geist-mono, monospace)",
+                                          maxHeight: 160,
+                                          overflowY: "auto",
+                                          lineHeight: 1.5,
+                                          fontSize: 11,
+                                          color: "var(--text-secondary)",
+                                          backgroundColor: "#f8fafc",
+                                          padding: "6px 8px",
+                                          borderRadius: 4,
+                                        }}
+                                      >
+                                        {stepItem.description}
+                                      </div>
+                                    )}
+                                  </details>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            thoughtContent && (
+                              <details
+                                style={{
+                                  fontSize: 11.5,
+                                  color: "var(--text-secondary)",
+                                  backgroundColor: "#ffffff",
+                                  padding: "6px 10px",
+                                  borderRadius: 6,
+                                  border: "1px solid #e2e8f0",
+                                  marginBottom: 4,
+                                }}
+                              >
+                                <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--brand-blue)" }}>
+                                  Xem nội dung suy luận chi tiết ({thoughtContent.length} ký tự)
+                                </summary>
+                                <div
+                                  style={{
+                                    marginTop: 4,
+                                    whiteSpace: "pre-wrap",
+                                    fontFamily: "var(--font-geist-mono, monospace)",
+                                    maxHeight: 140,
+                                    overflowY: "auto",
+                                    lineHeight: 1.5,
+                                    fontSize: 11,
+                                    color: "var(--text-secondary)",
+                                    backgroundColor: "#f8fafc",
+                                    padding: "6px 8px",
+                                    borderRadius: 4,
+                                  }}
+                                >
+                                  {thoughtContent}
+                                </div>
+                              </details>
+                            )
+                          )}
+
+                          {/* Pipeline Step Log List (Clean without repeating thinking tree) */}
+                          {distinctSteps.length > 0 && (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                              {distinctSteps.map((st, sidx) => (
+                                <div
+                                  key={sidx}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    fontSize: 12,
+                                    color: "var(--text-secondary)",
+                                  }}
+                                >
+                                  <span style={{ color: "#059669", fontWeight: 700 }}>✓</span>
+                                  <span style={{ flex: 1 }}>{st.message}</span>
+                                  <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>{st.timestamp}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -566,6 +695,44 @@ export function ChatArea({
                 <div className="message-content-body">
                   <MarkdownContent content={msg.content} />
                 </div>
+
+                {/* Citations & Source Links Section */}
+                {msg.sources && msg.sources.length > 0 && (
+                  <div className="message-sources-section">
+                    <div className="message-sources-header">
+                      <div className="message-sources-title">
+                        <span style={{ fontSize: 13, marginRight: 5 }}>📚</span>
+                        <span>Nguồn trích dẫn & Tham khảo ({msg.sources.length})</span>
+                      </div>
+                    </div>
+                    <div className="message-sources-grid">
+                      {msg.sources.map((src, sIdx) => {
+                        let domain = "";
+                        try {
+                          domain = src.domain || (src.url ? new URL(src.url).hostname.replace(/^www\./, "") : "");
+                        } catch {
+                          domain = src.url || "source";
+                        }
+                        const displayTitle = src.title && src.title !== src.url ? src.title : domain;
+                        return (
+                          <a
+                            key={sIdx}
+                            href={src.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="message-source-chip"
+                            title={`${src.title || src.url}\n${src.url}`}
+                          >
+                            <span className="message-source-index">{sIdx + 1}</span>
+                            <span className="message-source-domain">{domain}</span>
+                            <span className="message-source-title">{displayTitle}</span>
+                            <ExternalLinkIcon size={12} color="var(--text-muted)" />
+                          </a>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Assistant Footer Row */}
                 <div className="assistant-card-footer">
@@ -666,63 +833,291 @@ export function ChatArea({
                 </div>
               </div>
 
-              {/* Dynamic Step Logs Feed */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "4px 0" }}>
-                {activeSteps && activeSteps.length > 0 ? (
-                  activeSteps.map((st, idx) => {
-                    const isLatest = idx === activeSteps.length - 1;
-                    return (
+              {/* Real-time Thinking Process & DOM Citations Display */}
+              {(() => {
+                const latestThinkingStep = [...activeSteps].reverse().find(
+                  (s) =>
+                    (s.thinkingSteps && s.thinkingSteps.length > 0) ||
+                    (s.data?.thinking_steps && s.data.thinking_steps.length > 0) ||
+                    s.thinkingText ||
+                    s.data?.thinking_text ||
+                    s.isThinking ||
+                    s.data?.is_thinking
+                );
+                const rawCurrentSteps = latestThinkingStep?.thinkingSteps || latestThinkingStep?.data?.thinking_steps || [];
+                const seenCurrentKeys = new Set<string>();
+                const currentThinkingSteps = rawCurrentSteps.filter((step: any) => {
+                  const k = `${(step.title || "").trim()}::${(step.description || "").trim()}`;
+                  if (seenCurrentKeys.has(k)) return false;
+                  seenCurrentKeys.add(k);
+                  return true;
+                });
+                const currentThinkingText = latestThinkingStep?.thinkingText || latestThinkingStep?.data?.thinking_text || "";
+                const activeThinkingProvider = latestThinkingStep?.provider || latestThinkingStep?.data?.provider || "";
+                const hasThinkingData = currentThinkingSteps.length > 0 || Boolean(currentThinkingText);
+
+                const liveCitationsList: any[] = [];
+                const seenCitationUrls = new Set<string>();
+                for (const st of activeSteps) {
+                  const stepCitations: any[] = st.citations || st.data?.citations || [];
+                  for (const c of stepCitations) {
+                    if (c && c.url && !seenCitationUrls.has(c.url)) {
+                      seenCitationUrls.add(c.url);
+                      liveCitationsList.push(c);
+                    }
+                  }
+                }
+
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "4px 0" }}>
+                    {/* Live Thinking Process Content Card */}
+                    {hasThinkingData && (
                       <div
-                        key={idx}
                         style={{
+                          backgroundColor: "#f8fafc",
+                          borderRadius: "var(--radius-md)",
+                          border: "1.5px solid #93c5fd",
+                          padding: "12px 14px",
                           display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          fontSize: 12.5,
-                          color: isLatest ? "var(--text-primary)" : "var(--text-secondary)",
-                          fontWeight: isLatest ? 600 : 400,
-                          padding: "4px 8px",
-                          borderRadius: 6,
-                          backgroundColor: isLatest ? "var(--brand-blue-light)" : "transparent",
+                          flexDirection: "column",
+                          gap: 8,
                         }}
                       >
-                        {isLatest ? (
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            fontSize: 12.5,
+                            fontWeight: 700,
+                            color: "var(--brand-blue)",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                            <BrainIcon size={16} color="var(--brand-blue)" />
+                            <span>
+                              Tiến trình suy luận (Thinking Process) — {activeThinkingProvider ? activeThinkingProvider.toUpperCase() : "Live Chatbot"}
+                            </span>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: "#059669",
+                              backgroundColor: "#ecfdf5",
+                              padding: "2px 8px",
+                              borderRadius: 12,
+                              border: "1px solid #a7f3d0",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 4,
+                            }}
+                          >
+                            <span style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: "#059669" }} />
+                            Live DOM
+                          </span>
+                        </div>
+
+                        {/* If structured steps are available (e.g. Qwen status cards: Searching web, Reading sources, etc.) */}
+                        {currentThinkingSteps.length > 0 ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 2 }}>
+                            {currentThinkingSteps.map((stepItem: any, sIdx: number) => {
+                              const isStepRunning = stepItem.status === "running";
+                              return (
+                                <div
+                                  key={sIdx}
+                                  style={{
+                                    backgroundColor: "#ffffff",
+                                    borderRadius: 6,
+                                    border: isStepRunning ? "1px solid #93c5fd" : "1px solid #e2e8f0",
+                                    padding: "8px 12px",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: 4,
+                                  }}
+                                >
+                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, fontWeight: 600, color: "var(--text-primary)" }}>
+                                      {isStepRunning ? (
+                                        <div
+                                          style={{
+                                            width: 10,
+                                            height: 10,
+                                            border: "2px solid #3b82f6",
+                                            borderTopColor: "transparent",
+                                            borderRadius: "50%",
+                                            animation: "spin 0.8s linear infinite",
+                                          }}
+                                        />
+                                      ) : (
+                                        <span style={{ color: "#059669", fontWeight: 700 }}>✓</span>
+                                      )}
+                                      <span>{stepItem.title}</span>
+                                    </div>
+                                    <span
+                                      style={{
+                                        fontSize: 10.5,
+                                        padding: "1px 6px",
+                                        borderRadius: 10,
+                                        backgroundColor: isStepRunning ? "#eff6ff" : "#f0fdf4",
+                                        color: isStepRunning ? "#1d4ed8" : "#15803d",
+                                        fontWeight: 500,
+                                      }}
+                                    >
+                                      {isStepRunning ? "Đang xử lý..." : "Hoàn thành"}
+                                    </span>
+                                  </div>
+                                  {stepItem.description && (
+                                    <div
+                                      style={{
+                                        fontSize: 11.5,
+                                        lineHeight: 1.5,
+                                        color: "var(--text-secondary)",
+                                        backgroundColor: "#f8fafc",
+                                        padding: "6px 8px",
+                                        borderRadius: 4,
+                                        whiteSpace: "pre-wrap",
+                                        fontFamily: "var(--font-geist-mono, monospace)",
+                                        maxHeight: 140,
+                                        overflowY: "auto",
+                                      }}
+                                    >
+                                      {stepItem.description}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          currentThinkingText && (
+                            <div
+                              style={{
+                                fontSize: 12,
+                                lineHeight: 1.6,
+                                color: "var(--text-secondary)",
+                                backgroundColor: "#ffffff",
+                                padding: "10px 12px",
+                                borderRadius: 6,
+                                border: "1px solid #e2e8f0",
+                                maxHeight: 160,
+                                overflowY: "auto",
+                                whiteSpace: "pre-wrap",
+                                fontFamily: "var(--font-geist-mono, monospace)",
+                              }}
+                            >
+                              {currentThinkingText}
+                            </div>
+                          )
+                        )}
+
+                        {liveCitationsList.length > 0 && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 2 }}>
+                            <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-primary)" }}>
+                              ✦ Nguồn trích dẫn tìm thấy từ DOM ({liveCitationsList.length}):
+                            </div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                              {liveCitationsList.map((c, cIdx) => (
+                                <a
+                                  key={cIdx}
+                                  href={c.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  style={{
+                                    fontSize: 11,
+                                    padding: "3px 8px",
+                                    borderRadius: 4,
+                                    backgroundColor: "#f1f5f9",
+                                    color: "var(--brand-blue)",
+                                    border: "1px solid #cbd5e1",
+                                    textDecoration: "none",
+                                    maxWidth: 240,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                  title={c.title || c.url}
+                                >
+                                  🔗 {c.title || c.url}
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Dynamic Step Logs Feed */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {(() => {
+                        const distinctActive = activeSteps.filter((st, i) => {
+                          if (
+                            currentThinkingSteps.length > 0 &&
+                            (st.step === "thinking_progress" || st.isThinking || /đang suy luận/i.test(st.message))
+                          ) {
+                            return false;
+                          }
+                          if (i === 0) return true;
+                          return st.message !== activeSteps[i - 1].message;
+                        });
+                        return distinctActive.length > 0 ? (
+                          distinctActive.map((st, idx) => {
+                            const isLatest = idx === distinctActive.length - 1;
+                            return (
+                              <div
+                                key={idx}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 10,
+                                  fontSize: 12.5,
+                                  color: isLatest ? "var(--text-primary)" : "var(--text-secondary)",
+                                  fontWeight: isLatest ? 600 : 400,
+                                  padding: "4px 8px",
+                                  borderRadius: 6,
+                                  backgroundColor: isLatest ? "var(--brand-blue-light)" : "transparent",
+                                }}
+                              >
+                                {isLatest ? (
+                                  <div
+                                    style={{
+                                      width: 12,
+                                      height: 12,
+                                      border: "2px solid #3b82f6",
+                                      borderTopColor: "transparent",
+                                      borderRadius: "50%",
+                                      animation: "spin 0.8s linear infinite",
+                                    }}
+                                  />
+                                ) : (
+                                  <span style={{ color: "#059669", fontWeight: 700 }}>✓</span>
+                                )}
+                                <span style={{ flex: 1 }}>{st.message}</span>
+                                <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>{st.timestamp}</span>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
                           <div
                             style={{
-                              width: 12,
-                              height: 12,
-                              border: "2px solid #3b82f6",
-                              borderTopColor: "transparent",
+                              width: 14,
+                              height: 14,
+                              border: "2px solid #cbd5e1",
+                              borderTopColor: "var(--brand-blue)",
                               borderRadius: "50%",
-                              animation: "spin 0.8s linear infinite",
+                              animation: "spin 1s linear infinite",
                             }}
                           />
-                        ) : (
-                          <span style={{ color: "#059669", fontWeight: 700 }}>✓</span>
-                        )}
-                        <span style={{ flex: 1 }}>{st.message}</span>
-                        <span style={{ fontSize: 10.5, color: "var(--text-muted)" }}>{st.timestamp}</span>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
-                    <div
-                      style={{
-                        width: 14,
-                        height: 14,
-                        border: "2px solid #cbd5e1",
-                        borderTopColor: "var(--brand-blue)",
-                        borderRadius: "50%",
-                        animation: "spin 1s linear infinite",
-                      }}
-                    />
-                    <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-                      Khởi tạo phiên nghiên cứu và kết nối tới {selectedCount} trình duyệt...
-                    </span>
+                          <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+                            Khởi tạo phiên nghiên cứu và kết nối tới {selectedCount} trình duyệt...
+                          </span>
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
-                )}
-              </div>
+                );
+              })()}
             </div>
           </div>
         )}

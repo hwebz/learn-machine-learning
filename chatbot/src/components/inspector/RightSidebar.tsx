@@ -29,7 +29,27 @@ export function RightSidebar({
 }: RightSidebarProps) {
   const [showFactCheckModal, setShowFactCheckModal] = useState(false);
 
-  const sources = currentMessage?.sources || [];
+  // Collect live citations from activeSteps during generation
+  const liveSources: any[] = [];
+  const seenUrls = new Set<string>();
+  for (const st of activeSteps) {
+    const stepCitations: any[] = st.citations || st.data?.citations || [];
+    for (const c of stepCitations) {
+      if (c && c.url && !seenUrls.has(c.url)) {
+        seenUrls.add(c.url);
+        liveSources.push({
+          url: c.url,
+          title: c.title || c.url,
+          domain: c.domain,
+          snippet: c.snippet,
+        });
+      }
+    }
+  }
+
+  const sources = (currentMessage?.sources && currentMessage.sources.length > 0)
+    ? currentMessage.sources
+    : liveSources;
   const claims = currentMessage?.claims || [];
 
   const getDomainIconColor = (domain: string) => {

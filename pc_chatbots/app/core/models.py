@@ -68,9 +68,12 @@ class ProviderRun(SQLModel, table=True):
 class Source(SQLModel, table=True):
     id: str = Field(primary_key=True)
     run_id: str = Field(index=True)
+    job_id: str | None = Field(default=None, index=True)
+    provider: str | None = Field(default=None, index=True)
     url: str
     title: str | None = None
     snippet: str | None = None
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class Claim(SQLModel, table=True):

@@ -15,6 +15,7 @@ import {
   getResearchResult,
   updateResearchJob,
   deleteResearchJob,
+  fetchConversationCitations,
 } from "../lib/api";
 
 const DELETED_SESSIONS_KEY = "deep_research_deleted_sessions";
@@ -113,6 +114,7 @@ export default function Home() {
                 claims: job.claims || [],
                 provider_runs: job.provider_runs || {},
                 factCheckStatus: "verified",
+                steps: (job as any).steps || [],
               });
             }
 
@@ -218,10 +220,20 @@ export default function Home() {
     setActiveSteps([]);
 
     const session = sessions.find((s) => s.id === id);
-    if (session?.jobId && session.messages.length === 1 && session.status === "completed") {
+    if (session?.jobId && session.status === "completed") {
       try {
         const fullJob = await getResearchResult(session.jobId);
-        if (fullJob.report_markdown) {
+        let jobSources = fullJob.sources || [];
+        if (jobSources.length === 0) {
+          try {
+            const dbSources = await fetchConversationCitations(session.jobId);
+            if (dbSources && dbSources.length > 0) {
+              jobSources = dbSources;
+            }
+          } catch {}
+        }
+
+        if (fullJob.report_markdown && session.messages.length <= 1) {
           const asstMsg: Message = {
             id: `msg-${session.jobId}-detail`,
             role: "assistant",
@@ -230,15 +242,34 @@ export default function Home() {
             content: fullJob.report_markdown,
             providers: session.selectedProviders,
             depth: session.depth,
-            sources: fullJob.sources || [],
+            sources: jobSources,
             claims: fullJob.claims || [],
             provider_runs: fullJob.provider_runs || {},
             factCheckStatus: "verified",
+            steps: (fullJob as any).steps || [],
           };
           setSessions((prev) =>
             prev.map((s) =>
               s.id === id ? { ...s, messages: [...s.messages, asstMsg] } : s
             )
+          );
+        } else {
+          setSessions((prev) =>
+            prev.map((s) => {
+              if (s.id !== id) return s;
+              return {
+                ...s,
+                messages: s.messages.map((m) =>
+                  m.role === "assistant"
+                    ? {
+                        ...m,
+                        sources: m.sources && m.sources.length > 0 ? m.sources : jobSources,
+                        steps: m.steps && m.steps.length > 0 ? m.steps : ((fullJob as any).steps || []),
+                      }
+                    : m
+                ),
+              };
+            })
           );
         }
       } catch (err) {
@@ -419,8 +450,25 @@ export default function Home() {
         },
         onResult: (result) => {
           setActiveSteps((latestSteps) => {
+            const consolidatedSources = [...(result.sources || [])];
+            const seenUrls = new Set(consolidatedSources.map((s) => s.url));
+            for (const st of latestSteps) {
+              const stepCits = st.citations || (st.data as any)?.citations || [];
+              for (const c of stepCits) {
+                if (c && c.url && !seenUrls.has(c.url)) {
+                  seenUrls.add(c.url);
+                  consolidatedSources.push({
+                    title: c.title || c.url,
+                    url: c.url,
+                    domain: c.domain,
+                  });
+                }
+              }
+            }
+
+            const asstMsgId = `asst-${jobAccepted.job_id}`;
             const assistantMsg: Message = {
-              id: `msg-${Date.now()}`,
+              id: asstMsgId,
               role: "assistant",
               authorName: `AI Research Engine (${currentProviderIds.join(", ")})`,
               timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -429,7 +477,7 @@ export default function Home() {
               depth: currentDepth,
               tokens: 1540,
               latencySeconds: 10.8,
-              sources: result.sources || [],
+              sources: consolidatedSources,
               claims: result.claims || [],
               disagreements: result.disagreements || [],
               provider_runs: result.provider_runs || {},
@@ -438,11 +486,17 @@ export default function Home() {
             };
 
             setSessions((prev) =>
-              prev.map((s) =>
-                s.id === activeSessionId
-                  ? { ...s, status: "completed", messages: [...s.messages, assistantMsg] }
-                  : s
-              )
+              prev.map((s) => {
+                if (s.id !== activeSessionId) return s;
+                const existingIdx = s.messages.findIndex(
+                  (m) => m.id === asstMsgId || (m.role === "assistant" && s.jobId === jobAccepted.job_id)
+                );
+                const updatedMessages =
+                  existingIdx >= 0
+                    ? s.messages.map((m, idx) => (idx === existingIdx ? assistantMsg : m))
+                    : [...s.messages, assistantMsg];
+                return { ...s, status: "completed", messages: updatedMessages };
+              })
             );
             return latestSteps;
           });

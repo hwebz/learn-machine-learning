@@ -42,6 +42,7 @@ class Settings:
     work_mode: str
     max_concurrent_browsers: int
     browser_profiles_base_dir: Path
+    thinking_interval_check: float
 
     @property
     def adapter_default_timeout_s(self) -> int:
@@ -77,7 +78,28 @@ class Settings:
             work_mode=os.getenv("WORK_MODE", "sync").strip().lower(),
             max_concurrent_browsers=int(os.getenv("MAX_CONCURRENT_BROWSERS", "3")),
             browser_profiles_base_dir=profile_dir.parent if profile_dir.parent.name == "profiles" else Path("./data/profiles"),
+            thinking_interval_check=_parse_interval(os.getenv("THINKING_INTERVAL_CHECK", "1s"), default=1.0),
         )
+
+
+def _parse_interval(val: str | None, default: float = 1.0) -> float:
+    if not val:
+        return default
+    v = val.strip().lower()
+    if v.endswith("ms"):
+        try:
+            return float(v[:-2]) / 1000.0
+        except ValueError:
+            return default
+    if v.endswith("s"):
+        try:
+            return float(v[:-1])
+        except ValueError:
+            return default
+    try:
+        return float(v)
+    except ValueError:
+        return default
 
 
 def _env_bool(name: str, *, default: bool) -> bool:
