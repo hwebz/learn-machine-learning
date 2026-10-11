@@ -163,7 +163,7 @@ export function ChatArea({
             >
               {selectedCount > 1 ? (
                 <>
-                  <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+                  <span style={{ display: "inline-flex", gap: 3, alignItems: "center" }}>
                     {selectedProviders.slice(0, 3).map((p) => (
                       <span
                         key={p.id}
@@ -175,7 +175,7 @@ export function ChatArea({
                         }}
                       />
                     ))}
-                  </div>
+                  </span>
                   <span>{selectedCount} Models Selected</span>
                 </>
               ) : (

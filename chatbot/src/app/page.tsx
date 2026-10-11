@@ -41,7 +41,20 @@ function markSessionAsDeleted(id: string, jobId?: string) {
   }
 }
 
+const FALLBACK_SESSION: ChatSession = {
+  id: "session-fallback",
+  title: "Phiên nghiên cứu mới",
+  pinned: false,
+  createdAt: "Vừa xong",
+  createdTimestamp: 0,
+  selectedProviders: DEFAULT_SELECTED_PROVIDERS,
+  selectedProvider: "copilot",
+  depth: "deep",
+  messages: [],
+};
+
 export default function Home() {
+  const [mounted, setMounted] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -178,21 +191,15 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     loadHistoryFromBackend();
   }, [loadHistoryFromBackend]);
 
   const activeSession: ChatSession =
-    sessions.find((s) => s.id === activeSessionId) || sessions[0] || {
-      id: "session-fallback",
-      title: "Phiên nghiên cứu mới",
-      pinned: false,
-      createdAt: "Vừa xong",
-      createdTimestamp: Date.now(),
-      selectedProviders: DEFAULT_SELECTED_PROVIDERS,
-      selectedProvider: "copilot",
-      depth: "deep",
-      messages: [],
-    };
+    sessions.find((s) => s.id === activeSessionId) || sessions[0] || FALLBACK_SESSION;
 
   // Convert selected provider ids to ProviderInfo objects
   const activeProviderIds = activeSession.selectedProviders && activeSession.selectedProviders.length > 0
@@ -553,8 +560,12 @@ Hệ thống sẵn sàng hỗ trợ các câu hỏi đào sâu tiếp theo của
 
   const latestMessage = activeSession.messages[activeSession.messages.length - 1];
 
+  if (!mounted) {
+    return <div className="app-container" suppressHydrationWarning />;
+  }
+
   return (
-    <div className="app-container">
+    <div className="app-container" suppressHydrationWarning>
       {/* 1. Left Sidebar */}
       <LeftSidebar
         sessions={sessions}

@@ -277,9 +277,9 @@ export function LeftSidebar({
             onClick={onRefreshHistory}
             aria-label="Refresh History"
           >
-            <div style={{ animation: isLoadingHistory ? "spin 1s linear infinite" : "none" }}>
+            <span style={{ display: "inline-flex", animation: isLoadingHistory ? "spin 1s linear infinite" : "none" }}>
               <RefreshIcon size={15} />
-            </div>
+            </span>
           </button>
         </div>
       </div>

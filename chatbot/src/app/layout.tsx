@@ -23,8 +23,60 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  function cleanBis() {
+                    var els = document.querySelectorAll('[bis_skin_checked]');
+                    for (var i = 0; i < els.length; i++) {
+                      els[i].removeAttribute('bis_skin_checked');
+                    }
+                  }
+                  cleanBis();
+                  if (typeof MutationObserver !== 'undefined') {
+                    var observer = new MutationObserver(function(mutations) {
+                      for (var i = 0; i < mutations.length; i++) {
+                        var m = mutations[i];
+                        if (m.type === 'attributes' && m.attributeName === 'bis_skin_checked' && m.target) {
+                          m.target.removeAttribute('bis_skin_checked');
+                        }
+                        if (m.type === 'childList') {
+                          for (var j = 0; j < m.addedNodes.length; j++) {
+                            var node = m.addedNodes[j];
+                            if (node.nodeType === 1) {
+                              if (node.hasAttribute && node.hasAttribute('bis_skin_checked')) {
+                                node.removeAttribute('bis_skin_checked');
+                              }
+                              var sub = node.querySelectorAll ? node.querySelectorAll('[bis_skin_checked]') : [];
+                              for (var k = 0; k < sub.length; k++) {
+                                sub[k].removeAttribute('bis_skin_checked');
+                              }
+                            }
+                          }
+                        }
+                      }
+                    });
+                    observer.observe(document.documentElement, {
+                      attributes: true,
+                      subtree: true,
+                      childList: true,
+                      attributeFilter: ['bis_skin_checked']
+                    });
+                    window.addEventListener('DOMContentLoaded', cleanBis);
+                  }
+                } catch(e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
+      <body className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }
