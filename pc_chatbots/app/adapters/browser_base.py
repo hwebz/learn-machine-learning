@@ -13,7 +13,7 @@ import structlog
 from app.adapters.base import HealthStatus, ProviderResult, Source, StepCallback
 from app.adapters.selectors_loader import load_selectors, provider_selectors
 from app.browser.artifacts import save_artifacts
-from app.browser.extraction import html_to_markdown, normalize_sources
+from app.browser.extraction import clean_markdown_text, html_to_markdown, normalize_sources
 from app.browser.locators import resolve_locator
 from app.browser.session import BrowserSession
 from app.browser.waits import wait_for_completion, wait_for_input
@@ -141,7 +141,7 @@ class BrowserProviderAdapter(ABC):
                             and clipboard_text.strip().lower() != prompt.strip().lower()
                         ):
                             logger.info("answer_copied_from_clipboard", provider=self.name, length=len(clipboard_text))
-                            return clipboard_text.strip()
+                            return clean_markdown_text(clipboard_text)
                 except Exception as exc:  # noqa: BLE001
                     logger.debug("clipboard_copy_fallback", provider=self.name, error=str(exc))
 
@@ -157,8 +157,9 @@ class BrowserProviderAdapter(ABC):
             html = await target.inner_html(timeout=5000)
             markdown = html_to_markdown(html)
             if markdown.strip():
-                return markdown.strip()
-            return (await target.inner_text(timeout=5000)).strip()
+                return clean_markdown_text(markdown)
+            raw_text = await target.inner_text(timeout=5000)
+            return clean_markdown_text(raw_text)
         except Exception:  # noqa: BLE001
             return ""
 

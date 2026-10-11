@@ -5,6 +5,8 @@ from typing import Any, Iterable
 
 from app.adapters.base import Source
 
+import re
+
 _BLOCK_TAGS = {"p", "div", "section", "article", "header", "footer", "tr"}
 _SKIP_TAGS = {"script", "style", "noscript", "svg"}
 _HEADING = {"h1": "#", "h2": "##", "h3": "###", "h4": "####", "h5": "#####", "h6": "######"}
@@ -18,6 +20,8 @@ class _MarkdownRenderer(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.parts: list[str] = []
         self._list_stack: list[str] = []
+        self._list_counters: list[int] = []
+        self._at_li_start = False
         self._in_pre = False
         self._in_code = False
         self._href_stack: list[str | None] = []
@@ -25,6 +29,8 @@ class _MarkdownRenderer(HTMLParser):
         self._skip_depth = 0
 
     def _emit(self, text: str) -> None:
+        if self._at_li_start and text.strip():
+            self._at_li_start = False
         if self._link_text is not None:
             self._link_text.append(text)
         else:
@@ -38,24 +44,45 @@ class _MarkdownRenderer(HTMLParser):
             return
         attr_map = {k: (v or "") for k, v in attrs}
         if tag in _HEADING:
+            self._at_li_start = False
             self.parts.append("\n\n" + _HEADING[tag] + " ")
         elif tag == "br":
             self.parts.append("\n")
         elif tag == "hr":
+            self._at_li_start = False
             self.parts.append("\n\n---\n\n")
         elif tag in _LIST_MARK:
             self._list_stack.append(tag)
-            self.parts.append("\n" + _LIST_MARK[tag])
-        elif tag in {"li"}:
-            if self._list_stack:
-                self.parts.append("\n" + _LIST_MARK[self._list_stack[-1]])
+            if tag == "ol":
+                self._list_counters.append(1)
             else:
-                self.parts.append("\n- ")
+                self._list_counters.append(0)
+            if self.parts and not self.parts[-1].endswith("\n"):
+                self.parts.append("\n")
+        elif tag in {"li"}:
+            depth = max(0, len(self._list_stack) - 1)
+            indent = "  " * depth
+            if self._list_stack and self._list_stack[-1] == "ol" and self._list_counters:
+                idx = self._list_counters[-1]
+                marker = f"{idx}. "
+                self._list_counters[-1] += 1
+            else:
+                marker = "- "
+            if self.parts and not self.parts[-1].endswith("\n"):
+                self.parts.append("\n")
+            self.parts.append(indent + marker)
+            self._at_li_start = True
         elif tag in _BLOCK_TAGS:
-            self.parts.append("\n\n")
+            if self._at_li_start:
+                # First block inside a list item should be on the same line as the marker
+                pass
+            else:
+                self.parts.append("\n\n")
         elif tag == "blockquote":
+            self._at_li_start = False
             self.parts.append("\n\n> ")
         elif tag == "pre":
+            self._at_li_start = False
             self._in_pre = True
             self.parts.append("\n\n```\n")
         elif tag in {"code", "tt"}:
@@ -81,8 +108,12 @@ class _MarkdownRenderer(HTMLParser):
         elif tag in _LIST_MARK:
             if self._list_stack:
                 self._list_stack.pop()
+            if self._list_counters:
+                self._list_counters.pop()
+            self._at_li_start = False
             self.parts.append("\n")
         elif tag == "li":
+            self._at_li_start = False
             self.parts.append("\n")
         elif tag in _BLOCK_TAGS:
             self.parts.append("\n\n")
@@ -119,10 +150,26 @@ class _MarkdownRenderer(HTMLParser):
     def markdown(self) -> str:
         raw = "".join(self.parts)
         lines = [line.rstrip() for line in raw.splitlines()]
-        text = "\n".join(lines)
+        # Filter out empty list items (lines containing only a list marker without text)
+        marker_pattern = re.compile(r"^\s*(?:[-*+]|\d+\.)\s*$")
+        cleaned_lines = [line for line in lines if not marker_pattern.match(line)]
+        text = "\n".join(cleaned_lines)
         while "\n\n\n\n" in text:
             text = text.replace("\n\n\n\n", "\n\n\n")
         return text.strip()
+
+
+def clean_markdown_text(text: str) -> str:
+    """Filter out empty list items (lines containing only a list marker without text)."""
+    if not text:
+        return ""
+    lines = [line.rstrip() for line in text.splitlines()]
+    marker_pattern = re.compile(r"^\s*(?:[-*+]|\d+\.)\s*$")
+    cleaned_lines = [line for line in lines if not marker_pattern.match(line)]
+    result = "\n".join(cleaned_lines)
+    while "\n\n\n\n" in result:
+        result = result.replace("\n\n\n\n", "\n\n\n")
+    return result.strip()
 
 
 def html_to_markdown(html: str) -> str:

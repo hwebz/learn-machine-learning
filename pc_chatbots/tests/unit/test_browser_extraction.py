@@ -17,6 +17,25 @@ def test_html_to_markdown_headings_and_lists() -> None:
     assert "# Title" in md
     assert "- One" in md
     assert "- Two" in md
+    lines = [line.strip() for line in md.splitlines()]
+    # There should not be an empty "-" or "1." line
+    assert "-" not in lines
+    assert "1." not in lines
+
+
+def test_html_to_markdown_ordered_and_nested_paragraphs() -> None:
+    html = """
+    <h3>Heading</h3>
+    <ol>
+      <li><p><strong>First point</strong></p><p>Details about point</p></li>
+      <li>Second point</li>
+    </ol>
+    """
+    md = html_to_markdown(html)
+    lines = [line.strip() for line in md.splitlines() if line.strip()]
+    assert "1." not in lines
+    assert any(line.startswith("1. **First point**") for line in lines)
+    assert any(line.startswith("2. Second point") for line in lines)
 
 
 def test_html_to_markdown_code_and_blockquote() -> None:

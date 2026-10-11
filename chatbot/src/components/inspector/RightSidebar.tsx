@@ -608,18 +608,6 @@ export function RightSidebar({
                               {stepItem.timestamp}
                             </span>
                           )}
-                          <span
-                            style={{
-                              fontSize: 10,
-                              padding: "1px 6px",
-                              borderRadius: 8,
-                              backgroundColor: isStepRunning ? "#eff6ff" : "#f0fdf4",
-                              color: isStepRunning ? "#1d4ed8" : "#15803d",
-                              fontWeight: 600,
-                            }}
-                          >
-                            {isStepRunning ? "Đang chạy" : "Hoàn thành"}
-                          </span>
                         </div>
                       </div>
 
@@ -720,7 +708,7 @@ export function RightSidebar({
             )}
 
             {/* Raw Thinking Reasoning Text if available */}
-            {activeDetail.thinkingText && (
+            {/* {activeDetail.thinkingText && (
               <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 4 }}>
                 <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--brand-blue)" }}>
                   ✦ Nội dung suy luận chi tiết ({activeDetail.thinkingText.length} ký tự):
@@ -743,7 +731,7 @@ export function RightSidebar({
                   {activeDetail.thinkingText}
                 </div>
               </div>
-            )}
+            )} */}
 
             {/* Citations from DOM */}
             {activeDetail.citations.length > 0 && (
