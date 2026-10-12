@@ -308,11 +308,7 @@ class BrowserProviderAdapter(ABC):
                             {"blocking_kind": blocking.kind, "blocking_detail": blocking.detail},
                         )
                     else:
-                        if mode and mode != "default":
-                            await _notify("selecting_mode", f"Đang cấu hình chế độ nghiên cứu ({mode}) cho {self.name}...")
-                        await self._select_mode(page, mode)
-
-                        # SPA editors (e.g., Mistral) can take several seconds to hydrate
+                        # SPA editors (e.g., Mistral, Gemini) can take several seconds to hydrate
                         # depending on network conditions — poll until the input appears
                         # instead of sleeping a fixed amount.
                         await _notify("locating_input", f"Đang định vị ô nhập prompt trên {self.name}...")
@@ -322,6 +318,10 @@ class BrowserProviderAdapter(ABC):
                             error = "Question input locator not found — selectors may be stale. See selectors.yaml and data/artifacts."
                             await _notify("error", f"Không tìm thấy ô nhập câu hỏi trên {self.name}.", {"error": error})
                         else:
+                            if mode and mode != "default":
+                                await _notify("selecting_mode", f"Đang cấu hình chế độ nghiên cứu ({mode}) cho {self.name}...")
+                            await self._select_mode(page, mode)
+
                             await _notify("entering_prompt", f"Đang nhập câu hỏi vào ô chat của {self.name}...")
                             # Click to focus, then type. fill() does not work reliably on
                             # contenteditable rich-text editors (Perplexity/Gemini), and the

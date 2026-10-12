@@ -11,6 +11,7 @@ import {
   CopyIcon,
 } from "../icons/Icons";
 import { extractProviderResponse } from "../../lib/providerResponse";
+import { MarkdownContent, cleanMarkdownCodeBlocks } from "../chat/MarkdownContent";
 
 function normalizeProvider(name: string): string {
   const s = name.trim().toLowerCase();
@@ -73,6 +74,7 @@ export function RightSidebar({
   onClose,
 }: RightSidebarProps) {
   const [copiedStepIdx, setCopiedStepIdx] = useState<number | null>(null);
+  const [responseViewMode, setResponseViewMode] = useState<"preview" | "raw">("preview");
 
   const copyStepText = (text: string, idx: number) => {
     navigator.clipboard.writeText(text);
@@ -180,6 +182,25 @@ export function RightSidebar({
       isRunning: isGenerating,
       timestamp: "",
     });
+  } else if (providersMap.size === 0 && (currentMessage?.providers?.length || currentMessage?.provider_runs)) {
+    const provs = currentMessage.providers && currentMessage.providers.length > 0
+      ? currentMessage.providers
+      : Object.keys(currentMessage.provider_runs || {});
+    for (const p of provs) {
+      const norm = normalizeProvider(p);
+      if (!providersMap.has(norm)) {
+        providersMap.set(norm, {
+          provider: norm,
+          displayName: norm.toUpperCase(),
+          thinkingSteps: [],
+          thinkingText: "",
+          citations: [],
+          logs: [],
+          isRunning: isGenerating,
+          timestamp: currentMessage.timestamp || "",
+        });
+      }
+    }
   }
 
   for (const [p, detail] of providersMap.entries()) {
@@ -295,8 +316,8 @@ export function RightSidebar({
   useEffect(() => {
     if (inspectedProvider) {
       setSelectedTab(inspectedProvider.toLowerCase());
-    } else if (providerDetailsList.length > 0 && !selectedTab) {
-      setSelectedTab(providerDetailsList[0].provider);
+    } else {
+      setSelectedTab(providerDetailsList[0]?.provider);
     }
   }, [inspectedProvider, providerDetailsList.length]);
 
@@ -636,46 +657,124 @@ export function RightSidebar({
                               <span style={{ fontSize: 11, fontWeight: 700, color: "var(--brand-blue)" }}>
                                 ✦ Phản hồi thực tế từ mô hình (Response Content)
                               </span>
-                              <button
-                                type="button"
-                                onClick={() => copyStepText(stepItem.description || "", sIdx)}
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                {/* Switcher toggle between Preview and Raw */}
+                                <div
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    backgroundColor: "#dbeafe",
+                                    borderRadius: 4,
+                                    padding: 2,
+                                    gap: 2,
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => setResponseViewMode("preview")}
+                                    style={{
+                                      border: "none",
+                                      backgroundColor: responseViewMode === "preview" ? "#ffffff" : "transparent",
+                                      color: responseViewMode === "preview" ? "var(--brand-blue)" : "#64748b",
+                                      fontSize: 10.5,
+                                      fontWeight: responseViewMode === "preview" ? 700 : 500,
+                                      padding: "2px 7px",
+                                      borderRadius: 3,
+                                      cursor: "pointer",
+                                      boxShadow: responseViewMode === "preview" ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+                                      transition: "all 0.15s ease",
+                                    }}
+                                    title="Xem định dạng hiển thị markdown (Preview)"
+                                  >
+                                    Preview
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setResponseViewMode("raw")}
+                                    style={{
+                                      border: "none",
+                                      backgroundColor: responseViewMode === "raw" ? "#ffffff" : "transparent",
+                                      color: responseViewMode === "raw" ? "var(--brand-blue)" : "#64748b",
+                                      fontSize: 10.5,
+                                      fontWeight: responseViewMode === "raw" ? 700 : 500,
+                                      padding: "2px 7px",
+                                      borderRadius: 3,
+                                      cursor: "pointer",
+                                      boxShadow: responseViewMode === "raw" ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+                                      transition: "all 0.15s ease",
+                                    }}
+                                    title="Xem mã markdown nguyên bản (Raw)"
+                                  >
+                                    Raw
+                                  </button>
+                                </div>
+
+                                <div style={{ width: 1, height: 14, backgroundColor: "#bfdbfe" }} />
+
+                                <button
+                                  type="button"
+                                  onClick={() => copyStepText(cleanMarkdownCodeBlocks(stepItem.description || ""), sIdx)}
+                                  style={{
+                                    border: "none",
+                                    background: "none",
+                                    color: "var(--brand-blue)",
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 4,
+                                    cursor: "pointer",
+                                    padding: "2px 6px",
+                                    borderRadius: 4,
+                                  }}
+                                  title="Sao chép toàn bộ phản hồi"
+                                >
+                                  <CopyIcon size={12} />
+                                  <span>{copiedStepIdx === sIdx ? "Đã sao chép!" : "Sao chép"}</span>
+                                </button>
+                              </div>
+                            </div>
+                            {responseViewMode === "preview" ? (
+                              <div
+                                className="response-preview-content"
                                 style={{
-                                  border: "none",
-                                  background: "none",
-                                  color: "var(--brand-blue)",
-                                  fontSize: 11,
-                                  fontWeight: 600,
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 4,
-                                  cursor: "pointer",
-                                  padding: "2px 6px",
+                                  fontSize: 12.5,
+                                  lineHeight: 1.6,
+                                  color: "var(--text-primary)",
+                                  backgroundColor: "#ffffff",
+                                  padding: "10px 12px",
                                   borderRadius: 4,
+                                  maxHeight: 420,
+                                  overflowY: "auto",
+                                  border: "1px solid #e2e8f0",
+                                  borderLeft: "3.5px solid var(--brand-blue)",
+                                  boxShadow: "inset 0 1px 2px rgba(0,0,0,0.02)",
                                 }}
-                                title="Sao chép toàn bộ phản hồi"
                               >
-                                <CopyIcon size={12} />
-                                <span>{copiedStepIdx === sIdx ? "Đã sao chép!" : "Sao chép"}</span>
-                              </button>
-                            </div>
-                            <div
-                              style={{
-                                fontSize: 12,
-                                lineHeight: 1.6,
-                                color: "var(--text-primary)",
-                                backgroundColor: "#ffffff",
-                                padding: "10px 12px",
-                                borderRadius: 4,
-                                whiteSpace: "pre-wrap",
-                                maxHeight: 380,
-                                overflowY: "auto",
-                                border: "1px solid #e2e8f0",
-                                borderLeft: "3.5px solid var(--brand-blue)",
-                                boxShadow: "inset 0 1px 2px rgba(0,0,0,0.02)",
-                              }}
-                            >
-                              {stepItem.description}
-                            </div>
+                                <MarkdownContent content={stepItem.description} />
+                              </div>
+                            ) : (
+                              <div
+                                style={{
+                                  fontSize: 11.5,
+                                  fontFamily: "var(--font-mono, monospace)",
+                                  lineHeight: 1.6,
+                                  color: "var(--text-primary)",
+                                  backgroundColor: "#ffffff",
+                                  padding: "10px 12px",
+                                  borderRadius: 4,
+                                  whiteSpace: "pre-wrap",
+                                  wordBreak: "break-word",
+                                  maxHeight: 420,
+                                  overflowY: "auto",
+                                  border: "1px solid #e2e8f0",
+                                  borderLeft: "3.5px solid var(--brand-blue)",
+                                  boxShadow: "inset 0 1px 2px rgba(0,0,0,0.02)",
+                                }}
+                              >
+                                {cleanMarkdownCodeBlocks(stepItem.description)}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div

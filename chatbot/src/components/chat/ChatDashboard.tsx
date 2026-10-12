@@ -318,7 +318,6 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
   const handleSelectSession = async (id: string, updateUrl: boolean = true) => {
     setActiveSessionId(id);
-    setActiveSteps([]);
 
     // Update browser URL to /chat/{id}
     if (updateUrl && typeof window !== "undefined") {
@@ -331,9 +330,38 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     const session = sessions.find((s) => s.id === id || s.jobId === id);
     const targetJobId = session?.jobId || (!id.startsWith("session-") ? id : undefined);
 
+    // If starting or selecting an empty conversation (no messages and no backend job ID)
+    if (!targetJobId && (!session || session.messages.length === 0)) {
+      setIsRightSidebarOpen(false);
+      setActiveSteps([]);
+      setInspectedMessage(undefined);
+      setInspectedProvider(undefined);
+      return;
+    }
+
+    // Otherwise, click on any conversation with content: open sidebar and load thinking steps, provider, sources
+    setIsRightSidebarOpen(true);
+
+    const existingAsst = session?.messages.find((m) => m.role === "assistant");
+    const existingProviders = (session?.selectedProviders && session.selectedProviders.length > 0)
+      ? session.selectedProviders
+      : (existingAsst?.providers && existingAsst.providers.length > 0)
+        ? existingAsst.providers
+        : (session?.selectedProvider ? [session.selectedProvider] : []);
+    const initialFirstProvider = (existingProviders[0] || "copilot").toLowerCase();
+
+    setInspectedProvider(initialFirstProvider);
+    if (existingAsst) {
+      setInspectedMessage(existingAsst);
+      if (existingAsst.steps && existingAsst.steps.length > 0) {
+        setActiveSteps(existingAsst.steps);
+      }
+    }
+
     if (targetJobId) {
       try {
         const fullJob = await getResearchResult(targetJobId);
+        if (!fullJob) return;
         let jobSources = fullJob.sources || [];
         if (jobSources.length === 0) {
           try {
@@ -344,45 +372,49 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           } catch { }
         }
 
-        if (fullJob.report_markdown && (!session || session.messages.length <= 1)) {
-          const asstMsg: Message = {
-            id: `msg-${targetJobId}-detail`,
-            role: "assistant",
-            authorName: `AI Research Engine (${((session?.selectedProviders) || fullJob.providers || []).join(", ")})`,
-            timestamp: fullJob.finished_at ? new Date(fullJob.finished_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            content: fullJob.report_markdown,
-            providers: session?.selectedProviders || fullJob.providers,
-            depth: session?.depth || fullJob.depth || "deep",
-            sources: jobSources,
-            claims: fullJob.claims || [],
-            provider_runs: fullJob.provider_runs || {},
-            factCheckStatus: "verified",
-            steps: fullJob.steps || [],
-          };
-          setSessions((prev) =>
-            prev.map((s) =>
-              s.id === id || s.jobId === id ? { ...s, messages: [...s.messages.filter((m) => m.role === "user"), asstMsg] } : s
-            )
-          );
-        } else {
-          setSessions((prev) =>
-            prev.map((s) => {
-              if (s.id !== id && s.jobId !== id) return s;
-              return {
-                ...s,
-                messages: s.messages.map((m) =>
-                  m.role === "assistant"
-                    ? {
-                      ...m,
-                      sources: m.sources && m.sources.length > 0 ? m.sources : jobSources,
-                      steps: m.steps && m.steps.length > 0 ? m.steps : (fullJob.steps || []),
-                    }
-                    : m
-                ),
-              };
-            })
-          );
-        }
+        const jobSteps = fullJob.steps && fullJob.steps.length > 0
+          ? fullJob.steps
+          : (existingAsst?.steps || []);
+        setActiveSteps(jobSteps);
+
+        const fullJobProviders = (fullJob.providers && fullJob.providers.length > 0)
+          ? fullJob.providers
+          : (existingProviders.length > 0 ? existingProviders : ["copilot"]);
+        const resolvedFirstProvider = (fullJobProviders[0] || initialFirstProvider).toLowerCase();
+        setInspectedProvider(resolvedFirstProvider);
+
+        const asstMsg: Message = {
+          id: `msg-${targetJobId}-detail`,
+          role: "assistant",
+          authorName: `AI Research Engine (${fullJobProviders.join(", ")})`,
+          timestamp: fullJob.finished_at
+            ? new Date(fullJob.finished_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            : (existingAsst?.timestamp || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })),
+          content: fullJob.report_markdown || existingAsst?.content || "",
+          providers: fullJobProviders,
+          depth: session?.depth || fullJob.depth || "deep",
+          sources: jobSources,
+          claims: fullJob.claims || [],
+          provider_runs: fullJob.provider_runs || {},
+          factCheckStatus: "verified",
+          steps: jobSteps,
+        };
+
+        setInspectedMessage(asstMsg);
+        setIsRightSidebarOpen(true);
+
+        setSessions((prev) =>
+          prev.map((s) => {
+            if (s.id !== id && s.jobId !== id) return s;
+            const otherMsgs = s.messages.filter((m) => m.role === "user");
+            return {
+              ...s,
+              selectedProviders: fullJobProviders,
+              selectedProvider: fullJobProviders[0] || s.selectedProvider,
+              messages: otherMsgs.length > 0 ? [...otherMsgs, asstMsg] : [asstMsg],
+            };
+          })
+        );
       } catch (err) {
         console.warn("Could not fetch detailed job report:", err);
       }
@@ -408,12 +440,16 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     setSessions([newSession, ...sessions]);
     setActiveSessionId(newId);
     setActiveSteps([]);
+    setInspectedMessage(undefined);
+    setInspectedProvider(undefined);
+    setIsRightSidebarOpen(false);
 
     // Update URL back to root
     if (typeof window !== "undefined" && window.location.pathname !== "/") {
       window.history.pushState(null, "", "/");
     }
   };
+
 
   const handleTogglePin = (id: string) => {
     const session = sessions.find((s) => s.id === id || s.jobId === id);
@@ -615,6 +651,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
     setIsGenerating(true);
     setActiveSteps([]);
+    setInspectedMessage(undefined);
 
     const currentProviderIds = activeSession.selectedProviders && activeSession.selectedProviders.length > 0
       ? activeSession.selectedProviders
@@ -630,7 +667,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       });
 
       if (isCancelledRef.current) {
-        cancelResearchJob(jobAccepted.job_id).catch(() => {});
+        cancelResearchJob(jobAccepted.job_id).catch(() => { });
         return;
       }
 

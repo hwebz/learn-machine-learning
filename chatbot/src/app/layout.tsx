@@ -68,6 +68,23 @@ export default function RootLayout({
                     });
                     window.addEventListener('DOMContentLoaded', cleanBis);
                   }
+
+                  // Suppress unhandled rejections and errors from browser extensions
+                  if (typeof window !== 'undefined') {
+                    window.addEventListener('unhandledrejection', function(event) {
+                      var reason = event.reason;
+                      var str = (reason && (reason.stack || reason.message || '')) || '';
+                      if (str.indexOf('chrome-extension://') !== -1 || str.indexOf('M_ID') !== -1) {
+                        event.preventDefault();
+                      }
+                    });
+                    window.addEventListener('error', function(event) {
+                      var fn = event.filename || '';
+                      if (fn.indexOf('chrome-extension://') !== -1) {
+                        event.preventDefault();
+                      }
+                    });
+                  }
                 } catch(e) {}
               })();
             `,

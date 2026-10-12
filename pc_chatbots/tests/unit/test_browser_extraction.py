@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from app.browser.extraction import extract_source_links, html_to_markdown, normalize_sources
+from app.browser.extraction import (
+    clean_markdown_text,
+    extract_source_links,
+    html_to_markdown,
+    normalize_sources,
+)
 
 
 def test_html_to_markdown_basic() -> None:
@@ -276,3 +281,54 @@ async def test_normalize_sources_keeps_first_title() -> None:
     sources = normalize_sources(pairs)
     assert len(sources) == 1
     assert sources[0].title == "First"
+
+
+def test_html_to_markdown_removes_double_backticks_at_end_of_code_block() -> None:
+    html = (
+        '<div class="scriptor-component-code-block scriptor-codeblock-virtualized">'
+        '<div data-testid="one-copilot-code-identity"><span>Python</span></div>'
+        '<div role="textbox">'
+        '<div data-line-number="1"></div>'
+        '<div data-line-index="0">print("Hello, World!")</div>'
+        '<div data-line-number="2"></div>'
+        '<div data-line-index="1">``</div>'
+        '</div></div>'
+    )
+    md = html_to_markdown(html)
+    assert md == '```python\nprint("Hello, World!")\n```'
+
+
+def test_clean_markdown_text_removes_double_backticks() -> None:
+    raw_md = '```python\nprint("Hello, World!")\n``\n```'
+    cleaned = clean_markdown_text(raw_md)
+    assert cleaned == '```python\nprint("Hello, World!")\n```'
+
+
+def test_html_to_markdown_gemini_math_block_and_inline() -> None:
+    html = (
+        '<p>Given formula:</p>'
+        '<div class="math-block" data-math="\\theta_{t+1} = \\theta_t - \\alpha \\nabla J(\\theta_t)">'
+        '<span class="katex-display"><span class="katex"><span class="katex-html">duplicate visual text</span></span></span>'
+        '</div>'
+        '<p>where <span class="math-inline" data-math="\\alpha"><span class="katex"><span class="katex-html">a</span></span></span> is learning rate.</p>'
+    )
+    md = html_to_markdown(html)
+    assert "$$\n\\theta_{t+1} = \\theta_t - \\alpha \\nabla J(\\theta_t)\n$$" in md
+    assert "$\\alpha$" in md
+    assert "duplicate visual text" not in md
+
+
+def test_html_to_markdown_katex_display_with_annotation() -> None:
+    html = (
+        '<p>Pythagorean theorem:</p>'
+        '<span class="katex-display">'
+        '<span class="katex">'
+        '<span class="katex-mathml"><math><semantics><mrow><mi>a</mi></mrow>'
+        '<annotation encoding="application/x-tex">a^2 + b^2 = c^2</annotation>'
+        '</semantics></math></span>'
+        '<span class="katex-html" aria-hidden="true"><span class="base">a2+b2=c2</span></span>'
+        '</span></span>'
+    )
+    md = html_to_markdown(html)
+    assert "$$\na^2 + b^2 = c^2\n$$" in md
+    assert "a2+b2=c2" not in md

@@ -3,23 +3,40 @@
 import React, { useEffect, useRef, useMemo } from "react";
 import { marked } from "marked";
 import hljs from "highlight.js";
+import katex from "katex";
 
 interface MarkdownContentProps {
   content: string;
 }
 
-function trimCodeBlock(codeText: string): string {
+export function trimCodeBlock(codeText: string): string {
   if (!codeText) return "";
-  const rawLines = codeText.split("\n").map((l) => l.trimEnd());
+  let rawLines = codeText.split("\n").map((l) => l.trimEnd());
 
-  // Trim leading & trailing empty lines
-  while (rawLines.length > 0 && rawLines[0].trim() === "") {
+  // Trim leading empty lines or stray backtick markers
+  while (
+    rawLines.length > 0 &&
+    (rawLines[0].trim() === "" || /^`{1,3}$/.test(rawLines[0].trim()))
+  ) {
     rawLines.shift();
   }
-  while (rawLines.length > 0 && rawLines[rawLines.length - 1].trim() === "") {
+  // Trim trailing empty lines or stray backtick markers (e.g. "``" or "```")
+  while (
+    rawLines.length > 0 &&
+    (rawLines[rawLines.length - 1].trim() === "" ||
+      /^`{1,3}$/.test(rawLines[rawLines.length - 1].trim()))
+  ) {
     rawLines.pop();
   }
   if (rawLines.length === 0) return "";
+
+  // If the last line ends with stray trailing backticks like "``"
+  if (rawLines.length > 0) {
+    const last = rawLines[rawLines.length - 1].trimEnd();
+    if (last.endsWith("``") && !last.endsWith("```")) {
+      rawLines[rawLines.length - 1] = last.slice(0, -2).trimEnd();
+    }
+  }
 
   // Check for alternating empty lines (double-spaced code artifact from HTML/div conversions)
   const nonEmptyIndices: number[] = [];
@@ -56,10 +73,39 @@ function trimCodeBlock(codeText: string): string {
     }
   }
 
-  while (cleaned.length > 0 && cleaned[0].trim() === "") cleaned.shift();
-  while (cleaned.length > 0 && cleaned[cleaned.length - 1].trim() === "") cleaned.pop();
+  while (
+    cleaned.length > 0 &&
+    (cleaned[0].trim() === "" || /^`{1,3}$/.test(cleaned[0].trim()))
+  ) {
+    cleaned.shift();
+  }
+  while (
+    cleaned.length > 0 &&
+    (cleaned[cleaned.length - 1].trim() === "" ||
+      /^`{1,3}$/.test(cleaned[cleaned.length - 1].trim()))
+  ) {
+    cleaned.pop();
+  }
+
+  if (cleaned.length > 0) {
+    const last = cleaned[cleaned.length - 1].trimEnd();
+    if (last.endsWith("``") && !last.endsWith("```")) {
+      cleaned[cleaned.length - 1] = last.slice(0, -2).trimEnd();
+    }
+  }
 
   return cleaned.join("\n");
+}
+
+export function cleanMarkdownCodeBlocks(text: string): string {
+  if (!text) return "";
+  return text.replace(
+    /(```[^\n]*\n)([\s\S]*?)(```)/g,
+    (_, openFence, code, closeFence) => {
+      const trimmed = trimCodeBlock(code);
+      return `${openFence}${trimmed}\n${closeFence}`;
+    }
+  );
 }
 
 export function MarkdownContent({ content }: MarkdownContentProps) {
@@ -124,26 +170,70 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       // Always trim unnecessary lines (leading/trailing blanks, excessive blank lines, alternating double-spaced lines)
       codeText = trimCodeBlock(codeText);
 
-      let highlightedCode = codeText;
-      let validLang = language;
+      // If no specific language was given (or given as plain text variants), treat as Plain Text
+      if (
+        !language ||
+        ["plaintext", "text", "plain", "none"].includes(language)
+      ) {
+        language = "";
+      }
 
-      if (language && hljs.getLanguage(language)) {
+      // Check for LaTeX / Math code blocks: render with KaTeX
+      if (["latex", "tex", "math"].includes(language)) {
         try {
-          highlightedCode = hljs.highlight(codeText, { language }).value;
-        } catch {
-          highlightedCode = hljs.highlightAuto(codeText).value;
-        }
-      } else if (codeText) {
-        try {
-          const autoResult = hljs.highlightAuto(codeText);
-          highlightedCode = autoResult.value;
-          validLang = autoResult.language || "text";
-        } catch {
-          highlightedCode = codeText;
+          const renderedMath = katex.renderToString(codeText, {
+            displayMode: true,
+            throwOnError: false,
+          });
+          const highlightedLatex = hljs.getLanguage("latex")
+            ? hljs.highlight(codeText, { language: "latex", ignoreIllegals: true }).value
+            : hljs.highlight(codeText, { language: "plaintext" }).value;
+
+          return `
+            <div class="code-block-container latex-block-container">
+              <div class="code-block-header">
+                <span class="code-block-lang">∑ LATEX FORMULA</span>
+                <button class="code-copy-btn" type="button" aria-label="Copy LaTeX code">
+                  <span class="copy-icon">📋</span>
+                  <span class="copy-text">Copy LaTeX</span>
+                </button>
+              </div>
+              <div class="latex-card-display">
+                ${renderedMath}
+              </div>
+              <details class="latex-card-source">
+                <summary>Xem mã nguồn LaTeX</summary>
+                <div class="code-block-body">
+                  <pre><code class="hljs language-latex">${highlightedLatex}</code></pre>
+                </div>
+              </details>
+              <div style="display:none"><code class="latex-raw-code">${codeText.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></div>
+            </div>
+          `;
+        } catch (e) {
+          console.warn("Failed to render LaTeX formula with KaTeX:", e);
         }
       }
 
-      const displayLang = (validLang || "code").toUpperCase();
+      let highlightedCode = codeText;
+      let validLang = "plaintext";
+      let displayLang = "Plain Text";
+
+      if (language) {
+        validLang = language;
+        displayLang = language.toUpperCase();
+        if (hljs.getLanguage(language)) {
+          try {
+            highlightedCode = hljs.highlight(codeText, { language }).value;
+          } catch {
+            highlightedCode = hljs.highlight(codeText, { language: "plaintext" }).value;
+          }
+        } else {
+          highlightedCode = hljs.highlight(codeText, { language: "plaintext" }).value;
+        }
+      } else {
+        highlightedCode = hljs.highlight(codeText, { language: "plaintext" }).value;
+      }
 
       // Generate line numbers gutter
       const lineCount = codeText.split("\n").length;
@@ -222,20 +312,67 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       .filter((line) => !/^\s*(?:>\s*)*(?:[-*+]|\d+\.)\s*$/.test(line))
       .join("\n");
 
-    // 3. Convert virtualized scriptor code blocks (Copilot) and Monaco / Qwen code blocks
-    // to markdown fenced code blocks so marked and highlight.js highlight them
+    // 3. Convert virtualized scriptor code blocks (Copilot), Monaco / Qwen code blocks,
+    // and raw HTML math blocks (Gemini math-block, KaTeX katex-display/katex)
     const hasScriptor =
       sanitizedContent.includes("scriptor-component-code-block") ||
       sanitizedContent.includes("scriptor-codeblock-virtualized");
     const hasMonaco =
       sanitizedContent.includes("qwen-markdown-code") ||
       sanitizedContent.includes("monaco-editor");
+    const hasMath =
+      sanitizedContent.includes("math-block") ||
+      sanitizedContent.includes("math-inline") ||
+      sanitizedContent.includes("katex-display") ||
+      sanitizedContent.includes("data-math") ||
+      sanitizedContent.includes('class="katex"') ||
+      sanitizedContent.includes("class='katex'");
 
-    if (hasScriptor || hasMonaco) {
+    if (hasScriptor || hasMonaco || hasMath) {
       if (typeof window !== "undefined" && typeof DOMParser !== "undefined") {
         try {
           const parser = new DOMParser();
           const doc = parser.parseFromString(sanitizedContent, "text/html");
+
+          // Handle Gemini math-block & KaTeX display/inline elements in raw HTML
+          if (hasMath) {
+            // 1. Display math blocks (.math-block, [data-math], .katex-display)
+            const displayEls = doc.querySelectorAll(
+              ".math-block, [class*='math-block'], .katex-display, [class*='katex-display']"
+            );
+            displayEls.forEach((el) => {
+              const formula =
+                el.getAttribute("data-math") ||
+                el.getAttribute("data-latex") ||
+                el.getAttribute("data-tex") ||
+                el.querySelector("annotation")?.textContent ||
+                el.querySelector("script[type*='math']")?.textContent ||
+                "";
+              if (formula.trim()) {
+                const mdBlock = doc.createTextNode(`\n\n$$\n${formula.trim()}\n$$\n\n`);
+                el.parentNode?.replaceChild(mdBlock, el);
+              }
+            });
+
+            // 2. Inline math elements (.math-inline, .katex, [data-math])
+            const inlineEls = doc.querySelectorAll(
+              ".math-inline, [class*='math-inline'], .katex, [data-math], [data-latex]"
+            );
+            inlineEls.forEach((el) => {
+              if (!el.parentNode) return;
+              if (el.closest(".katex-html") || el.closest(".katex-mathml")) return;
+              const formula =
+                el.getAttribute("data-math") ||
+                el.getAttribute("data-latex") ||
+                el.getAttribute("data-tex") ||
+                el.querySelector("annotation")?.textContent ||
+                "";
+              if (formula.trim()) {
+                const mdInline = doc.createTextNode(` $${formula.trim()}$ `);
+                el.parentNode?.replaceChild(mdInline, el);
+              }
+            });
+          }
 
           // Handle Copilot scriptor code blocks
           if (hasScriptor) {
@@ -334,6 +471,25 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
         }
       } else {
         // Universal fallback for SSR
+        if (hasMath) {
+          sanitizedContent = sanitizedContent
+            .replace(
+              /<(?:div|span)[^>]*class="[^"]*(?:math-block|katex-display)[^"]*"[^>]*data-math="([^"]+)"[\s\S]*?<\/(?:div|span)>/g,
+              "\n\n$$\n$1\n$$\n\n"
+            )
+            .replace(
+              /<(?:div|span)[^>]*data-math="([^"]+)"[\s\S]*?<\/(?:div|span)>/g,
+              "\n\n$$\n$1\n$$\n\n"
+            )
+            .replace(
+              /<(?:div|span)[^>]*class="[^"]*katex-display[^"]*"[\s\S]*?<annotation[^>]*>([\s\S]*?)<\/annotation>[\s\S]*?<\/(?:div|span)>/g,
+              "\n\n$$\n$1\n$$\n\n"
+            )
+            .replace(
+              /<span[^>]*class="[^"]*(?:math-inline|katex)[^"]*"[\s\S]*?<annotation[^>]*>([\s\S]*?)<\/annotation>[\s\S]*?<\/span>/g,
+              " $$1 "
+            );
+        }
         if (hasScriptor) {
           sanitizedContent = sanitizedContent.replace(
             /<[a-zA-Z0-9]+[^>]*class="[^"]*(?:scriptor-component-code-block|scriptor-codeblock-virtualized)[^"]*"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/g,
@@ -391,12 +547,116 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       }
     }
 
+    // Ensure all code block fences have clean inner code without leaked trailing ``
+    sanitizedContent = cleanMarkdownCodeBlocks(sanitizedContent);
+
+    // Extract and protect LaTeX math expressions before marked.parse to prevent markdown escaping
+    const mathPlaceholders = new Map<string, string>();
+    let placeholderCounter = 0;
+
+    const storeMath = (tex: string, displayMode: boolean) => {
+      const key = `@@KATEX_MATH_${placeholderCounter++}@@`;
+      try {
+        const cleanTex = tex.trim();
+        const rendered = katex.renderToString(cleanTex, {
+          displayMode,
+          throwOnError: false,
+        });
+        const highlightedLatex = hljs.getLanguage("latex")
+          ? hljs.highlight(cleanTex, { language: "latex", ignoreIllegals: true }).value
+          : hljs.highlight(cleanTex, { language: "plaintext" }).value;
+
+        const wrapper = displayMode
+          ? `<div class="code-block-container latex-block-container" style="margin: 14px 0;">
+              <div class="code-block-header">
+                <span class="code-block-lang">∑ LATEX FORMULA</span>
+                <button class="code-copy-btn" type="button" aria-label="Copy LaTeX code">
+                  <span class="copy-icon">📋</span>
+                  <span class="copy-text">Copy LaTeX</span>
+                </button>
+              </div>
+              <div class="latex-card-display">
+                ${rendered}
+              </div>
+              <details class="latex-card-source">
+                <summary>Xem mã nguồn LaTeX</summary>
+                <div class="code-block-body">
+                  <pre><code class="hljs language-latex">${highlightedLatex}</code></pre>
+                </div>
+              </details>
+              <div style="display:none"><code class="latex-raw-code">${cleanTex.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></div>
+            </div>`
+          : `<span class="katex-inline-block">${rendered}</span>`;
+        mathPlaceholders.set(key, wrapper);
+      } catch (err) {
+        mathPlaceholders.set(key, `<span class="katex-error">${tex}</span>`);
+      }
+      return key;
+    };
+
+    let processedContent = sanitizedContent;
+
+    // 1. Temporarily protect code blocks and inline code so we don't alter math inside code
+    const codePlaceholders = new Map<string, string>();
+    let codeCounter = 0;
+    processedContent = processedContent.replace(
+      /(```[\s\S]*?```|`[^`\n]+`)/g,
+      (match) => {
+        const key = `@@CODE_CHUNK_${codeCounter++}@@`;
+        codePlaceholders.set(key, match);
+        return key;
+      }
+    );
+
+    // 2. Block math: $$ ... $$ and \[ ... \]
+    processedContent = processedContent.replace(
+      /(?<!\\)\$\$([\s\S]+?)\$\$/g,
+      (_, math) => `\n\n${storeMath(math, true)}\n\n`
+    );
+    processedContent = processedContent.replace(
+      /(?<!\\)\\\[([\s\S]+?)\\\]/g,
+      (_, math) => `\n\n${storeMath(math, true)}\n\n`
+    );
+
+    // 2b. Block math: \begin{equation|align|gather|matrix|bmatrix|pmatrix|cases|aligned} ... \end{...}
+    processedContent = processedContent.replace(
+      /(?<!\\)\\begin\{(equation\*?|align\*?|gather\*?|matrix|bmatrix|pmatrix|cases|aligned)\}([\s\S]+?)\\end\{\1\}/g,
+      (match) => `\n\n${storeMath(match, true)}\n\n`
+    );
+
+    // 3. Inline math: \( ... \)
+    processedContent = processedContent.replace(
+      /(?<!\\)\\\(([\s\S]+?)\\\)/g,
+      (_, math) => storeMath(math, false)
+    );
+
+    // 4. Inline math: $ ... $ (excluding currency like $100 or $50 to $100)
+    processedContent = processedContent.replace(
+      /(?<![\\\$])\$([^\s\$](?:[^\$]*?[^\s\$])?)\$(?!\d)/g,
+      (match, math) => {
+        if (/^\d+(?:[.,]\d+)?$/.test(math.trim())) {
+          return match;
+        }
+        return storeMath(math, false);
+      }
+    );
+
+    // 5. Restore code blocks
+    for (const [key, code] of codePlaceholders.entries()) {
+      processedContent = processedContent.replace(key, () => code);
+    }
+
     let rawHtml = "";
     try {
-      rawHtml = marked.parse(sanitizedContent) as string;
+      rawHtml = marked.parse(processedContent) as string;
     } catch (err) {
       console.warn("Markdown parse error, falling back to raw text:", err);
       rawHtml = `<p>${content}</p>`;
+    }
+
+    // Restore rendered KaTeX math placeholders
+    for (const [key, mathHtml] of mathPlaceholders.entries()) {
+      rawHtml = rawHtml.replace(key, () => mathHtml);
     }
 
     // Enhance citations like [1], [2], [S1], [S2]
@@ -419,7 +679,11 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       if (!copyBtn) return;
 
       const codeContainer = copyBtn.closest(".code-block-container");
-      const codeElement = codeContainer?.querySelector("code");
+      const isLatex = Boolean(copyBtn.closest(".latex-block-container"));
+      const originalText = isLatex ? "Copy LaTeX" : "Copy code";
+      const codeElement =
+        codeContainer?.querySelector("code.latex-raw-code") ||
+        codeContainer?.querySelector("code");
       if (!codeElement) return;
 
       const codeText = codeElement.textContent || "";
@@ -432,7 +696,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
         copyBtn.classList.add("copied");
 
         setTimeout(() => {
-          if (copyTextSpan) copyTextSpan.textContent = "Copy code";
+          if (copyTextSpan) copyTextSpan.textContent = originalText;
           if (copyIconSpan) copyIconSpan.textContent = "📋";
           copyBtn.classList.remove("copied");
         }, 2000);

@@ -77,6 +77,7 @@ class _MarkdownRenderer(HTMLParser):
         self._citation_stack: list[tuple[str, list[tuple[str, str | None, str | None]]]] = []
         self._citation_text_stack: list[list[str]] = []
         self._code_stack: list[dict[str, Any]] = []
+        self._math_stack: list[dict[str, Any]] = []
         self._skip_depth = 0
 
     @property
@@ -130,10 +131,13 @@ class _MarkdownRenderer(HTMLParser):
             return ""
 
         raw_lines = [l.rstrip() for l in lines]
-        while raw_lines and not raw_lines[0].strip():
+        while raw_lines and (not raw_lines[0].strip() or raw_lines[0].strip() in {"`", "``", "```"}):
             raw_lines.pop(0)
-        while raw_lines and not raw_lines[-1].strip():
+        while raw_lines and (not raw_lines[-1].strip() or raw_lines[-1].strip() in {"`", "``", "```"}):
             raw_lines.pop()
+
+        if raw_lines and raw_lines[-1].rstrip().endswith("``") and not raw_lines[-1].rstrip().endswith("```"):
+            raw_lines[-1] = raw_lines[-1].rstrip()[:-2].rstrip()
 
         if not raw_lines:
             return ""
@@ -157,10 +161,13 @@ class _MarkdownRenderer(HTMLParser):
                 blank_count = 0
                 cleaned.append(l)
 
-        while cleaned and not cleaned[0].strip():
+        while cleaned and (not cleaned[0].strip() or cleaned[0].strip() in {"`", "``", "```"}):
             cleaned.pop(0)
-        while cleaned and not cleaned[-1].strip():
+        while cleaned and (not cleaned[-1].strip() or cleaned[-1].strip() in {"`", "``", "```"}):
             cleaned.pop()
+
+        if cleaned and cleaned[-1].rstrip().endswith("``") and not cleaned[-1].rstrip().endswith("```"):
+            cleaned[-1] = cleaned[-1].rstrip()[:-2].rstrip()
 
         return "\n".join(cleaned)
 
@@ -190,6 +197,46 @@ class _MarkdownRenderer(HTMLParser):
         curr.append(fenced)
         curr.append("\n\n")
 
+    def _emit_math_block(self, top: dict[str, Any]) -> None:
+        formula = (top.get("formula") or "").strip()
+        if not formula and top.get("annotation_text"):
+            formula = "".join(top["annotation_text"]).strip()
+        if not formula and top.get("math_text"):
+            formula = "".join(top["math_text"]).strip()
+        if not formula and top.get("raw_text"):
+            formula = "".join(top["raw_text"]).strip()
+
+        if not formula:
+            return
+
+        formula = formula.strip()
+        if formula.startswith("$$") and formula.endswith("$$") and len(formula) >= 4:
+            formula = formula[2:-2].strip()
+        elif formula.startswith("$") and formula.endswith("$") and len(formula) >= 2:
+            formula = formula[1:-1].strip()
+        elif formula.startswith(r"\[") and formula.endswith(r"\]") and len(formula) >= 4:
+            formula = formula[2:-2].strip()
+        elif formula.startswith(r"\(") and formula.endswith(r"\)") and len(formula) >= 4:
+            formula = formula[2:-2].strip()
+
+        if not formula:
+            return
+
+        if top.get("display"):
+            curr = self.parts
+            if curr and not curr[-1].endswith("\n\n"):
+                if curr[-1].endswith("\n"):
+                    curr.append("\n")
+                else:
+                    curr.append("\n\n")
+            curr.append(f"$$\n{formula}\n$$")
+            curr.append("\n\n")
+        else:
+            curr = self.parts
+            if curr and curr[-1] and not curr[-1].endswith((" ", "\n", "(", "[", "{", ">", "*", "`")):
+                curr.append(" ")
+            curr.append(f"${formula}$")
+
     def _emit_blockquote(self, inner_raw: str) -> None:
         inner_text = inner_raw.strip()
         if not inner_text:
@@ -216,6 +263,55 @@ class _MarkdownRenderer(HTMLParser):
             return
         attr_map = {k: (v or "") for k, v in attrs}
         cls = attr_map.get("class", "")
+
+        # Check for LaTeX / Math elements (Gemini math-block, KaTeX katex-display / katex, MathJax, MathML)
+        has_math_attr = bool(attr_map.get("data-math") or attr_map.get("data-latex") or attr_map.get("data-tex"))
+        is_math_block_cls = "math-block" in cls or "math-display" in cls or "katex-display" in cls
+        is_math_inline_cls = "math-inline" in cls or ("katex" in cls and "katex-html" not in cls and "katex-mathml" not in cls)
+        is_math_element = has_math_attr or is_math_block_cls or is_math_inline_cls
+
+        if is_math_element and not self._math_stack and not self._code_stack:
+            self._at_li_start = False
+            is_display = (
+                is_math_block_cls
+                or tag in {"div", "p"}
+                or attr_map.get("display") == "block"
+                or "display" in cls
+            )
+            formula = (
+                attr_map.get("data-math")
+                or attr_map.get("data-latex")
+                or attr_map.get("data-tex")
+                or ""
+            )
+            self._math_stack.append({
+                "tag": tag,
+                "depth": 1,
+                "display": is_display,
+                "formula": formula,
+                "annotation_text": [],
+                "in_annotation": False,
+                "math_text": [],
+                "in_math": False,
+                "raw_text": [],
+                "skip_depth": 0,
+            })
+            return
+
+        if self._math_stack:
+            top = self._math_stack[-1]
+            if tag == top["tag"]:
+                top["depth"] += 1
+            if tag in {"annotation", "script"}:
+                if tag == "annotation" or "math/tex" in attr_map.get("type", ""):
+                    top["in_annotation"] = True
+            if tag == "math":
+                top["in_math"] = True
+            if "katex-html" in cls or attr_map.get("aria-hidden") == "true":
+                top["skip_depth"] += 1
+            elif top["skip_depth"] > 0:
+                top["skip_depth"] += 1
+            return
 
         # Check for code blocks (pre, Qwen/Monaco editor, Copilot scriptor-component-code-block / scriptor-codeblock-virtualized)
         is_qwen_block = "qwen-markdown-code" in cls and "qwen-markdown-codespan" not in cls
@@ -383,6 +479,21 @@ class _MarkdownRenderer(HTMLParser):
         if self._skip_depth:
             return
 
+        if self._math_stack:
+            top = self._math_stack[-1]
+            if top["skip_depth"] > 0:
+                top["skip_depth"] -= 1
+            if tag in {"annotation", "script"}:
+                top["in_annotation"] = False
+            if tag == "math":
+                top["in_math"] = False
+            if tag == top["tag"]:
+                top["depth"] -= 1
+                if top["depth"] <= 0:
+                    self._math_stack.pop()
+                    self._emit_math_block(top)
+            return
+
         if self._code_stack:
             top = self._code_stack[-1]
             if top["skip_depth"] > 0:
@@ -469,6 +580,20 @@ class _MarkdownRenderer(HTMLParser):
     def handle_data(self, data: str) -> None:
         if self._skip_depth:
             return
+        if self._math_stack:
+            top = self._math_stack[-1]
+            if top["formula"]:
+                return
+            if top["skip_depth"] > 0:
+                return
+            if top["in_annotation"]:
+                top["annotation_text"].append(data)
+                return
+            if top["in_math"]:
+                top["math_text"].append(data)
+                return
+            top["raw_text"].append(data)
+            return
         if self._code_stack:
             top = self._code_stack[-1]
             if top["skip_depth"] > 0:
@@ -486,6 +611,9 @@ class _MarkdownRenderer(HTMLParser):
         while self._code_stack:
             top = self._code_stack.pop()
             self._emit_code_block(top)
+        while self._math_stack:
+            top = self._math_stack.pop()
+            self._emit_math_block(top)
         while self._citation_stack:
             _, items = self._citation_stack.pop()
             text_parts = self._citation_text_stack.pop() if self._citation_text_stack else []

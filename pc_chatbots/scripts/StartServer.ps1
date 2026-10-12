@@ -26,8 +26,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-if ($HostAddress -eq "--Reload" -or $HostAddress -eq "-Reload") {
-    $Reload = $true
+if ($HostAddress -like "-*") {
+    if ($HostAddress -like "*Reload*") { $Reload = $true }
+    if ($HostAddress -like "*KillExisting*") { $KillExisting = $true }
     $HostAddress = "127.0.0.1"
 }
 
@@ -59,7 +60,21 @@ if (Test-Path $VenvActivate) {
 $ExistingConns = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -ne 0 }
 if ($ExistingConns) {
     $Pids = $ExistingConns | Select-Object -ExpandProperty OwningProcess -Unique
-    if ($KillExisting) {
+    $shouldKill = $KillExisting -or $Reload
+    if (-not $shouldKill) {
+        $allPython = $true
+        foreach ($p in $Pids) {
+            $proc = Get-Process -Id $p -ErrorAction SilentlyContinue
+            if (-not $proc -or $proc.ProcessName -notlike "*python*") {
+                $allPython = $false
+            }
+        }
+        if ($allPython) {
+            $shouldKill = $true
+        }
+    }
+
+    if ($shouldKill) {
         Write-Host "[XỬ LÝ] Tự động giải phóng cổng $Port (PID: $($Pids -join ', '))..." -ForegroundColor Yellow
         foreach ($p in $Pids) {
             Stop-Process -Id $p -Force -ErrorAction SilentlyContinue

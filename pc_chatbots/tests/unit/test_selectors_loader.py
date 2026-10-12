@@ -45,3 +45,17 @@ def test_provider_selectors_raises_on_unknown() -> None:
     selectors = load_selectors()
     with pytest.raises(KeyError):
         provider_selectors(selectors, "nonexistent")
+
+
+def test_gemini_mode_selectors_configured() -> None:
+    selectors = load_selectors()
+    gemini_cfg = provider_selectors(selectors, "gemini")
+    mode_selectors = gemini_cfg.get("mode_selectors", {})
+    assert "mode_dropdown" in mode_selectors
+    assert "pro_model" in mode_selectors
+    assert "flash_model" in mode_selectors
+    assert "thinking_high" in mode_selectors
+    assert "thinking_low" in mode_selectors
+    dropdown = mode_selectors["mode_dropdown"]
+    assert any("bard-mode-menu-button" in str(r) for r in dropdown)
+    assert any("input-area-switch" in str(r) for r in dropdown)

@@ -95,14 +95,25 @@ providers:
     mode_selectors:
       mode_dropdown:
         - { css: "button[data-test-id='bard-mode-menu-button']" }
+        - { css: "bard-mode-switcher button" }
         - { css: "button.input-area-switch" }
+        - { css: ".pill-ui-logo-container button" }
+        - { css: "button:has(.input-area-switch-label)" }
+        - { css: "button:has(.picker-primary-text)" }
         - { css: "button[aria-label*='chọn chế độ' i]" }
+        - { css: "button[aria-label*='chế độ' i]" }
+        - { css: "button[aria-label*='mode' i]" }
       pro_model:
+        - { css: "[role='menuitem']:has-text('3.1 Pro')" }
         - { css: "[role='menuitem']:has-text('Pro')" }
         - { css: ".mat-mdc-menu-item:has-text('Pro')" }
+        - { css: "button:has-text('Pro')" }
       flash_model:
+        - { css: "[role='menuitem']:has-text('3.8 Flash')" }
+        - { css: "[role='menuitem']:has-text('Flash'):not(:has-text('Lite'))" }
         - { css: "[role='menuitem']:has-text('Flash')" }
         - { css: ".mat-mdc-menu-item:has-text('Flash')" }
+        - { css: "button:has-text('Flash')" }
       thinking_high:
         - { css: "[role='menuitem']:has-text('Cao')" }
         - { css: "[role='menuitem']:has-text('High')" }

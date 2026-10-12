@@ -358,4 +358,37 @@ def test_gemini_dom_scan_script_contains_thinking_and_citations_selectors() -> N
     assert "link-block" in DOM_SCAN_THINKING_AND_CITATIONS
 
 
+@pytest.mark.asyncio
+async def test_gemini_select_mode_dropdown_not_found_graceful() -> None:
+    from app.adapters.gemini_ui import GeminiUIAdapter
+    adapter = GeminiUIAdapter()
+    mock_page = MagicMock()
+    mock_page.locator.return_value.count = AsyncMock(return_value=0)
+    mock_page.get_by_role.return_value.count = AsyncMock(return_value=0)
+    mock_page.get_by_test_id.return_value.count = AsyncMock(return_value=0)
+    mock_page.get_by_placeholder.return_value.count = AsyncMock(return_value=0)
+    mock_page.get_by_text.return_value.count = AsyncMock(return_value=0)
+
+    # When dropdown is not found within timeout, should not raise
+    await adapter._select_mode(mock_page, "deep", timeout_s=0.1)
+
+
+@pytest.mark.asyncio
+async def test_gemini_select_mode_already_in_target_mode() -> None:
+    from app.adapters.gemini_ui import GeminiUIAdapter
+    adapter = GeminiUIAdapter()
+    mock_page = MagicMock()
+
+    mock_btn = AsyncMock()
+    mock_btn.count = AsyncMock(return_value=1)
+    mock_btn.inner_text = AsyncMock(return_value="Pro Cao")
+    mock_btn.get_attribute = AsyncMock(return_value="Mở công cụ chọn chế độ, hiện tại là Pro Cao")
+
+    mock_page.locator.return_value = mock_btn
+
+    # Deep mode requested, already "Pro Cao", should not click to switch
+    await adapter._select_mode(mock_page, "deep", timeout_s=1.0)
+    assert mock_btn.click.call_count == 0
+
+
 
