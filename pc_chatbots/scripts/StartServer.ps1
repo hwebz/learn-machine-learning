@@ -42,16 +42,21 @@ Write-Host "  Thư mục: $ProjectRoot" -ForegroundColor DarkGray
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 # 1. Kiểm tra và kích hoạt virtual environment
+$PythonExe = "python"
+$VenvPython = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
 $VenvActivate = Join-Path $ProjectRoot ".venv\Scripts\Activate.ps1"
 if (Test-Path $VenvActivate) {
     Write-Host "[1/3] Kích hoạt virtual environment (.venv)..." -ForegroundColor Green
     & $VenvActivate
+    if (Test-Path $VenvPython) {
+        $PythonExe = $VenvPython
+    }
 } else {
     Write-Host "[CẢNH BÁO] Không tìm thấy $VenvActivate. Sử dụng Python hiện tại của hệ thống." -ForegroundColor Yellow
 }
 
 # 2. Kiểm tra xung đột cổng
-$ExistingConns = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
+$ExistingConns = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -ne 0 }
 if ($ExistingConns) {
     $Pids = $ExistingConns | Select-Object -ExpandProperty OwningProcess -Unique
     if ($KillExisting) {
@@ -78,8 +83,15 @@ $UvicornArgs = @("app.main:app", "--host", $HostAddress, "--port", "$Port")
 if ($env:OS -like "*Windows*" -or $IsWindows -or $env:PROCESSOR_ARCHITECTURE) {
     $UvicornArgs += @("--loop", "app.main:proactor_loop_factory")
 }
+
 if ($Reload) {
-    $UvicornArgs += "--reload"
+    if ($env:OS -like "*Windows*" -or $IsWindows -or $env:PROCESSOR_ARCHITECTURE) {
+        Write-Host "      [Chế độ Reload - Windows] Khởi chạy qua watchfiles runner để đảm bảo Proactor IOCP sạch..." -ForegroundColor DarkCyan
+        & $PythonExe -m watchfiles --filter python "`"$PythonExe`" -m uvicorn $($UvicornArgs -join ' ')" app
+        exit $LASTEXITCODE
+    } else {
+        $UvicornArgs += "--reload"
+    }
 }
 
-python -m uvicorn @UvicornArgs
+& $PythonExe -m uvicorn @UvicornArgs

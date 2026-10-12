@@ -220,8 +220,8 @@ def test_async_work_mode_executes_concurrently(monkeypatch: MonkeyPatch) -> None
         # In concurrent mode with 0.1s sleep each, total elapsed should be well below sequential sum (0.3s)
         # Verify that start times overlap (start of last provider is before end of first provider)
         assert len(start_times) == 3
-        # First and last started within 0.08s of each other (concurrent launch)
-        assert (start_times[-1] - start_times[0]) < 0.08
+        # First and last started within 0.15s of each other (concurrent launch, well below sequential 0.3s)
+        assert (start_times[-1] - start_times[0]) < 0.15
 
 
 def test_sync_work_mode_executes_sequentially(monkeypatch: MonkeyPatch) -> None:

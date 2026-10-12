@@ -1390,6 +1390,18 @@ textarea {
   font-style: italic;
 }
 
+.markdown-blockquote p {
+  margin: 4px 0;
+}
+
+.markdown-blockquote p:first-child {
+  margin-top: 0;
+}
+
+.markdown-blockquote p:last-child {
+  margin-bottom: 0;
+}
+
 .inline-code {
   font-family: var(--font-mono);
   font-size: 12.5px;
@@ -1454,11 +1466,48 @@ textarea {
   border-color: #10b981;
 }
 
+.code-block-body {
+  display: flex;
+  position: relative;
+  overflow-x: auto;
+  background-color: #1e293b;
+}
+
+.code-gutter {
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  background-color: #162032;
+  border-right: 1px solid #334155;
+  padding: 14px 10px 14px 12px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  color: #64748b;
+}
+
+.code-gutter span {
+  display: block;
+  min-width: 18px;
+}
+
 .code-block-container pre {
   margin: 0;
   padding: 14px 16px;
   overflow-x: auto;
   background-color: #1e293b !important;
+}
+
+.code-block-body pre {
+  overflow-x: visible;
+  flex-grow: 1;
+  background-color: transparent !important;
 }
 
 .code-block-container code.hljs {
@@ -1467,6 +1516,7 @@ textarea {
   line-height: 1.55;
   background-color: transparent !important;
   padding: 0;
+  display: block;
 }
 
 /* Tables in Markdown */

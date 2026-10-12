@@ -279,6 +279,74 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
         } catch (e) {}
     }
 
+    // 1.2. Copilot-specific: Open ChainOfThought thinking steps & Sources button if closed
+    if (provider === "copilot" || !provider) {
+        try {
+            // A. Expand ChainOfThought cards/details by clicking scc-ChainOfThought toggles
+            const cotToggles = document.querySelectorAll(
+                "[class*='scc-ChainOfThought']:not([class*='scc-ChainOfThought__card']):not([class*='scc-ChainOfThought__description']):not([class*='scc-ChainOfThought__body']):not([class*='scc-ChainOfThought__detail']), " +
+                "button[class*='scc-ChainOfThought'], " +
+                "[class*='scc-ChainOfThought__header'], " +
+                "[class*='scc-ChainOfThought__toggle'], " +
+                "[class*='scc-ChainOfThought__title']"
+            );
+            for (const toggle of cotToggles) {
+                const isExpanded = toggle.getAttribute("aria-expanded");
+                if (isExpanded === "false" || isExpanded === null) {
+                    const attempts = parseInt(toggle.dataset.expandAttempts || "0", 10);
+                    if (attempts < 5) {
+                        toggle.dataset.expandAttempts = (attempts + 1).toString();
+                        triggerClick(toggle);
+                    }
+                }
+            }
+
+            // B. Click Sources button to reveal detailed sources/citations
+            const sourcesBtn = document.querySelector(
+                "button[data-testid='sources-button-testid'], " +
+                "button[aria-label='Sources'], " +
+                "[data-testid='sources-button-testid']"
+            );
+            if (sourcesBtn) {
+                const isExpanded = sourcesBtn.getAttribute("aria-expanded");
+                if (isExpanded === "false" || isExpanded === null) {
+                    const attempts = parseInt(sourcesBtn.dataset.expandAttempts || "0", 10);
+                    if (attempts < 5) {
+                        sourcesBtn.dataset.expandAttempts = (attempts + 1).toString();
+                        triggerClick(sourcesBtn);
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    // 1.3. Gemini-specific: Open thoughts/thinking accordion if closed
+    if (provider === "gemini" || !provider) {
+        try {
+            const thoughtToggles = document.querySelectorAll(
+                ".thoughts-container button, " +
+                ".thoughts-wrapper button, " +
+                "button.thoughts-header, " +
+                "button.thoughts-toggle, " +
+                "button[aria-label*='suy nghĩ' i], " +
+                "button[aria-label*='thought' i], " +
+                "button[aria-label*='thinking' i], " +
+                "expandable-section[data-test-id*='thought'] [data-test-id='expandable-section-toggle'], " +
+                "[data-test-id*='thought-toggle']"
+            );
+            for (const toggle of thoughtToggles) {
+                const isExpanded = toggle.getAttribute("aria-expanded");
+                if (isExpanded === "false") {
+                    const attempts = parseInt(toggle.dataset.expandAttempts || "0", 10);
+                    if (attempts < 5) {
+                        toggle.dataset.expandAttempts = (attempts + 1).toString();
+                        triggerClick(toggle);
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
     // 2. Extract structured thinking steps without duplicates
     const seenStepKeys = new Set();
     try {
@@ -432,6 +500,200 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
         }
     } catch (e) {}
 
+    // 2.2. Copilot-specific: Extract from scc-ChainOfThought__card and scc-ChainOfThought*
+    if (provider === "copilot" || !provider) {
+        try {
+            const cotCards = document.querySelectorAll(
+                "[class*='scc-ChainOfThought__card'], " +
+                "[class*='ChainOfThought__card'], " +
+                "div[class*='scc-ChainOfThought'][class*='card']"
+            );
+
+            if (cotCards && cotCards.length > 0) {
+                for (const card of cotCards) {
+                    const subSteps = card.querySelectorAll(
+                        "[class*='scc-ChainOfThought__step'], " +
+                        "[class*='scc-ChainOfThought__item'], " +
+                        "li"
+                    );
+                    const stepItems = (subSteps && subSteps.length > 1) ? Array.from(subSteps) : [card];
+
+                    for (const item of stepItems) {
+                        let title = "";
+                        const titleEl = item.querySelector(
+                            "[class*='scc-ChainOfThought__title'], " +
+                            "[class*='scc-ChainOfThought__header'], " +
+                            "[class*='ChainOfThought__title'], " +
+                            "[class*='title'], " +
+                            "[class*='header'], " +
+                            "h3, h4, h5, [role='heading'], strong"
+                        );
+                        if (titleEl) {
+                            const clone = titleEl.cloneNode(true);
+                            clone.querySelectorAll("svg, button, [class*='icon'], [class*='badge']").forEach(i => i.remove());
+                            title = clean(clone.innerText || clone.textContent);
+                        }
+
+                        let description = "";
+                        const descEl = item.querySelector(
+                            "[class*='scc-ChainOfThought__description'], " +
+                            "[class*='scc-ChainOfThought__detail'], " +
+                            "[class*='scc-ChainOfThought__body'], " +
+                            "[class*='scc-ChainOfThought__content'], " +
+                            "[class*='ChainOfThought__description'], " +
+                            "[class*='description'], " +
+                            "[class*='detail'], " +
+                            "[class*='body'], " +
+                            "[class*='content'], " +
+                            "p, .markdown"
+                        );
+                        if (descEl && descEl !== titleEl) {
+                            const clone = descEl.cloneNode(true);
+                            clone.querySelectorAll("svg, button, [class*='icon']").forEach(i => i.remove());
+                            description = clean(clone.innerText || clone.textContent);
+                        } else {
+                            const clone = item.cloneNode(true);
+                            clone.querySelectorAll("svg, button, [class*='icon']").forEach(i => i.remove());
+                            if (titleEl) {
+                                const cloneTitle = clone.querySelector(
+                                    "[class*='scc-ChainOfThought__title'], [class*='title'], [class*='header'], h3, h4, h5, strong"
+                                );
+                                if (cloneTitle) cloneTitle.remove();
+                            }
+                            description = clean(clone.innerText || clone.textContent);
+                        }
+
+                        if (!title && description) {
+                            const lines = description.split("\\n").map(l => clean(l)).filter(Boolean);
+                            if (lines.length > 1) {
+                                title = lines[0];
+                                description = lines.slice(1).join(" ");
+                            } else {
+                                title = description;
+                                description = "";
+                            }
+                        }
+
+                        if (title) {
+                            const itemClass = (item.className || "") + " " + (card.className || "");
+                            const isCompleted = itemClass.includes("completed") ||
+                                                itemClass.includes("success") ||
+                                                item.querySelector("[class*='Checkmark'], [class*='check'], [class*='success'], [data-icon-name*='Checkmark'], svg[aria-label*='complete' i]") !== null;
+                            const isRunning = itemClass.includes("running") ||
+                                              itemClass.includes("loading") ||
+                                              item.querySelector("[class*='spinner'], [class*='loading'], [class*='ProgressRing'], svg[class*='spin'], [data-icon-name*='Sync']") !== null;
+                            const stepStatus = isCompleted ? "completed" : (isRunning ? "running" : (description ? "completed" : "running"));
+
+                            const dedupeKey = title + "::" + description;
+                            if (!seenStepKeys.has(dedupeKey)) {
+                                seenStepKeys.add(dedupeKey);
+                                isThinking = true;
+                                thinkingSteps.push({
+                                    title: title,
+                                    description: description || "",
+                                    status: stepStatus
+                                });
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Fallback: search for elements with scc-ChainOfThought text
+                const cotTexts = document.querySelectorAll(
+                    "[class*='scc-ChainOfThought']:not(button):not(svg)"
+                );
+                for (const el of cotTexts) {
+                    const txt = clean(el.innerText || el.textContent);
+                    if (txt && txt.length > 3 && !seenStepKeys.has(txt)) {
+                        seenStepKeys.add(txt);
+                        isThinking = true;
+                        thinkingSteps.push({
+                            title: txt,
+                            description: "",
+                            status: "completed"
+                        });
+                    }
+                }
+            }
+
+            // Sequential thinking: all steps prior to the latest active card are completed
+            for (let sIdx = 0; sIdx < thinkingSteps.length - 1; sIdx++) {
+                thinkingSteps[sIdx].status = "completed";
+            }
+        } catch (e) {}
+    }
+
+    // 2.3. Gemini-specific: Extract structured thinking steps
+    if (provider === "gemini" || !provider) {
+        try {
+            // Check for live processing indicator in Gemini
+            const processingEl = document.querySelector(
+                ".response-container-header-processing-state, " +
+                "thinking-overlay, " +
+                ".thinking-dots-animation, " +
+                "[data-test-id*='thinking-state'], " +
+                ".pending-status"
+            );
+            if (processingEl) {
+                isThinking = true;
+                const procText = clean(processingEl.innerText || processingEl.textContent);
+                if (procText && !seenStepKeys.has(procText)) {
+                    seenStepKeys.add(procText);
+                    thinkingSteps.push({
+                        title: procText,
+                        description: "",
+                        status: "in_progress"
+                    });
+                }
+            }
+
+            // Check for thoughts containers and structured step elements
+            const thoughtsContainers = document.querySelectorAll(
+                ".thoughts-container, " +
+                ".thoughts-wrapper, " +
+                ".thoughts-content, " +
+                "spark-thinking-steps, " +
+                ".is-embedded-thought"
+            );
+            for (const container of thoughtsContainers) {
+                // If container has structured steps or list items
+                const stepItems = container.querySelectorAll("spark-thinking-steps .step, li, .step-item, div[class*='step']");
+                if (stepItems && stepItems.length > 0) {
+                    for (const item of stepItems) {
+                        const titleEl = item.querySelector(".step-title, strong, h4, h5") || item;
+                        const title = clean(titleEl.innerText || titleEl.textContent);
+                        let description = "";
+                        const descEl = item.querySelector(".step-description, .step-desc, p");
+                        if (descEl && descEl !== titleEl) {
+                            description = clean(descEl.innerText || descEl.textContent);
+                        }
+                        if (title && !seenStepKeys.has(title)) {
+                            seenStepKeys.add(title);
+                            isThinking = true;
+                            thinkingSteps.push({
+                                title: title,
+                                description: description,
+                                status: "completed"
+                            });
+                        }
+                    }
+                } else {
+                    // Fallback: entire thoughts content text
+                    const fullText = clean(container.innerText || container.textContent);
+                    if (fullText && fullText.length > 3 && !seenStepKeys.has(fullText)) {
+                        seenStepKeys.add(fullText);
+                        isThinking = true;
+                        thinkingSteps.push({
+                            title: fullText.length > 60 ? fullText.slice(0, 57) + "..." : fullText,
+                            description: fullText.length > 60 ? fullText : "",
+                            status: "completed"
+                        });
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
     // 3. Fallback: query general thinking containers across other providers
     const thinkingSelectors = [
         ".ds-markdown--thought",
@@ -528,12 +790,123 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
         }
     } catch (e) {}
 
-    // 4.2. General link selectors for citations across providers
+    // 4.2. Copilot-specific: Extract from sources button, flyout, panel
+    try {
+        const copilotSourceEls = document.querySelectorAll(
+            "[data-testid='sources-button-testid'] ~ * a[href^='http'], " +
+            "div[class*='sources'] a[href^='http'], " +
+            "div[class*='attribution'] a[href^='http'], " +
+            "[data-testid*='source'] a[href^='http'], " +
+            "[aria-label*='Sources' i] a[href^='http'], " +
+            "[role='dialog'] a[href^='http'], " +
+            "div[class*='scc-'] a[href^='http'], " +
+            "a[data-testid*='attribution'][href^='http'], " +
+            "a[class*='attribution'][href^='http']"
+        );
+        for (const a of copilotSourceEls) {
+            const href = a.href || a.getAttribute("href") || "";
+            if (href && href.startsWith("http") && !seenUrls.has(href)) {
+                if (!href.includes("login") && !href.includes("auth") && !href.includes("microsoft.com/chat")) {
+                    seenUrls.add(href);
+                    let title = clean(a.innerText || a.textContent || a.getAttribute("title") || a.getAttribute("aria-label") || "");
+                    const card = a.closest("div, li, [class*='card']");
+                    let snippet = "";
+                    if (card && card !== a) {
+                        const snipEl = card.querySelector("[class*='snippet'], [class*='desc'], [class*='summary'], p");
+                        if (snipEl) snippet = clean(snipEl.innerText || snipEl.textContent);
+                    }
+                    citations.push({
+                        url: href,
+                        title: title || href,
+                        snippet: snippet
+                    });
+                }
+            }
+        }
+
+        // Copilot: Extract citations from paragraph citation buttons (fai-BebopCitation)
+        const bebopButtons = document.querySelectorAll(
+            "button[class*='fai-BebopCitation'], [class*='fai-BebopCitation'], [data-grouped-citations]"
+        );
+        for (const btn of bebopButtons) {
+            const rawGrouped = btn.getAttribute("data-grouped-citations");
+            const ariaLabel = btn.getAttribute("aria-label") || "";
+            let ariaTitle = "";
+            if (ariaLabel) {
+                let lbl = ariaLabel.trim();
+                if (lbl.toLowerCase().startsWith("citation:")) {
+                    lbl = lbl.slice(9).trim();
+                }
+                if (lbl.includes(" — ")) {
+                    ariaTitle = lbl.split(" — ")[1].trim();
+                } else if (lbl.includes(" - ")) {
+                    ariaTitle = lbl.split(" - ")[1].trim();
+                } else {
+                    ariaTitle = lbl;
+                }
+            }
+
+            if (rawGrouped) {
+                try {
+                    const parsed = JSON.parse(rawGrouped);
+                    if (Array.isArray(parsed)) {
+                        for (const item of parsed) {
+                            if (item && item.url && !seenUrls.has(item.url)) {
+                                if (!item.url.includes("login") && !item.url.includes("auth") && !item.url.includes("microsoft.com/chat")) {
+                                    seenUrls.add(item.url);
+                                    citations.push({
+                                        url: item.url,
+                                        title: item.name || ariaTitle || item.url,
+                                        snippet: ""
+                                    });
+                                }
+                            }
+                        }
+                    }
+                } catch (err) {}
+            }
+        }
+    } catch (e) {}
+
+    // 4.3. Gemini-specific: Extract rich citations from attribution containers
+    if (provider === "gemini" || !provider) {
+        try {
+            const geminiAttrContainers = document.querySelectorAll(
+                "attribution-container, div.tool-attribution, link-block, sources-list, [data-test-id*='attribution']"
+            );
+            for (const container of geminiAttrContainers) {
+                const link = container.querySelector("a[href^='http']");
+                if (link) {
+                    const href = link.href || link.getAttribute("href");
+                    if (href && !seenUrls.has(href)) {
+                        if (!href.includes("login") && !href.includes("auth") && !href.includes("accounts.google")) {
+                            seenUrls.add(href);
+                            const titleEl = container.querySelector(".tool-attribution-title-text, .title, .link-title, strong") || link;
+                            const title = clean(titleEl.innerText || titleEl.textContent || link.getAttribute("title") || "");
+                            const descEl = container.querySelector(".tool-attribution-label, .snippet, .description, p");
+                            const snippet = descEl ? clean(descEl.innerText || descEl.textContent) : "";
+                            citations.push({
+                                url: href,
+                                title: title || href,
+                                snippet: snippet
+                            });
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    // 4.4. General link selectors for citations across providers
     const linkSelectors = [
         "a[data-testid='citation']",
         "a.citation",
         "a[data-citation]",
         "a.qwen-markdown-link",
+        "attribution-container a[href^='http']",
+        "div.tool-attribution a[href^='http']",
+        "link-block a[href^='http']",
+        "sources-list a[href^='http']",
         "div.response-message-content a[href^='http']",
         ".custom-qwen-markdown a[href^='http']",
         ".qwen-markdown a[href^='http']",

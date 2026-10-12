@@ -40,6 +40,10 @@ def test_dom_scan_script_syntax() -> None:
     assert "citations" in DOM_SCAN_THINKING_AND_CITATIONS
     assert "is_thinking" in DOM_SCAN_THINKING_AND_CITATIONS
     assert "qwen-chat-status-card-after" in DOM_SCAN_THINKING_AND_CITATIONS
+    assert "scc-ChainOfThought" in DOM_SCAN_THINKING_AND_CITATIONS
+    assert "sources-button-testid" in DOM_SCAN_THINKING_AND_CITATIONS
+    assert "fai-BebopCitation" in DOM_SCAN_THINKING_AND_CITATIONS
+    assert "data-grouped-citations" in DOM_SCAN_THINKING_AND_CITATIONS
     assert ".ds-markdown--thought" in DOM_SCAN_THINKING_AND_CITATIONS
     assert "data-testid='citation'" in DOM_SCAN_THINKING_AND_CITATIONS
 
@@ -157,6 +161,67 @@ async def test_wait_for_completion_qwen_thinking_steps() -> None:
     assert first_poll["thinking_steps"][0]["description"] == "Query: python"
     assert first_poll["thinking_steps"][0]["status"] == "completed"
     assert first_poll["thinking_steps"][1]["title"] == "Reading sources..."
+
+
+@pytest.mark.asyncio
+async def test_wait_for_completion_copilot_thinking_steps() -> None:
+    poll_events: list[dict] = []
+
+    async def mock_on_poll(**kwargs) -> None:
+        poll_events.append(kwargs)
+
+    mock_page = MagicMock()
+    mock_page.url = "https://m365.cloud.microsoft/chat"
+    mock_page.locator.return_value.inner_text = AsyncMock(return_value="Copilot response")
+    mock_page.evaluate = AsyncMock(return_value={
+        "is_thinking": True,
+        "thinking_text": "Understanding question\nSearching web sources",
+        "thinking_steps": [
+            {"title": "Understanding question", "description": "Analyzing intent", "status": "completed"},
+            {"title": "Searching web sources", "description": "Querying Bing", "status": "running"},
+        ],
+        "citations": [{"url": "https://microsoft.com", "title": "Microsoft Official"}],
+    })
+
+    clock_val = 1000.0
+
+    def fake_clock() -> float:
+        nonlocal clock_val
+        clock_val += 0.5
+        return clock_val
+
+    async def fake_sleep(dur: float) -> None:
+        pass
+
+    provider_cfg = {
+        "question_input": [],
+        "answer_container": [],
+        "generating_indicator": None,
+        "done_indicator": None,
+    }
+
+    result = await wait_for_completion(
+        mock_page,
+        provider="copilot",
+        provider_cfg=provider_cfg,
+        blocking={},
+        completion_cfg={"stable_seconds": 0.5, "poll_interval_s": 1.0},
+        timeout_s=2.0,
+        on_poll=mock_on_poll,
+        clock=fake_clock,
+        sleep=fake_sleep,
+    )
+
+    assert len(poll_events) > 0
+    first_poll = poll_events[0]
+    assert first_poll["is_thinking"] is True
+    assert len(first_poll["thinking_steps"]) == 2
+    assert first_poll["thinking_steps"][0]["title"] == "Understanding question"
+    assert first_poll["thinking_steps"][0]["description"] == "Analyzing intent"
+    assert first_poll["thinking_steps"][0]["status"] == "completed"
+    assert first_poll["thinking_steps"][1]["title"] == "Searching web sources"
+    assert len(first_poll["citations"]) == 1
+    assert first_poll["citations"][0]["url"] == "https://microsoft.com"
 
 
 @pytest.mark.asyncio
@@ -283,6 +348,14 @@ def test_qwen_dom_scan_script_contains_sidebar_and_citations_selectors() -> None
     assert "host-name-text" in DOM_SCAN_THINKING_AND_CITATIONS
     assert "content-item-des-title" in DOM_SCAN_THINKING_AND_CITATIONS
     assert "content-item-des" in DOM_SCAN_THINKING_AND_CITATIONS
+
+
+def test_gemini_dom_scan_script_contains_thinking_and_citations_selectors() -> None:
+    assert "thoughts-container" in DOM_SCAN_THINKING_AND_CITATIONS
+    assert "spark-thinking-steps" in DOM_SCAN_THINKING_AND_CITATIONS
+    assert "attribution-container" in DOM_SCAN_THINKING_AND_CITATIONS
+    assert "tool-attribution" in DOM_SCAN_THINKING_AND_CITATIONS
+    assert "link-block" in DOM_SCAN_THINKING_AND_CITATIONS
 
 
 

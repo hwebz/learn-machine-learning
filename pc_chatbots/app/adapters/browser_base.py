@@ -178,6 +178,35 @@ class BrowserProviderAdapter(ABC):
                     text = (await item.inner_text(timeout=2000)).strip()
                 except Exception:  # noqa: BLE001
                     pass
+                if not href:
+                    raw_grouped = await item.get_attribute("data-grouped-citations", timeout=1000)
+                    if raw_grouped:
+                        try:
+                            import json
+                            parsed = json.loads(raw_grouped)
+                            if isinstance(parsed, list) and len(parsed) > 0:
+                                aria = await item.get_attribute("aria-label", timeout=1000) or ""
+                                aria_title = ""
+                                if aria:
+                                    lbl = aria.strip()
+                                    if lbl.lower().startswith("citation:"):
+                                        lbl = lbl[9:].strip()
+                                    if " — " in lbl:
+                                        aria_title = lbl.split(" — ", 1)[1].strip()
+                                    elif " - " in lbl:
+                                        aria_title = lbl.split(" - ", 1)[1].strip()
+                                    elif lbl:
+                                        aria_title = lbl
+                                is_multi = len(parsed) > 1
+                                for p_item in parsed:
+                                    if isinstance(p_item, dict) and p_item.get("url"):
+                                        p_url = p_item["url"]
+                                        p_name = (p_item.get("name") or "").strip() or None
+                                        p_title = p_name if is_multi else (aria_title or p_name)
+                                        pairs.append((p_url, p_title))
+                                continue
+                        except Exception:  # noqa: BLE001
+                            pass
                 if not href and text.startswith(("http://", "https://")):
                     href = text
                     text = ""
@@ -477,7 +506,7 @@ class BrowserProviderAdapter(ABC):
                         try:
                             await _notify("extracting", f"Đang trích xuất nội dung câu trả lời và nguồn trích dẫn từ {self.name}...")
 
-                            # Qwen-specific: Ensure the sources / thinking drawer is open before extracting
+                            # Provider-specific: Ensure the sources / thinking drawer is open before extracting
                             if self.name == "qwen":
                                 try:
                                     drawer_present = await page.locator(".qwen-chat-thinking-and-sources-content").count() > 0
@@ -490,6 +519,45 @@ class BrowserProviderAdapter(ABC):
                                         if await drawer_btn.is_visible(timeout=1000):
                                             await drawer_btn.click(timeout=2000)
                                             await page.wait_for_timeout(600)
+                                except Exception:  # noqa: BLE001
+                                    pass
+                            elif self.name == "copilot":
+                                try:
+                                    cot_btn = page.locator(
+                                        "[class*='scc-ChainOfThought']:not([class*='scc-ChainOfThought__card'])"
+                                    ).first
+                                    if await cot_btn.count() > 0 and await cot_btn.is_visible(timeout=1000):
+                                        await cot_btn.click(timeout=1500)
+                                        await page.wait_for_timeout(400)
+                                except Exception:  # noqa: BLE001
+                                    pass
+                                try:
+                                    sources_btn = page.locator(
+                                        "button[data-testid='sources-button-testid'], "
+                                        "button[aria-label='Sources'], "
+                                        "[data-testid='sources-button-testid']"
+                                    ).first
+                                    if await sources_btn.count() > 0 and await sources_btn.is_visible(timeout=1000):
+                                        await sources_btn.click(timeout=1500)
+                                        await page.wait_for_timeout(500)
+                                except Exception:  # noqa: BLE001
+                                    pass
+                            elif self.name == "gemini":
+                                try:
+                                    thought_toggles = page.locator(
+                                        ".thoughts-container button[aria-expanded='false'], "
+                                        ".thoughts-wrapper button[aria-expanded='false'], "
+                                        "button.thoughts-header[aria-expanded='false'], "
+                                        "button.thoughts-toggle[aria-expanded='false'], "
+                                        "button[aria-label*='suy nghĩ' i][aria-expanded='false'], "
+                                        "button[aria-label*='thought' i][aria-expanded='false']"
+                                    )
+                                    count = await thought_toggles.count()
+                                    for idx in range(count):
+                                        toggle = thought_toggles.nth(idx)
+                                        if await toggle.is_visible(timeout=500):
+                                            await toggle.click(timeout=1000)
+                                            await page.wait_for_timeout(300)
                                 except Exception:  # noqa: BLE001
                                     pass
 

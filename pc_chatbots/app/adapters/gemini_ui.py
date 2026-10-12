@@ -4,6 +4,7 @@ from typing import Any
 
 import structlog
 
+from app.adapters.base import Source
 from app.adapters.browser_base import BrowserProviderAdapter
 from app.browser.locators import resolve_locator
 
@@ -14,6 +15,26 @@ class GeminiUIAdapter(BrowserProviderAdapter):
     """Drive the signed-in gemini.google.com web UI via Playwright (DOM locators only)."""
 
     name = "gemini"
+
+    async def _extract_sources(self, page: Any) -> list[Source]:
+        """Ensure thought toggles or attribution containers are open before extraction."""
+        try:
+            toggles = page.locator(
+                ".thoughts-container button[aria-expanded='false'], "
+                ".thoughts-wrapper button[aria-expanded='false'], "
+                "button.thoughts-header[aria-expanded='false'], "
+                "button.thoughts-toggle[aria-expanded='false'], "
+                "button[aria-label*='suy nghĩ' i][aria-expanded='false'], "
+                "button[aria-label*='thought' i][aria-expanded='false']"
+            )
+            count = await toggles.count()
+            for idx in range(count):
+                toggle = toggles.nth(idx)
+                if await toggle.is_visible(timeout=500):
+                    await toggle.click(timeout=1000)
+        except Exception:  # noqa: BLE001
+            pass
+        return await super()._extract_sources(page)
 
     async def _select_mode(self, page: Any, mode: str) -> None:
         """Configure Gemini model (Pro vs Flash) and thinking effort (Cao vs Thấp)."""

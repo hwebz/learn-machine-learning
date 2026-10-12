@@ -134,6 +134,10 @@ providers:
     source_links:
       - { css: "a[data-test-id='cite-link']" }
       - { css: "a[href][target='_blank']:has(.citation-pill)" }
+      - { css: "attribution-container a[href^='http']" }
+      - { css: "div.tool-attribution a[href^='http']" }
+      - { css: "link-block a[href^='http']" }
+      - { css: "sources-list a[href^='http']" }
 
   # ─────────────────────────────────────── ChatGPT
   chatgpt:
@@ -250,7 +254,19 @@ providers:
       - { css: "[data-content='message-content']" }
       - { css: ".cib-response .prose" }
     source_links:
+      - { css: "button[class*='fai-BebopCitation']" }
+      - { css: "[data-grouped-citations]" }
+      - { css: "[class*='fai-BebopCitation']" }
+      - { css: "button[data-testid='sources-button-testid'] ~ * a[href^='http']" }
+      - { css: "div[class*='sources'] a[href^='http']" }
+      - { css: "div[class*='attribution'] a[href^='http']" }
+      - { css: "[data-testid*='source'] a[href^='http']" }
+      - { css: "[aria-label*='Sources' i] a[href^='http']" }
+      - { css: "[role='dialog'] a[href^='http']" }
+      - { css: "div[class*='scc-'] a[href^='http']" }
+      - { css: "a[data-testid*='attribution'][href^='http']" }
       - { css: "a[href^='http'][target='_blank']" }
+      - { css: "a[href^='http']" }
 
   # ─────────────────────────────────────── Qwen
   qwen:

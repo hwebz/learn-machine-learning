@@ -5,6 +5,7 @@ from typing import Any
 
 import structlog
 
+from app.adapters.base import Source
 from app.adapters.browser_base import BrowserProviderAdapter
 
 logger = structlog.get_logger(__name__)
@@ -21,6 +22,61 @@ class CopilotUIAdapter(BrowserProviderAdapter):
     """Drive the signed-in Microsoft 365 Copilot web UI via Playwright (DOM locators only)."""
 
     name = "copilot"
+
+    async def _extract_sources(self, page: Any) -> list[Source]:
+        """Click the Sources button if present to open the sources flyout/pane and collect all citations."""
+        try:
+            btn = page.locator("button[data-testid='sources-button-testid'], button[aria-label='Sources'], [data-testid='sources-button-testid']").first
+            if await btn.count() > 0 and await btn.is_visible():
+                await btn.click(timeout=1500)
+                await asyncio.sleep(0.5)
+        except Exception:  # noqa: BLE001
+            pass
+
+        sources = await super()._extract_sources(page)
+
+        # Also extract inline paragraph citations from fai-BebopCitation buttons
+        try:
+            inline_citations = await page.evaluate("""() => {
+                const results = [];
+                const buttons = document.querySelectorAll("button[class*='fai-BebopCitation'], [class*='fai-BebopCitation'], [data-grouped-citations]");
+                for (const b of buttons) {
+                    const raw = b.getAttribute("data-grouped-citations");
+                    const aria = b.getAttribute("aria-label") || "";
+                    let title = "";
+                    if (aria) {
+                        let clean = aria.trim();
+                        if (clean.toLowerCase().startsWith("citation:")) clean = clean.slice(9).trim();
+                        if (clean.includes(" — ")) title = clean.split(" — ")[1].trim();
+                        else if (clean.includes(" - ")) title = clean.split(" - ")[1].trim();
+                        else title = clean;
+                    }
+                    if (raw) {
+                        try {
+                            const parsed = JSON.parse(raw);
+                            if (Array.isArray(parsed)) {
+                                for (const item of parsed) {
+                                    if (item && item.url) {
+                                        results.push({ url: item.url, title: item.name || title || item.url });
+                                    }
+                                }
+                            }
+                        } catch (e) {}
+                    }
+                }
+                return results;
+            }""")
+            if isinstance(inline_citations, list) and inline_citations:
+                known_urls = {str(s.url) for s in sources}
+                for c in inline_citations:
+                    u = c.get("url")
+                    if u and u not in known_urls:
+                        known_urls.add(u)
+                        sources.append(Source(url=u, title=c.get("title") or u))
+        except Exception:  # noqa: BLE001
+            pass
+
+        return sources
 
     async def _select_mode(self, page: Any, mode: str) -> None:
         """Switch Copilot mode between Auto and Think deeper."""

@@ -7,11 +7,6 @@ from collections.abc import AsyncIterator
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-    try:
-        import uvicorn.loops.asyncio as _u_asyncio
-        _u_asyncio.asyncio_loop_factory = lambda use_subprocess=False: asyncio.ProactorEventLoop
-    except ImportError:
-        pass
 
 import structlog
 from fastapi import FastAPI
