@@ -19,6 +19,7 @@ import {
   updateResearchJob,
   deleteResearchJob,
   fetchConversationCitations,
+  retryJobProvider,
 } from "../../lib/api";
 
 const DELETED_SESSIONS_KEY = "deep_research_deleted_sessions";
@@ -775,6 +776,104 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     }
   };
 
+  const handleRetryProvider = useCallback(
+    async (provider: string, jobId?: string) => {
+      const targetJobId = jobId || activeJobIdRef.current || activeSession.jobId;
+      if (!targetJobId) {
+        const userMsg = activeSession.messages.find((m) => m.role === "user");
+        if (userMsg) {
+          handleSendMessage(userMsg.content);
+        }
+        return;
+      }
+
+      setIsGenerating(true);
+      try {
+        await retryJobProvider(targetJobId, provider);
+
+        if (activeUnsubscribeRef.current) {
+          activeUnsubscribeRef.current();
+          activeUnsubscribeRef.current = null;
+        }
+        activeJobIdRef.current = targetJobId;
+
+        const unsub = subscribeJobEvents(targetJobId, {
+          onStep: (stepLog) => {
+            setActiveSteps((prev) => [...prev, stepLog]);
+          },
+          onResult: (result) => {
+            setActiveSteps((latestSteps) => {
+              const consolidatedSources = [...(result.sources || [])];
+              const seenUrls = new Set(consolidatedSources.map((s) => s.url));
+              for (const st of latestSteps) {
+                const stepCits = st.citations || (st.data as any)?.citations || [];
+                for (const c of stepCits) {
+                  if (c && c.url && !seenUrls.has(c.url)) {
+                    seenUrls.add(c.url);
+                    consolidatedSources.push({
+                      title: c.title || c.url,
+                      url: c.url,
+                      domain: c.domain,
+                    });
+                  }
+                }
+              }
+
+              const asstMsgId = `asst-${targetJobId}`;
+              const assistantMsg: Message = {
+                id: asstMsgId,
+                role: "assistant",
+                authorName: `AI Research Engine (${(result.providers || activeSession.selectedProviders || [provider]).join(", ")})`,
+                timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                content: result.report_markdown || "Đã cập nhật câu trả lời từ các mô hình.",
+                providers: result.providers || activeSession.selectedProviders || [provider],
+                depth: activeSession.depth,
+                tokens: 1540,
+                latencySeconds: 10.8,
+                sources: consolidatedSources,
+                claims: result.claims || [],
+                disagreements: result.disagreements || [],
+                provider_runs: result.provider_runs || {},
+                factCheckStatus: "verified",
+                steps: latestSteps,
+              };
+
+              setSessions((prev) =>
+                prev.map((s) => {
+                  if (s.id !== targetJobId && s.jobId !== targetJobId) return s;
+                  const existingIdx = s.messages.findIndex(
+                    (m) => m.id === asstMsgId || (m.role === "assistant" && s.jobId === targetJobId)
+                  );
+                  const updatedMessages =
+                    existingIdx >= 0
+                      ? s.messages.map((m, idx) => (idx === existingIdx ? assistantMsg : m))
+                      : [...s.messages, assistantMsg];
+                  return { ...s, status: "completed", messages: updatedMessages };
+                })
+              );
+              setInspectedMessage(assistantMsg);
+              return latestSteps;
+            });
+            setIsGenerating(false);
+            activeUnsubscribeRef.current = null;
+          },
+          onError: (err) => {
+            console.warn("Retry SSE issue:", err);
+            setIsGenerating(false);
+          },
+          onDone: () => {
+            setIsGenerating(false);
+          },
+        });
+        activeUnsubscribeRef.current = unsub;
+      } catch (err) {
+        console.error("Failed to retry provider:", err);
+        setIsGenerating(false);
+      }
+    },
+    [activeSession, handleSendMessage]
+  );
+
   const handleSimulatedMultiModelResponse = (
     content: string,
     providerIds: string[],
@@ -923,6 +1022,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         activeSteps={activeSteps}
         onSelectThinking={handleSelectThinking}
         onStopResearch={handleStopResearch}
+        onRetryProvider={handleRetryProvider}
       />
 
       {/* 3. Right Sidebar (Inspection & Details) */}
@@ -941,6 +1041,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           depth={inspectedMessage?.depth || activeSession.depth}
           onSelectProvider={(p) => setInspectedProvider(p)}
           onClose={() => setIsRightSidebarOpen(false)}
+          onRetryProvider={handleRetryProvider}
         />
       )}
 

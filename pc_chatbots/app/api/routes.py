@@ -499,3 +499,61 @@ async def set_settings(req: SettingsUpdateRequest) -> SettingsResponse:
 
     return await get_settings()
 
+
+@router.post("/providers/{provider}/open-browser", dependencies=protected)
+@router.post("/browser/open", dependencies=protected)
+async def open_provider_browser(provider: str | None = None, request: Request = None) -> dict[str, Any]:
+    from app.browser.manual import ManualBrowserManager
+    target_provider = provider
+    if not target_provider and request:
+        try:
+            body = await request.json()
+            target_provider = body.get("provider")
+        except Exception:
+            pass
+    if not target_provider:
+        raise HTTPException(status_code=400, detail="Provider name is required")
+    try:
+        return await ManualBrowserManager.open_browser(target_provider)
+    except Exception as exc:
+        logger.error("open_provider_browser_failed", provider=target_provider, error=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/providers/{provider}/close-browser", dependencies=protected)
+@router.post("/browser/close", dependencies=protected)
+async def close_provider_browser(provider: str | None = None, request: Request = None) -> dict[str, Any]:
+    from app.browser.manual import ManualBrowserManager
+    target_provider = provider
+    if not target_provider and request:
+        try:
+            body = await request.json()
+            target_provider = body.get("provider")
+        except Exception:
+            pass
+    if not target_provider:
+        raise HTTPException(status_code=400, detail="Provider name is required")
+    return await ManualBrowserManager.close_browser(target_provider)
+
+
+@router.get("/providers/{provider}/browser-status", dependencies=protected)
+async def get_provider_browser_status(provider: str) -> dict[str, Any]:
+    from app.browser.manual import ManualBrowserManager
+    return {
+        "provider": provider,
+        "is_open": ManualBrowserManager.is_open(provider),
+    }
+
+
+@router.post("/research/{job_id}/retry/{provider}", dependencies=protected)
+async def retry_job_provider(job_id: str, provider: str) -> dict[str, Any]:
+    from app.orchestrator.pipeline import retry_provider_subtask
+    await _load_job(job_id)
+    asyncio.create_task(retry_provider_subtask(job_id, provider))
+    return {
+        "status": "queued",
+        "job_id": job_id,
+        "provider": provider,
+        "message": f"Retry started for provider {provider}",
+    }
+

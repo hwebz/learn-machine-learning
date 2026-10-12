@@ -33,6 +33,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await app.state.worker_task
         except asyncio.CancelledError:
             pass
+        from app.browser.manual import ManualBrowserManager
+        await ManualBrowserManager.close_all()
         await close_browser_session()
         await close_db()
 

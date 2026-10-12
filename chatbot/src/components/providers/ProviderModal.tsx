@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { ProviderInfo } from "../../types/chat";
-import { checkBackendHealth } from "../../lib/api";
+import { checkBackendHealth, openProviderBrowser } from "../../lib/api";
 import { BrainIcon, ModelBadgeLogo } from "../icons/Icons";
 
 interface ProviderModalProps {
@@ -253,6 +253,33 @@ export function ProviderModal({
                   >
                     {p.shortDesc}
                   </p>
+
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 2 }}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openProviderBrowser(p.id);
+                      }}
+                      style={{
+                        padding: "3px 8px",
+                        borderRadius: 4,
+                        border: "1px solid #e2e8f0",
+                        backgroundColor: "#ffffff",
+                        fontSize: 10.5,
+                        fontWeight: 600,
+                        color: "var(--text-secondary)",
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                      title={`Mở trình duyệt thực tế của ${p.name} để đăng nhập hoặc kiểm tra hồ sơ`}
+                    >
+                      <span>🌐</span>
+                      <span>Mở trình duyệt đăng nhập</span>
+                    </button>
+                  </div>
                 </div>
               );
             })}

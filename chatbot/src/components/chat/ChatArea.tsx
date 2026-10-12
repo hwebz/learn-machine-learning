@@ -5,6 +5,8 @@ import { ChatSession, DepthMode, ProviderInfo, StepLog, ThinkingStep, SourceLink
 import { SUGGESTED_PROMPTS } from "../../lib/constants";
 import { extractProviderResponse } from "../../lib/providerResponse";
 import { MarkdownContent } from "./MarkdownContent";
+import { ProviderActionBanner } from "./ProviderActionBanner";
+import { detectAllProvidersNeedingAction } from "../../lib/providerAction";
 import {
   PlusIcon,
   SettingsIcon,
@@ -510,6 +512,7 @@ interface ChatAreaProps {
   activeSteps?: StepLog[];
   onSelectThinking?: (provider?: string, message?: Message) => void;
   onStopResearch?: () => void;
+  onRetryProvider?: (provider: string, jobId?: string) => void;
 }
 
 export function ChatArea({
@@ -526,6 +529,7 @@ export function ChatArea({
   activeSteps = [],
   onSelectThinking,
   onStopResearch,
+  onRetryProvider,
 }: ChatAreaProps) {
   const [inputText, setInputText] = useState("");
   const [isCopied, setIsCopied] = useState<string | null>(null);
@@ -998,6 +1002,26 @@ export function ChatArea({
                   </details>
                 )}
 
+                {/* Action Required Banner for providers needing login/manual action */}
+                {(() => {
+                  const neededActions = detectAllProvidersNeedingAction(msg);
+                  if (neededActions.length === 0) return null;
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "6px 0 10px 0" }}>
+                      {neededActions.map((act) => (
+                        <ProviderActionBanner
+                          key={act.provider}
+                          provider={act.provider}
+                          reason={act.reason}
+                          kind={act.kind}
+                          jobId={session.jobId || session.id}
+                          onContinue={(prov) => onRetryProvider?.(prov, session.jobId || session.id)}
+                        />
+                      ))}
+                    </div>
+                  );
+                })()}
+
                 {/* Main Content Body with Full Markdown & Syntax Highlighter */}
                 <div className="message-content-body">
                   <MarkdownContent content={msg.content} />
@@ -1151,6 +1175,26 @@ export function ChatArea({
                   </span>
                 </div>
               </div>
+
+              {/* Live Action Required Banner if any provider is blocked during generation */}
+              {(() => {
+                const liveNeededActions = detectAllProvidersNeedingAction(undefined, activeSteps);
+                if (liveNeededActions.length === 0) return null;
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "6px 0 8px 0" }}>
+                    {liveNeededActions.map((act) => (
+                      <ProviderActionBanner
+                        key={act.provider}
+                        provider={act.provider}
+                        reason={act.reason}
+                        kind={act.kind}
+                        jobId={session.jobId || session.id}
+                        onContinue={(prov) => onRetryProvider?.(prov, session.jobId || session.id)}
+                      />
+                    ))}
+                  </div>
+                );
+              })()}
 
               {/* Real-time Chronological Timeline Feed */}
               <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "4px 0" }}>

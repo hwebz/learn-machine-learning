@@ -305,7 +305,7 @@ class BrowserProviderAdapter(ABC):
                         await _notify(
                             "blocked",
                             f"{self.name} yêu cầu xác thực người dùng ({blocking.kind}): {blocking.detail}",
-                            {"blocking_kind": blocking.kind, "blocking_detail": blocking.detail},
+                            {"blocking_kind": blocking.kind, "blocking_detail": blocking.detail, "needs_user_action": True, "provider": self.name, "status": "needs_user_action", "error": error},
                         )
                     else:
                         # SPA editors (e.g., Mistral, Gemini) can take several seconds to hydrate
@@ -490,6 +490,11 @@ class BrowserProviderAdapter(ABC):
                                 if completion.reason == "blocked":
                                     status = "needs_user_action"
                                     error = f"Blocked during generation: {completion.blocking_detail}"
+                                    await _notify(
+                                        "blocked",
+                                        f"{self.name} bị gián đoạn do yêu cầu xác thực: {completion.blocking_detail}",
+                                        {"blocking_kind": "verification", "blocking_detail": completion.blocking_detail, "needs_user_action": True, "provider": self.name, "status": "needs_user_action", "error": error},
+                                    )
                                 elif completion.reason == "timeout":
                                     status = "partial" if completion.text.strip() else "timeout"
                                     if status == "timeout":

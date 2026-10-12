@@ -12,6 +12,8 @@ import {
 } from "../icons/Icons";
 import { extractProviderResponse } from "../../lib/providerResponse";
 import { MarkdownContent, cleanMarkdownCodeBlocks } from "../chat/MarkdownContent";
+import { ProviderActionBanner } from "../chat/ProviderActionBanner";
+import { detectProviderActionNeeded } from "../../lib/providerAction";
 
 function normalizeProvider(name: string): string {
   const s = name.trim().toLowerCase();
@@ -59,6 +61,7 @@ interface RightSidebarProps {
   depth?: DepthMode;
   onSelectProvider?: (providerId: string) => void;
   onClose?: () => void;
+  onRetryProvider?: (provider: string, jobId?: string) => void;
 }
 
 export function RightSidebar({
@@ -72,6 +75,7 @@ export function RightSidebar({
   depth,
   onSelectProvider,
   onClose,
+  onRetryProvider,
 }: RightSidebarProps) {
   const [copiedStepIdx, setCopiedStepIdx] = useState<number | null>(null);
   const [responseViewMode, setResponseViewMode] = useState<"preview" | "raw">("preview");
@@ -573,6 +577,21 @@ export function RightSidebar({
                 </span>
               )}
             </div>
+
+            {/* Provider Action Required Banner (Manual Browser Trigger) */}
+            {(() => {
+              const actionInfo = detectProviderActionNeeded(activeDetail.provider, currentMessage, stepsToInspect);
+              if (!actionInfo.needsAction) return null;
+              return (
+                <ProviderActionBanner
+                  provider={activeDetail.provider}
+                  reason={actionInfo.reason}
+                  kind={actionInfo.kind}
+                  jobId={currentMessage?.id}
+                  onContinue={(prov) => onRetryProvider?.(prov, currentMessage?.id)}
+                />
+              );
+            })()}
 
             {/* List of Detailed Thinking Steps with content and datetime */}
             {activeDetail.thinkingSteps.length > 0 ? (
