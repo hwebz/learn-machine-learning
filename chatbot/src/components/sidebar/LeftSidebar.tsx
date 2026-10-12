@@ -24,6 +24,7 @@ interface LeftSidebarProps {
   onNewChat: () => void;
   onOpenProvidersModal: () => void;
   onOpenJobsModal: () => void;
+  onOpenSettingsModal?: () => void;
   onRefreshHistory?: () => void;
   isLoadingHistory?: boolean;
   onTogglePin: (id: string) => void;
@@ -38,6 +39,7 @@ export function LeftSidebar({
   onNewChat,
   onOpenProvidersModal,
   onOpenJobsModal,
+  onOpenSettingsModal,
   onRefreshHistory,
   isLoadingHistory = false,
   onTogglePin,
@@ -265,8 +267,8 @@ export function LeftSidebar({
         <div className="user-actions">
           <button
             className="icon-btn"
-            title="AI Model Library"
-            onClick={onOpenProvidersModal}
+            title="Cài đặt hệ thống (Settings)"
+            onClick={onOpenSettingsModal || onOpenProvidersModal}
             aria-label="Settings"
           >
             <SettingsIcon size={16} />

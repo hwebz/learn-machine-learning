@@ -13,11 +13,19 @@ from fastapi.responses import StreamingResponse
 from sqlmodel import select
 
 from app.api.auth import require_api_key
-from app.api.schemas import JobUpdateRequest, ResearchAccepted, ResearchRequest, ResearchResponse
+from app.api.schemas import (
+    JobUpdateRequest,
+    ResearchAccepted,
+    ResearchRequest,
+    ResearchResponse,
+    SettingsResponse,
+    SettingsUpdateRequest,
+)
 from app.adapters.perplexity_api import PerplexityAgentAdapter
 from app.orchestrator.pipeline import _UI_ADAPTERS
+from app.browser.session import BrowserSessionManager
 from app.core.db import SessionLocal
-from app.core.config import settings
+from app.core.config import detect_available_browsers, settings, update_runtime_settings
 from app.core.models import Claim, Job, JobEvent, ProviderRun, Report, Source, Subtask, utc_now
 
 logger = structlog.get_logger(__name__)
@@ -456,3 +464,38 @@ async def cancel_research(job_id: str, request: Request) -> Response:
         ))
         await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/settings", response_model=SettingsResponse, dependencies=protected)
+async def get_settings() -> SettingsResponse:
+    browsers = detect_available_browsers()
+    all_providers = list(_UI_ADAPTERS.keys())
+    headless_map: dict[str, bool] = {}
+    for p in all_providers:
+        headless_map[p] = settings.headless_providers.get(p, settings.browser_headless)
+
+    return SettingsResponse(
+        available_browsers=browsers,
+        browser=settings.browser_channel,
+        work_mode=settings.work_mode,
+        max_concurrent_browsers=settings.max_concurrent_browsers,
+        headless_providers=headless_map,
+    )
+
+
+@router.post("/settings", response_model=SettingsResponse, dependencies=protected)
+async def set_settings(req: SettingsUpdateRequest) -> SettingsResponse:
+    update_runtime_settings(
+        browser=req.browser,
+        browser_executable=req.browser_executable,
+        work_mode=req.work_mode,
+        max_concurrent_browsers=req.max_concurrent_browsers,
+        headless_providers=req.headless_providers,
+    )
+    try:
+        await BrowserSessionManager.close_all()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("settings_close_sessions_error", error=str(exc))
+
+    return await get_settings()
+

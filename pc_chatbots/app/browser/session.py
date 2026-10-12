@@ -8,7 +8,7 @@ import structlog
 
 from pathlib import Path
 
-from app.core.config import get_provider_profile_dir, settings
+from app.core.config import get_provider_headless, get_provider_profile_dir, settings
 
 logger = structlog.get_logger(__name__)
 
@@ -30,8 +30,9 @@ class BrowserSession:
 
     _instance: ClassVar[BrowserSession | None] = None
 
-    def __init__(self, profile_dir: Path | None = None) -> None:
+    def __init__(self, profile_dir: Path | None = None, provider_name: str = "") -> None:
         self.profile_dir = profile_dir or settings.browser_profile_dir
+        self.provider_name = provider_name
         self._lock = asyncio.Lock()
         self._pw: Any = None
         self._ctx: Any = None
@@ -54,32 +55,44 @@ class BrowserSession:
             from playwright.async_api import async_playwright
 
             self.profile_dir.mkdir(parents=True, exist_ok=True)
-            use_headless = settings.browser_headless if headless is None else headless
+            use_headless = (
+                get_provider_headless(self.provider_name)
+                if headless is None
+                else headless
+            )
             logger.info(
                 "browser_session_starting",
                 profile=str(self.profile_dir),
+                provider=self.provider_name,
                 channel=settings.browser_channel,
+                executable=settings.browser_executable,
                 headless=use_headless,
             )
             pw = await async_playwright().start()
             max_attempts = 3
             ctx = None
             last_err: Exception | None = None
+
+            launch_kwargs: dict[str, Any] = {
+                "user_data_dir": str(self.profile_dir),
+                "headless": use_headless,
+                "args": [
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-background-timer-throttling",
+                    "--disable-backgrounding-occluded-windows",
+                    "--disable-renderer-backgrounding",
+                ],
+                "permissions": ["clipboard-read", "clipboard-write"],
+                "viewport": {"width": 1280, "height": 900},
+            }
+            if settings.browser_executable and Path(settings.browser_executable).is_file():
+                launch_kwargs["executable_path"] = settings.browser_executable
+            elif settings.browser_channel and settings.browser_channel != "chromium":
+                launch_kwargs["channel"] = settings.browser_channel
+
             for attempt in range(1, max_attempts + 1):
                 try:
-                    ctx = await pw.chromium.launch_persistent_context(
-                        user_data_dir=str(self.profile_dir),
-                        channel=settings.browser_channel,
-                        headless=use_headless,
-                        args=[
-                            "--disable-blink-features=AutomationControlled",
-                            "--disable-background-timer-throttling",
-                            "--disable-backgrounding-occluded-windows",
-                            "--disable-renderer-backgrounding",
-                        ],
-                        permissions=["clipboard-read", "clipboard-write"],
-                        viewport={"width": 1280, "height": 900},
-                    )
+                    ctx = await pw.chromium.launch_persistent_context(**launch_kwargs)
                     break
                 except Exception as exc:  # noqa: BLE001
                     last_err = exc
@@ -170,22 +183,24 @@ class BrowserSessionManager:
     @classmethod
     def get_session(cls, provider: str = "main") -> BrowserSession:
         """Return the appropriate BrowserSession based on WORK_MODE and provider."""
-        if settings.work_mode == "sync":
-            return BrowserSession.instance()
-
         key = provider.lower()
+        if settings.work_mode == "sync":
+            session = cls._sessions.get(key)
+            if session is None:
+                session = BrowserSession(profile_dir=settings.browser_profile_dir, provider_name=key)
+                cls._sessions[key] = session
+            return session
+
         session = cls._sessions.get(key)
         if session is None:
             profile = get_provider_profile_dir(key, mode="async")
-            session = BrowserSession(profile_dir=profile)
+            session = BrowserSession(profile_dir=profile, provider_name=key)
             cls._sessions[key] = session
         return session
 
     @classmethod
     async def close_session(cls, provider: str = "main") -> None:
         """Close and remove a specific session from the pool."""
-        if settings.work_mode == "sync":
-            return
         key = provider.lower()
         async with cls._lock:
             session = cls._sessions.pop(key, None)

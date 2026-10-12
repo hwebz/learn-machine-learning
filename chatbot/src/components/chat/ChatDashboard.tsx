@@ -9,6 +9,7 @@ import { ChatArea } from "./ChatArea";
 import { RightSidebar } from "../inspector/RightSidebar";
 import { ProviderModal } from "../providers/ProviderModal";
 import { JobsModal } from "../jobs/JobsModal";
+import { SettingsModal } from "../settings/SettingsModal";
 import {
   createResearchJob,
   cancelResearchJob,
@@ -72,6 +73,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(false);
   const [isProvidersModalOpen, setIsProvidersModalOpen] = useState<boolean>(false);
   const [isJobsModalOpen, setIsJobsModalOpen] = useState<boolean>(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
   const [inspectedMessage, setInspectedMessage] = useState<Message | undefined>(undefined);
   const [inspectedProvider, setInspectedProvider] = useState<string | undefined>(undefined);
@@ -898,6 +900,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         onNewChat={handleNewChat}
         onOpenProvidersModal={() => setIsProvidersModalOpen(true)}
         onOpenJobsModal={() => setIsJobsModalOpen(true)}
+        onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
         onRefreshHistory={() => loadHistoryFromBackend(activeSessionId)}
         isLoadingHistory={isLoadingHistory}
         onTogglePin={handleTogglePin}
@@ -955,6 +958,12 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       <JobsModal
         isOpen={isJobsModalOpen}
         onClose={() => setIsJobsModalOpen(false)}
+      />
+
+      {/* 6. Settings Modal (Browser, Headless, Work Mode, Concurrency) */}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
       />
     </div>
   );

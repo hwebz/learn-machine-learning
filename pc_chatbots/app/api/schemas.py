@@ -95,3 +95,20 @@ class JobUpdateRequest(BaseModel):
     title: str | None = None
     pinned: bool | None = None
 
+
+class SettingsResponse(BaseModel):
+    available_browsers: list[dict[str, Any]]
+    browser: str
+    work_mode: str
+    max_concurrent_browsers: int
+    headless_providers: dict[str, bool]
+
+
+class SettingsUpdateRequest(BaseModel):
+    browser: str | None = None
+    browser_executable: str | None = None
+    work_mode: str | None = None
+    max_concurrent_browsers: int | None = None
+    headless_providers: dict[str, bool] | None = None
+
+
