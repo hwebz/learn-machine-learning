@@ -220,15 +220,17 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                     ))
                     await s.commit()
 
+            prov_opts = (request.provider_options or {}).get(subtask.provider)
             await _emit_subtask_step(
                 step_name="provider_start",
                 step_message=f"Bắt đầu nghiên cứu với {subtask.provider} ({index}/{total_subtasks})...",
-                step_data={"provider": subtask.provider, "index": index, "total": total_subtasks},
+                step_data={"provider": subtask.provider, "index": index, "total": total_subtasks, "options": prov_opts},
             )
 
             adapter = create_adapter(subtask.provider)
             ask_params = inspect.signature(adapter.ask).parameters
-            ask_kwargs: dict[str, Any] = {"timeout_s": request.max_minutes * 60, "mode": request.depth}
+            selected_mode = json.dumps(prov_opts) if prov_opts else "default"
+            ask_kwargs: dict[str, Any] = {"timeout_s": request.max_minutes * 60, "mode": selected_mode}
             if "on_step" in ask_params or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in ask_params.values()):
                 ask_kwargs["on_step"] = _emit_subtask_step
 
@@ -331,6 +333,7 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                     step_data={
                         "status": "ok",
                         "provider": subtask.provider,
+                        "options": prov_opts,
                         "response_length": len(result.answer_markdown),
                         "response_preview": answer_preview,
                         "response_markdown": result.answer_markdown,
@@ -350,6 +353,7 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                     step_data={
                         "status": "partial",
                         "provider": subtask.provider,
+                        "options": prov_opts,
                         "error": result.error,
                         "response_length": len(result.answer_markdown),
                         "response_preview": answer_preview,
@@ -365,6 +369,7 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                     step_data={
                         "status": result.status,
                         "provider": subtask.provider,
+                        "options": prov_opts,
                         "error": result.error or f"Provider returned status {result.status}",
                         "artifact_paths": result.artifact_paths,
                         "elapsed_ms": elapsed_ms,
@@ -382,6 +387,7 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                     "elapsed_ms": elapsed_ms,
                     "answer_markdown": result.answer_markdown.strip() if result.answer_markdown else "",
                     "error": result.error,
+                    "options": prov_opts,
                 })
                 done_count = len(runs)
 
@@ -635,14 +641,15 @@ async def retry_provider_subtask(job_id: str, provider: str) -> None:
         ))
         await session.commit()
 
-        # Parse request depth / max_minutes
+        # Parse request options / max_minutes
         try:
             req_data = json.loads(job.config_json)
             max_minutes = int(req_data.get("max_minutes", 5))
-            depth = str(req_data.get("depth", "deep"))
+            prov_opts = (req_data.get("provider_options") or {}).get(prov)
+            mode_param = json.dumps(prov_opts) if prov_opts else "default"
         except Exception:
             max_minutes = 5
-            depth = "deep"
+            mode_param = "default"
 
     async def _emit_step(
         step_name: str,
@@ -671,7 +678,7 @@ async def retry_provider_subtask(job_id: str, provider: str) -> None:
 
     adapter = create_adapter(prov)
     ask_params = inspect.signature(adapter.ask).parameters
-    ask_kwargs: dict[str, Any] = {"timeout_s": max_minutes * 60, "mode": depth}
+    ask_kwargs: dict[str, Any] = {"timeout_s": max_minutes * 60, "mode": mode_param}
     if "on_step" in ask_params or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in ask_params.values()):
         ask_kwargs["on_step"] = _emit_step
 

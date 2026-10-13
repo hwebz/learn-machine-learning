@@ -240,15 +240,20 @@ class ChatGPTMarkdownConverter(BaseMarkdownConverter):
         if not is_full_page:
             return full_html
 
-        matches = list(re.finditer(r'<div[^>]*data-markdown-text-style="assistant-message"[^>]*>', full_html))
-        if not matches:
-            matches = list(re.finditer(r'<div[^>]*class="[^"]*MarkdownRoot[^"]*"[^>]*>', full_html))
-        if not matches:
-            return full_html
+        # Prefer full assistant turn container which includes both markdown text and generated images
+        asst_matches = list(re.finditer(r'<div[^>]*data-message-author-role="assistant"[^>]*>', full_html))
+        if asst_matches:
+            target_match = asst_matches[-1]
+        else:
+            matches = list(re.finditer(r'<div[^>]*data-markdown-text-style="assistant-message"[^>]*>', full_html))
+            if not matches:
+                matches = list(re.finditer(r'<div[^>]*class="[^"]*MarkdownRoot[^"]*"[^>]*>', full_html))
+            if not matches:
+                return full_html
 
-        # Prefer non-tertiary assistant message containers (reasoning models produce tertiary thinking pills)
-        non_tertiary = [m for m in matches if 'data-markdown-text-tone="tertiary"' not in m.group(0)]
-        target_match = non_tertiary[-1] if non_tertiary else matches[-1]
+            # Prefer non-tertiary assistant message containers (reasoning models produce tertiary thinking pills)
+            non_tertiary = [m for m in matches if 'data-markdown-text-tone="tertiary"' not in m.group(0)]
+            target_match = non_tertiary[-1] if non_tertiary else matches[-1]
 
         start_tag_end = target_match.end()
         depth = 1
@@ -268,6 +273,34 @@ class ChatGPTMarkdownConverter(BaseMarkdownConverter):
         if depth == 0:
             return full_html[start_tag_end:pos - len('</div>')]
         return full_html[start_tag_end:]
+
+    def is_skip_tag(self, tag: str, attr_map: dict[str, str], cls: str) -> bool:
+        if super().is_skip_tag(tag, attr_map, cls):
+            return True
+        if tag == "button" and not self._raw_html_stack:
+            # Preserve checkbox buttons used for checklists and task lists
+            if (
+                attr_map.get("role") == "checkbox"
+                or attr_map.get("data-d-component") == "checkbox"
+                or attr_map.get("type") == "checkbox"
+                or "Checkbox-" in cls
+            ):
+                return False
+            # Skip action buttons (copy, thumbs up, share, audio, etc.)
+            aria_lbl = (attr_map.get("aria-label") or "").lower()
+            tid = (attr_map.get("data-testid") or "").lower()
+            if (
+                "copy" in aria_lbl
+                or "copy" in tid
+                or "thumbs" in aria_lbl
+                or "good response" in aria_lbl
+                or "bad response" in aria_lbl
+                or "read aloud" in aria_lbl
+                or "regenerate" in aria_lbl
+                or "more actions" in aria_lbl
+            ):
+                return True
+        return False
 
     def preprocess_html(self, html: str) -> str:
         """Preprocess rendered Mermaid diagrams and clean components."""
@@ -345,8 +378,13 @@ class ChatGPTMarkdownConverter(BaseMarkdownConverter):
         attr_map = {k: (v or "") for k, v in attrs}
         cls = attr_map.get("class", "")
 
-        # If inside raw HTML block or starting one, delegate directly to super()
-        if self._raw_html_stack or self.is_raw_html_block_start(tag, attr_map, cls):
+        # If inside raw HTML block or icon, or starting one, delegate directly to super()
+        if (
+            self._raw_html_stack
+            or self._icon_stack
+            or self.is_raw_html_block_start(tag, attr_map, cls)
+            or self.is_icon_start(tag, attr_map, cls)
+        ):
             super().handle_starttag(tag, attrs)
             return
 
@@ -392,7 +430,7 @@ class ChatGPTMarkdownConverter(BaseMarkdownConverter):
         super().handle_starttag(tag, attrs)
 
     def handle_endtag(self, tag: str) -> None:
-        if self._raw_html_stack:
+        if self._raw_html_stack or self._icon_stack:
             super().handle_endtag(tag)
             return
         if (

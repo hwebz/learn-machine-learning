@@ -16,7 +16,27 @@ class ChatGPTUIAdapter(BrowserProviderAdapter):
     name = "chatgpt"
 
     async def _select_mode(self, page: Any, mode: str) -> None:
-        """Switch ChatGPT thinking mode (Think button pill) or Deep research."""
+        """Switch ChatGPT thinking mode (Think button pill), model, or Deep research."""
+        from app.adapters.capabilities.models import ProviderSelectionRequest
+        from app.adapters.capabilities.chatgpt import ChatGPTCapabilitiesStrategy
+
+        if mode and mode.startswith("{") and mode.endswith("}"):
+            try:
+                import json
+                parsed = json.loads(mode)
+                if isinstance(parsed, dict):
+                    config = ProviderSelectionRequest(
+                        model_id=parsed.get("model_id"),
+                        thinking_level_id=parsed.get("thinking_level_id"),
+                        mode_id=parsed.get("mode_id"),
+                        tool_id=parsed.get("tool_id"),
+                    )
+                    strategy = ChatGPTCapabilitiesStrategy()
+                    await strategy.apply_selection(page, config)
+                    return
+            except Exception:
+                pass
+
         is_deep = mode in {"deep", "deep_research", "research", "pro"}
         cfg_modes = self._cfg.get("mode_selectors") or {}
 
@@ -56,4 +76,92 @@ class ChatGPTUIAdapter(BrowserProviderAdapter):
                 logger.info("chatgpt_mode_selected", mode=mode)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("chatgpt_mode_click_failed", error=str(exc))
+
+    async def _extract_sources(self, page: Any) -> list[Any]:
+        """Extract sources for ChatGPT via 'More actions' -> 'View sources' -> 'Sources' modal,
+
+        with automatic fallback to base locator and inline citation extraction.
+        """
+        from app.adapters.browser_base import Source, normalize_sources
+
+        pairs: list[tuple[str, str | None]] = []
+
+        try:
+            # 1. Look for 'More actions' button on the assistant response turn
+            more_btn = page.locator(
+                "article [data-message-author-role='assistant'] button[aria-label*='More action' i], "
+                "[data-message-author-role='assistant'] button[aria-label*='More action' i], "
+                "button[aria-label='More actions'], "
+                "button[aria-label*='Thao tác khác' i]"
+            ).last
+
+            if await more_btn.count() > 0 and await more_btn.is_visible(timeout=1000):
+                await more_btn.click(timeout=1500)
+                await page.wait_for_timeout(300)
+
+                # 2. Look for 'View sources' menu item
+                view_sources_item = page.locator(
+                    "[role='menuitem']:has-text('View sources'), "
+                    "[role='menuitem']:has-text('Xem nguồn'), "
+                    "button:has-text('View sources'), "
+                    "button:has-text('Xem nguồn'), "
+                    ":has-text('View sources')"
+                ).first
+
+                if await view_sources_item.count() > 0 and await view_sources_item.is_visible(timeout=1500):
+                    await view_sources_item.click(timeout=1500)
+                    await page.wait_for_timeout(400)
+
+                    # 3. Look for modal with aria-label="Sources" (or aria-label="Nguồn" / role="dialog")
+                    modal = page.locator(
+                        "[aria-label='Sources'], "
+                        "[aria-label='Nguồn'], "
+                        "[role='dialog'][aria-label*='Sources' i], "
+                        "[role='dialog'][aria-label*='Nguồn' i], "
+                        "[role='dialog']:has-text('Sources')"
+                    ).first
+
+                    if await modal.count() > 0 and await modal.is_visible(timeout=2000):
+                        # Extract all links inside the sources modal
+                        links = modal.locator("a[href^='http']")
+                        link_count = await links.count()
+                        for i in range(link_count):
+                            link = links.nth(i)
+                            href = await link.get_attribute("href")
+                            if href:
+                                title = ""
+                                try:
+                                    title = (await link.inner_text(timeout=500)).strip()
+                                except Exception:
+                                    pass
+                                pairs.append((href, title or None))
+
+                        # Close the modal
+                        try:
+                            close_btn = modal.locator(
+                                "button[aria-label*='Close' i], "
+                                "button[aria-label*='Đóng' i], "
+                                "button[aria-label*='dismiss' i]"
+                            ).first
+                            if await close_btn.count() > 0 and await close_btn.is_visible(timeout=500):
+                                await close_btn.click(timeout=1000)
+                            else:
+                                await page.keyboard.press("Escape")
+                            await page.wait_for_timeout(200)
+                        except Exception:
+                            pass
+                else:
+                    await page.keyboard.press("Escape")
+        except Exception as exc:
+            logger.debug("chatgpt_modal_sources_extract_failed", error=str(exc))
+
+        # 4. Fallback and merge with base extraction
+        try:
+            base_sources = await super()._extract_sources(page)
+            for s in base_sources:
+                pairs.append((str(s.url), s.title))
+        except Exception:
+            pass
+
+        return normalize_sources(pairs)
 

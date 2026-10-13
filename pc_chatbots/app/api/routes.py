@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from openai import AsyncOpenAI
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlmodel import select
 
@@ -20,7 +20,9 @@ from app.api.schemas import (
     ResearchResponse,
     SettingsResponse,
     SettingsUpdateRequest,
+    VoiceTranscriptionResponse,
 )
+from app.adapters.capabilities import CapabilitiesRegistry, VoiceTranscriberService
 from app.adapters.perplexity_api import PerplexityAgentAdapter
 from app.orchestrator.pipeline import _UI_ADAPTERS
 from app.browser.session import BrowserSessionManager
@@ -64,7 +66,7 @@ def _job_response(
         job_id=job.id,
         query=job.query,
         title=getattr(job, "title", None) or job.query,
-        depth=config.get("depth", "deep"),
+        depth=config.get("depth"),
         providers=config.get("providers", []),
         status=job.status,
         progress={"subtasks_total": job.subtasks_total, "subtasks_done": job.subtasks_done},
@@ -74,6 +76,7 @@ def _job_response(
         disagreements=disagreements,
         provider_runs=runs,
         steps=steps or [],
+        provider_options=config.get("provider_options", {}),
         error=job.error,
         created_at=job.created_at,
         finished_at=job.finished_at,
@@ -293,8 +296,9 @@ async def list_research(limit: int = 50) -> list[dict[str, Any]]:
                 "claims": claims,
                 "provider_runs": runs,
                 "error": j.error,
-                "depth": config.get("depth", "deep"),
+                "depth": config.get("depth"),
                 "providers": config.get("providers", []),
+                "provider_options": config.get("provider_options", {}),
                 "created_at": j.created_at.isoformat() if j.created_at else None,
                 "finished_at": j.finished_at.isoformat() if j.finished_at else None,
             })
@@ -556,4 +560,35 @@ async def retry_job_provider(job_id: str, provider: str) -> dict[str, Any]:
         "provider": provider,
         "message": f"Retry started for provider {provider}",
     }
+
+
+@router.get("/providers/{provider}/capabilities", dependencies=protected)
+async def get_provider_capabilities(provider: str) -> dict[str, Any]:
+    caps = await CapabilitiesRegistry.instance().get_capabilities(provider, force_sync=False)
+    return caps.model_dump(mode="json")
+
+
+@router.post("/providers/{provider}/capabilities/sync", dependencies=protected)
+async def sync_provider_capabilities(provider: str) -> dict[str, Any]:
+    caps = await CapabilitiesRegistry.instance().get_capabilities(provider, force_sync=True)
+    return caps.model_dump(mode="json")
+
+
+@router.post("/providers/capabilities/sync-all", dependencies=protected)
+async def sync_all_provider_capabilities() -> dict[str, Any]:
+    all_caps = await CapabilitiesRegistry.instance().sync_all()
+    return {p: c.model_dump(mode="json") for p, c in all_caps.items()}
+
+
+@router.post("/voice/transcribe", response_model=VoiceTranscriptionResponse, dependencies=protected)
+async def transcribe_voice_audio(request: Request) -> VoiceTranscriptionResponse:
+    try:
+        content = await request.body()
+        content_type = request.headers.get("content-type", "audio/webm").split(";")[0].strip()
+        filename = request.headers.get("x-audio-filename", "recording.webm")
+        text = await VoiceTranscriberService().transcribe(content, filename=filename, content_type=content_type)
+        return VoiceTranscriptionResponse(text=text, success=True)
+    except Exception as exc:
+        logger.warning("transcribe_endpoint_failed", error=str(exc))
+        return VoiceTranscriptionResponse(text="", success=False, error=str(exc))
 

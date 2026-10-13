@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { ProviderInfo } from "../../types/chat";
 import { checkBackendHealth, openProviderBrowser } from "../../lib/api";
-import { BrainIcon, ModelBadgeLogo } from "../icons/Icons";
+import { BrainIcon, ModelBadgeLogo, RefreshIcon } from "../icons/Icons";
+import { ProviderLiveCapabilities, ProviderSelectionConfig } from "../../types/capabilities";
 
 interface ProviderModalProps {
   isOpen: boolean;
@@ -12,6 +13,14 @@ interface ProviderModalProps {
   selectedProviderIds: string[];
   onToggleProvider: (id: string) => void;
   onSelectMultipleProviders: (ids: string[]) => void;
+  capabilitiesMap?: Record<string, ProviderLiveCapabilities>;
+  selectionsMap?: Record<string, ProviderSelectionConfig>;
+  onUpdateSelection?: (providerId: string, updates: Partial<ProviderSelectionConfig>) => void;
+  onSyncProvider?: (providerId: string) => Promise<any>;
+  loadingProvider?: string | null;
+  onSyncAll?: () => void;
+  isSyncingAll?: boolean;
+  onLoadCapabilities?: (providerId: string) => void;
 }
 
 export function ProviderModal({
@@ -21,6 +30,14 @@ export function ProviderModal({
   selectedProviderIds,
   onToggleProvider,
   onSelectMultipleProviders,
+  capabilitiesMap = {},
+  selectionsMap = {},
+  onUpdateSelection,
+  onSyncProvider,
+  loadingProvider,
+  onSyncAll,
+  isSyncingAll,
+  onLoadCapabilities,
 }: ProviderModalProps) {
   const [backendStatus, setBackendStatus] = useState<{ online: boolean; data?: any }>({
     online: false,
@@ -28,8 +45,11 @@ export function ProviderModal({
   const [loadingHealth, setLoadingHealth] = useState(false);
   const [tempSelected, setTempSelected] = useState<string[]>(selectedProviderIds);
 
+  const prevIsOpenRef = useRef(false);
+
   useEffect(() => {
-    if (isOpen) {
+    // Only synchronize tempSelected and check health when modal transitions from closed to open
+    if (isOpen && !prevIsOpenRef.current) {
       setTempSelected(selectedProviderIds);
       setLoadingHealth(true);
       checkBackendHealth().then((res) => {
@@ -37,7 +57,19 @@ export function ProviderModal({
         setLoadingHealth(false);
       });
     }
+    prevIsOpenRef.current = isOpen;
   }, [isOpen, selectedProviderIds]);
+
+  // Load capabilities for all providers if not yet cached
+  useEffect(() => {
+    if (isOpen && onLoadCapabilities) {
+      providers.forEach((p) => {
+        if (!capabilitiesMap[p.id]) {
+          onLoadCapabilities(p.id);
+        }
+      });
+    }
+  }, [isOpen, onLoadCapabilities, providers, capabilitiesMap]);
 
   if (!isOpen) return null;
 
@@ -70,14 +102,18 @@ export function ProviderModal({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-dialog" style={{ maxWidth: 840 }} onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal-dialog"
+        style={{ maxWidth: 960, maxHeight: "90vh" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-header">
           <div>
             <h2 style={{ fontSize: 17, fontWeight: 700, color: "var(--text-primary)" }}>
               AI Model & Provider Library (Multi-Model Matrix)
             </h2>
             <p style={{ fontSize: 12.5, color: "var(--text-muted)", marginTop: 2 }}>
-              Chọn đồng thời một hoặc nhiều providers để nghiên cứu và đối chiếu câu trả lời
+              Chọn đồng thời các providers, tùy chỉnh mô hình, mức suy luận, chế độ và đồng bộ trực tiếp từ DOM trình duyệt
             </p>
           </div>
           <button className="icon-btn" onClick={onClose} aria-label="Close modal">
@@ -151,99 +187,278 @@ export function ProviderModal({
               >
                 <span>Chọn tất cả ({providers.length})</span>
               </button>
+              {onSyncAll && (
+                <button
+                  type="button"
+                  className="btn-composer-pill"
+                  onClick={onSyncAll}
+                  disabled={isSyncingAll}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: 12,
+                    borderColor: "#bfdbfe",
+                    color: "var(--brand-blue)",
+                    backgroundColor: isSyncingAll ? "#eff6ff" : "transparent",
+                    cursor: isSyncingAll ? "not-allowed" : "pointer",
+                  }}
+                  title="Quét lại DOM của tất cả các chatbot để cập nhật mô hình, suy luận và chế độ"
+                >
+                  <RefreshIcon
+                    size={12}
+                    color="var(--brand-blue)"
+                    style={isSyncingAll ? { animation: "spin 1s linear infinite" } : undefined}
+                  />
+                  <span>{isSyncingAll ? "Đang quét tất cả DOM..." : "🔄 Đồng bộ tất cả DOM"}</span>
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Providers Grid with Checkboxes */}
+          {/* Providers Grid with Combined Options */}
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 12,
-              maxHeight: 380,
+              gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))",
+              gap: 14,
+              maxHeight: "calc(88vh - 200px)",
+              minHeight: 380,
               overflowY: "auto",
-              paddingRight: 4,
+              paddingRight: 6,
             }}
           >
             {providers.map((p) => {
               const isSelected = tempSelected.includes(p.id);
+              const caps = capabilitiesMap[p.id];
+              const sel = selectionsMap[p.id] || {};
+              const isSyncingThis = loadingProvider === p.id;
+
+              const isFreeAccount = p.id === "chatgpt" || caps?.account_type === "free";
+
+              // 1. Models: For free account, lock to Auto
+              const models = isFreeAccount
+                ? [
+                    {
+                      id: "auto",
+                      label: "Auto (Tự động)",
+                      description: "Tài khoản Free: Mặc định Auto (Tự động)",
+                      selected: true,
+                      badge: "Free",
+                    },
+                  ]
+                : caps?.available_models && caps.available_models.length > 0
+                ? caps.available_models
+                : [
+                    {
+                      id: "auto",
+                      label: "Auto (Tự động)",
+                      description: "Tự động chọn mô hình phù hợp",
+                      selected: true,
+                    },
+                  ];
+
+              // 2. Reasoning: For free account, lock to Auto
+              const thinkingLevels = isFreeAccount
+                ? [
+                    {
+                      id: "auto",
+                      label: "Auto (Tự động)",
+                      description: "Tài khoản Free: Mặc định Auto",
+                      selected: true,
+                    },
+                  ]
+                : caps?.thinking_levels || [];
+
+              // 3. Modes: For ChatGPT, standard or thinking (default is standard)
+              const modes =
+                p.id === "chatgpt"
+                  ? [
+                      {
+                        id: "standard",
+                        label: "Tiêu chuẩn (Standard)",
+                        description: "Chế độ trò chuyện tiêu chuẩn nhanh chóng",
+                        selected: true,
+                      },
+                      {
+                        id: "thinking",
+                        label: "Suy luận (Thinking)",
+                        description: "Kích hoạt nút Think để phân tích và trả lời chi tiết",
+                        selected: false,
+                        badge: "Think",
+                      },
+                    ]
+                  : caps?.modes || [];
+
+              // 4. Tools: For ChatGPT, web_search, create_image, deep_research
+              const tools =
+                p.id === "chatgpt"
+                  ? [
+                      {
+                        id: "none",
+                        label: "Không sử dụng (Mặc định)",
+                        description: "Trò chuyện tiêu chuẩn không kèm công cụ bổ trợ",
+                        selected: true,
+                      },
+                      {
+                        id: "web_search",
+                        label: "Web search (Tìm kiếm web)",
+                        description: "Duyệt web trực tiếp cập nhật tin tức thời gian thực",
+                        badge: "Search",
+                      },
+                      {
+                        id: "create_image",
+                        label: "Create image (Tạo ảnh)",
+                        description: "Trực quan hóa và tạo ảnh từ mô tả",
+                        badge: "DALL-E",
+                      },
+                      {
+                        id: "deep_research",
+                        label: "Deep research (Nghiên cứu sâu)",
+                        description: "Nghiên cứu chuyên sâu tự động đa nguồn với báo cáo chi tiết",
+                        badge: "Research",
+                      },
+                    ]
+                  : caps?.tools || [];
+
+              const dataTypes = caps?.supported_data_types;
+              const voice = caps?.voice_chat;
+
+              const isChatGPT = p.id === "chatgpt";
+              const currentToolId = isChatGPT ? "none" : (sel.tool_id || caps?.selected_tool_id || "none");
+              const isThinkingDisabled = currentToolId === "web_search" || currentToolId === "create_image";
+
+              const currentModelId = isFreeAccount
+                ? "auto"
+                : sel.model_id || caps?.selected_model_id || models[0]?.id;
+              const currentModel = models.find((m) => m.id === currentModelId) || models[0];
+
+              const currentThinkingId = isFreeAccount
+                ? "auto"
+                : sel.thinking_level_id || caps?.selected_thinking_level_id || thinkingLevels[0]?.id;
+              const currentThinking =
+                thinkingLevels.find((t) => t.id === currentThinkingId) || thinkingLevels[0];
+
+              const rawModeId = sel.mode_id || caps?.selected_mode_id || modes[0]?.id || "standard";
+              const currentModeId = isThinkingDisabled ? "standard" : rawModeId;
+              const currentMode = modes.find((m) => m.id === currentModeId) || modes[0];
+
+              const currentTool = tools.find((t) => t.id === currentToolId) || tools[0];
 
               return (
                 <div
                   key={p.id}
                   onClick={() => handleToggle(p.id)}
                   style={{
-                    padding: "12px 14px",
+                    padding: "14px 16px",
                     borderRadius: "var(--radius-lg)",
                     border: `1.5px solid ${isSelected ? "var(--brand-blue)" : "var(--border-default)"}`,
                     backgroundColor: isSelected ? "var(--brand-blue-light)" : "#ffffff",
                     cursor: "pointer",
                     display: "flex",
                     flexDirection: "column",
-                    gap: 8,
+                    gap: 10,
                     transition: "all var(--transition-fast)",
-                    boxShadow: isSelected ? "0 2px 8px rgba(37, 99, 235, 0.12)" : "var(--shadow-sm)",
+                    boxShadow: isSelected ? "0 4px 12px rgba(37, 99, 235, 0.12)" : "var(--shadow-sm)",
                     position: "relative",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  {/* Top Header Row: Checkbox, Logo, Name, Badges */}
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                     {/* Checkbox indicator */}
                     <div
                       style={{
-                        width: 18,
-                        height: 18,
-                        borderRadius: 4,
+                        width: 20,
+                        height: 20,
+                        borderRadius: 5,
                         border: `2px solid ${isSelected ? "var(--brand-blue)" : "#cbd5e1"}`,
                         backgroundColor: isSelected ? "var(--brand-blue)" : "#ffffff",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         color: "#ffffff",
-                        fontSize: 11,
-                        fontWeight: 700,
+                        fontSize: 12,
+                        fontWeight: 800,
                         flexShrink: 0,
+                        marginTop: 2,
                       }}
                     >
                       {isSelected ? "✓" : ""}
                     </div>
 
-                    <ModelBadgeLogo type={p.iconType} size={30} />
+                    <ModelBadgeLogo type={p.iconType} size={32} />
+
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>
-                          {p.name}
-                        </span>
-                        {p.supportsDeepMode && (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text-primary)" }}>
+                            {p.name}
+                          </span>
+                          {p.supportsDeepMode && (
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 3,
+                                fontSize: 9.5,
+                                fontWeight: 700,
+                                color: "var(--brand-blue)",
+                                backgroundColor: "#ffffff",
+                                padding: "2px 6px",
+                                borderRadius: 4,
+                                border: "1px solid #bfdbfe",
+                              }}
+                            >
+                              <BrainIcon size={10} color="var(--brand-blue)" />
+                              {p.deepModeLabel?.split(" ")[0] || "Deep"}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* DOM Status Indicator */}
+                        {caps?.is_live_dom ? (
                           <span
                             style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 3,
                               fontSize: 9.5,
                               fontWeight: 700,
-                              color: "var(--brand-blue)",
-                              backgroundColor: "#ffffff",
-                              padding: "2px 5px",
+                              color: "#15803d",
+                              backgroundColor: "#dcfce7",
+                              padding: "2px 6px",
                               borderRadius: 4,
-                              border: "1px solid #bfdbfe",
+                              border: "1px solid #bbf7d0",
                             }}
+                            title="Đã đồng bộ trực tiếp từ DOM của trình duyệt"
                           >
-                            <BrainIcon size={10} color="var(--brand-blue)" />
-                            {p.deepModeLabel?.split(" ")[0] || "Deep"}
+                            LIVE DOM
+                          </span>
+                        ) : (
+                          <span
+                            style={{
+                              fontSize: 9.5,
+                              fontWeight: 600,
+                              color: "#64748b",
+                              backgroundColor: "#f1f5f9",
+                              padding: "2px 6px",
+                              borderRadius: 4,
+                              border: "1px solid #e2e8f0",
+                            }}
+                            title="Tùy chọn mặc định — Bấm 'Đồng bộ DOM' để quét trực tiếp"
+                          >
+                            CACHED
                           </span>
                         )}
                       </div>
-                      <span style={{ fontSize: 11.5, color: "var(--text-muted)", display: "block" }}>
-                        {p.modelName}
+
+                      <span style={{ fontSize: 11.5, color: "var(--text-muted)", display: "block", marginTop: 1 }}>
+                        {isFreeAccount ? "Auto Model (Free Tier)" : p.modelName}
                       </span>
                     </div>
                   </div>
 
+                  {/* Short Description */}
                   <p
                     style={{
                       fontSize: 11.5,
                       color: "var(--text-secondary)",
-                      lineHeight: 1.35,
+                      lineHeight: 1.4,
                       margin: 0,
                       display: "-webkit-box",
                       WebkitLineClamp: 2,
@@ -254,7 +469,403 @@ export function ProviderModal({
                     {p.shortDesc}
                   </p>
 
-                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 2 }}>
+                  {/* Provider Options Box (Model, Thinking, Mode, Tools, Data Types) */}
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: 8,
+                      backgroundColor: isSelected ? "rgba(255, 255, 255, 0.92)" : "#f8fafc",
+                      border: `1px solid ${isSelected ? "#bfdbfe" : "#e2e8f0"}`,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                    }}
+                  >
+                    {/* Grid of Options: Row 1 = Model & Reasoning, Row 2 = Mode & Tools */}
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: tools.length > 0 ? "1fr 1fr" : (thinkingLevels.length > 0 && modes.length > 0 ? "1fr 1fr" : "1fr"),
+                        gap: 10,
+                      }}
+                    >
+                      {/* 1. Model Selector */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <label
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: "var(--text-secondary)",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.4px",
+                            }}
+                          >
+                            Mô hình AI (Model)
+                          </label>
+                          <span
+                            style={{
+                              fontSize: 9.5,
+                              padding: "1px 5px",
+                              borderRadius: 3,
+                              backgroundColor: isFreeAccount ? "#f1f5f9" : "var(--brand-blue)",
+                              color: isFreeAccount ? "#64748b" : "#ffffff",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {isFreeAccount ? "Free (Auto)" : (currentModel?.badge || "Active")}
+                          </span>
+                        </div>
+                        <select
+                          disabled={isFreeAccount}
+                          value={currentModelId || "auto"}
+                          onChange={(e) => onUpdateSelection?.(p.id, { model_id: e.target.value })}
+                          style={{
+                            width: "100%",
+                            padding: "6px 8px",
+                            borderRadius: 6,
+                            border: "1px solid var(--border-default, #cbd5e1)",
+                            backgroundColor: isFreeAccount ? "#f8fafc" : "#ffffff",
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: isFreeAccount ? "#64748b" : "var(--text-primary, #0f172a)",
+                            cursor: isFreeAccount ? "not-allowed" : "pointer",
+                            outline: "none",
+                          }}
+                          title={isFreeAccount ? "Tài khoản Free: Mặc định Auto (Tự động)" : "Chọn mô hình AI"}
+                        >
+                          {models.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.label}
+                            </option>
+                          ))}
+                        </select>
+                        <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
+                          {isFreeAccount ? "Tài khoản Free: Mặc định Auto (Tự động)" : (currentModel?.description || "")}
+                        </span>
+                      </div>
+
+                      {/* 2. Reasoning Picker */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <label
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: "var(--text-secondary)",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 4,
+                            }}
+                          >
+                            <BrainIcon size={12} color="var(--brand-blue)" />
+                            <span>Mức suy luận (Reasoning)</span>
+                          </label>
+                          {isFreeAccount && (
+                            <span
+                              style={{
+                                fontSize: 9.5,
+                                padding: "1px 5px",
+                                borderRadius: 3,
+                                backgroundColor: "#f1f5f9",
+                                color: "#64748b",
+                                fontWeight: 700,
+                              }}
+                            >
+                              Auto
+                            </span>
+                          )}
+                        </div>
+                        <select
+                          disabled={isFreeAccount || thinkingLevels.length <= 1}
+                          value={currentThinkingId || "auto"}
+                          onChange={(e) => onUpdateSelection?.(p.id, { thinking_level_id: e.target.value })}
+                          style={{
+                            width: "100%",
+                            padding: "6px 8px",
+                            borderRadius: 6,
+                            border: "1px solid var(--border-default, #cbd5e1)",
+                            backgroundColor: (isFreeAccount || thinkingLevels.length <= 1) ? "#f8fafc" : "#ffffff",
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: (isFreeAccount || thinkingLevels.length <= 1) ? "#64748b" : "var(--text-primary, #0f172a)",
+                            cursor: (isFreeAccount || thinkingLevels.length <= 1) ? "not-allowed" : "pointer",
+                            outline: "none",
+                          }}
+                          title={isFreeAccount ? "Tài khoản Free: Mặc định Auto (Tự động)" : "Chọn mức độ suy luận"}
+                        >
+                          {thinkingLevels.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.label}
+                            </option>
+                          ))}
+                        </select>
+                        <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
+                          {isFreeAccount ? "Tài khoản Free: Mặc định Auto (Tự động)" : (currentThinking?.description || "")}
+                        </span>
+                      </div>
+
+                      {/* 3. Mode Picker */}
+                      {modes.length > 0 && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <label
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: "var(--text-secondary)",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.4px",
+                              }}
+                            >
+                              Chế độ (Mode)
+                            </label>
+                            {currentMode?.badge && (
+                              <span
+                                style={{
+                                  fontSize: 9.5,
+                                  padding: "1px 5px",
+                                  borderRadius: 3,
+                                  backgroundColor: "#eff6ff",
+                                  color: "var(--brand-blue)",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {currentMode.badge}
+                              </span>
+                            )}
+                          </div>
+                          <select
+                            value={currentModeId}
+                            onChange={(e) => {
+                              const nextMode = e.target.value;
+                              if (isThinkingDisabled && nextMode === "thinking") return;
+                              onUpdateSelection?.(p.id, { mode_id: nextMode });
+                            }}
+                            style={{
+                              width: "100%",
+                              padding: "6px 8px",
+                              borderRadius: 6,
+                              border: "1px solid var(--border-default, #cbd5e1)",
+                              backgroundColor: "#ffffff",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: "var(--text-primary, #0f172a)",
+                              cursor: "pointer",
+                              outline: "none",
+                            }}
+                          >
+                            {modes.map((m) => (
+                              <option
+                                key={m.id}
+                                value={m.id}
+                                disabled={m.id === "thinking" && isThinkingDisabled}
+                              >
+                                {m.label} {m.id === "thinking" && isThinkingDisabled ? "(Không hỗ trợ với công cụ này)" : ""}
+                              </option>
+                            ))}
+                          </select>
+                          <span style={{ fontSize: 10.5, color: isThinkingDisabled ? "#d97706" : "var(--text-muted)", lineHeight: 1.25 }}>
+                            {isThinkingDisabled
+                              ? "* Suy luận chỉ áp dụng khi dùng Deep Research hoặc chat thông thường"
+                              : (currentMode?.description || "Mặc định Tiêu chuẩn (Standard)")}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* 4. Tools Picker */}
+                      {tools.length > 0 && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <label
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: "var(--text-secondary)",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.4px",
+                              }}
+                            >
+                              Công cụ hỗ trợ (Tools)
+                            </label>
+                            {isChatGPT ? (
+                              <span
+                                style={{
+                                  fontSize: 9.5,
+                                  padding: "1px 5px",
+                                  borderRadius: 3,
+                                  backgroundColor: "#f1f5f9",
+                                  color: "#64748b",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                Tắt
+                              </span>
+                            ) : currentTool?.badge && (
+                              <span
+                                style={{
+                                  fontSize: 9.5,
+                                  padding: "1px 5px",
+                                  borderRadius: 3,
+                                  backgroundColor: "#fef3c7",
+                                  color: "#92400e",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {currentTool.badge}
+                              </span>
+                            )}
+                          </div>
+                          <select
+                            disabled={isChatGPT}
+                            value={currentToolId}
+                            onChange={(e) => {
+                              if (isChatGPT) return;
+                              const nextTool = e.target.value;
+                              if (nextTool === "web_search" || nextTool === "create_image") {
+                                onUpdateSelection?.(p.id, { tool_id: nextTool, mode_id: "standard" });
+                              } else {
+                                onUpdateSelection?.(p.id, { tool_id: nextTool });
+                              }
+                            }}
+                            style={{
+                              width: "100%",
+                              padding: "6px 8px",
+                              borderRadius: 6,
+                              border: "1px solid var(--border-default, #cbd5e1)",
+                              backgroundColor: isChatGPT ? "#f8fafc" : "#ffffff",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: isChatGPT ? "#64748b" : "var(--text-primary, #0f172a)",
+                              cursor: isChatGPT ? "not-allowed" : "pointer",
+                              outline: "none",
+                            }}
+                            title={isChatGPT ? "ChatGPT: Luôn chọn 'Không sử dụng (Mặc định)'" : "Chọn công cụ từ menu Plus của ChatGPT"}
+                          >
+                            {tools.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.label}
+                              </option>
+                            ))}
+                          </select>
+                          <span style={{ fontSize: 10.5, color: isChatGPT ? "#64748b" : "var(--text-muted)", lineHeight: 1.25 }}>
+                            {isChatGPT ? "ChatGPT: Luôn chọn 'Không sử dụng (Mặc định)'" : (currentTool?.description || "Chọn công cụ từ menu Plus của ChatGPT")}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 3. Supported Data Types & Sync Time */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: 6,
+                        paddingTop: 6,
+                        borderTop: "1px dashed #e2e8f0",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--text-muted)" }}>
+                          Hỗ trợ:
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            padding: "2px 5px",
+                            borderRadius: 4,
+                            backgroundColor: dataTypes?.image ? "#f0fdf4" : "#f1f5f9",
+                            color: dataTypes?.image ? "#15803d" : "#94a3b8",
+                            fontWeight: 600,
+                            border: `1px solid ${dataTypes?.image ? "#bbf7d0" : "#e2e8f0"}`,
+                          }}
+                          title={dataTypes?.image ? "Hỗ trợ tải ảnh phân tích" : "Không hỗ trợ tải ảnh"}
+                        >
+                          📷 Ảnh
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            padding: "2px 5px",
+                            borderRadius: 4,
+                            backgroundColor: dataTypes?.file ? "#f0fdf4" : "#f1f5f9",
+                            color: dataTypes?.file ? "#15803d" : "#94a3b8",
+                            fontWeight: 600,
+                            border: `1px solid ${dataTypes?.file ? "#bbf7d0" : "#e2e8f0"}`,
+                          }}
+                          title={dataTypes?.file ? `Hỗ trợ tệp đính kèm (${dataTypes?.max_file_size_mb || 50}MB)` : "Không hỗ trợ tệp"}
+                        >
+                          📄 Tệp
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            padding: "2px 5px",
+                            borderRadius: 4,
+                            backgroundColor: voice?.supported ? "#eff6ff" : "#f1f5f9",
+                            color: voice?.supported ? "#2563eb" : "#94a3b8",
+                            fontWeight: 600,
+                            border: `1px solid ${voice?.supported ? "#bfdbfe" : "#e2e8f0"}`,
+                          }}
+                          title={voice?.supported ? `Hỗ trợ giọng nói (${voice?.mode})` : "Không hỗ trợ giọng nói"}
+                        >
+                          🎙️ Giọng nói
+                        </span>
+                      </div>
+
+                      <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                        {caps?.synced_at
+                          ? `Cập nhật: ${new Date(caps.synced_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                          : "Mặc định"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card Actions: Sync DOM + Open Browser */}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginTop: 2,
+                      gap: 8,
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSyncProvider?.(p.id);
+                      }}
+                      disabled={isSyncingThis || isSyncingAll}
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: 5,
+                        border: "1px solid #bfdbfe",
+                        backgroundColor: isSyncingThis ? "#eff6ff" : "#ffffff",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: "var(--brand-blue)",
+                        cursor: isSyncingThis || isSyncingAll ? "not-allowed" : "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 5,
+                        transition: "all 0.15s ease",
+                      }}
+                      title={`Quét lại DOM của ${p.name} để cập nhật mô hình, suy luận và chế độ`}
+                    >
+                      <RefreshIcon
+                        size={12}
+                        color="var(--brand-blue)"
+                        style={isSyncingThis ? { animation: "spin 1s linear infinite" } : undefined}
+                      />
+                      <span>{isSyncingThis ? "Đang quét DOM..." : "🔄 Đồng bộ DOM"}</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={(e) => {
@@ -262,11 +873,11 @@ export function ProviderModal({
                         openProviderBrowser(p.id);
                       }}
                       style={{
-                        padding: "3px 8px",
-                        borderRadius: 4,
+                        padding: "4px 10px",
+                        borderRadius: 5,
                         border: "1px solid #e2e8f0",
                         backgroundColor: "#ffffff",
-                        fontSize: 10.5,
+                        fontSize: 11,
                         fontWeight: 600,
                         color: "var(--text-secondary)",
                         cursor: "pointer",
@@ -277,7 +888,7 @@ export function ProviderModal({
                       title={`Mở trình duyệt thực tế của ${p.name} để đăng nhập hoặc kiểm tra hồ sơ`}
                     >
                       <span>🌐</span>
-                      <span>Mở trình duyệt đăng nhập</span>
+                      <span>Mở trình duyệt</span>
                     </button>
                   </div>
                 </div>

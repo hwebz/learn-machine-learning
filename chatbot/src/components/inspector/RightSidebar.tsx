@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Message, ProviderInfo, StepLog, ThinkingStep, SourceLink, DepthMode } from "../../types/chat";
+import { Message, ProviderInfo, StepLog, ThinkingStep, SourceLink } from "../../types/chat";
 import {
   ModelBadgeLogo,
   CheckCircleIcon,
@@ -14,6 +14,7 @@ import { extractProviderResponse } from "../../lib/providerResponse";
 import { MarkdownContent, cleanMarkdownCodeBlocks } from "../chat/MarkdownContent";
 import { ProviderActionBanner } from "../chat/ProviderActionBanner";
 import { detectProviderActionNeeded } from "../../lib/providerAction";
+import { ProviderLiveCapabilities, ProviderSelectionConfig } from "../../types/capabilities";
 
 function normalizeProvider(name: string): string {
   const s = name.trim().toLowerCase();
@@ -39,10 +40,175 @@ function extractProvider(st: StepLog): string {
   return "";
 }
 
+export interface FormattedProviderOptions {
+  model: string;
+  reasoning: string;
+  mode: string;
+  tool: string;
+  raw: {
+    model_id?: string;
+    thinking_level_id?: string;
+    mode_id?: string;
+    tool_id?: string;
+  };
+}
+
+export function resolveProviderOptions(
+  provider: string,
+  message?: Message,
+  steps?: StepLog[],
+  selectionsMap?: Record<string, ProviderSelectionConfig>,
+  capabilitiesMap?: Record<string, ProviderLiveCapabilities>
+): FormattedProviderOptions {
+  const norm = normalizeProvider(provider);
+  const activeCaps = capabilitiesMap?.[norm];
+  const isFreeAccount = norm === "chatgpt" || activeCaps?.account_type === "free";
+
+  // 1. Raw options from available sources:
+  // User's explicitly chosen configuration in selectionsMap takes highest priority for real user choice,
+  // followed by message.provider_options, provider_runs, and steps.
+  const userSelection = selectionsMap?.[norm];
+  const msgOpts = message?.provider_options?.[norm] || message?.provider_options?.[provider];
+
+  let runOpts: any = null;
+  if (message?.provider_runs) {
+    if (Array.isArray(message.provider_runs)) {
+      const match = message.provider_runs.find((r: any) => normalizeProvider(r?.provider || "") === norm);
+      runOpts = match?.options;
+    } else if (typeof message.provider_runs === "object") {
+      runOpts = message.provider_runs[norm]?.options || message.provider_runs[provider]?.options;
+    }
+  }
+
+  let stepOpts: any = null;
+  if (steps && steps.length > 0) {
+    for (const st of steps) {
+      if (extractProvider(st) === norm && st.data?.options) {
+        stepOpts = st.data.options;
+        break;
+      }
+    }
+  }
+
+  const raw: {
+    model_id?: string;
+    thinking_level_id?: string;
+    mode_id?: string;
+    tool_id?: string;
+  } = {
+    model_id: userSelection?.model_id || msgOpts?.model_id || runOpts?.model_id || stepOpts?.model_id || "auto",
+    thinking_level_id: userSelection?.thinking_level_id || msgOpts?.thinking_level_id || runOpts?.thinking_level_id || stepOpts?.thinking_level_id || "auto",
+    mode_id: userSelection?.mode_id || msgOpts?.mode_id || runOpts?.mode_id || stepOpts?.mode_id || "standard",
+    tool_id: userSelection?.tool_id || msgOpts?.tool_id || runOpts?.tool_id || stepOpts?.tool_id || "none",
+  };
+
+  // For Free account tier on ChatGPT: always lock Model and Reasoning to Auto as specified
+  if (isFreeAccount) {
+    raw.model_id = "auto";
+    raw.thinking_level_id = "auto";
+  }
+
+  // Tools for ChatGPT are disabled: always lock to none ("Không sử dụng (Mặc định)")
+  if (norm === "chatgpt") {
+    raw.tool_id = "none";
+  }
+
+  // 2. Model Label
+  let modelLabel = "Auto (Tự động)";
+  if (!isFreeAccount) {
+    const modelId = raw.model_id;
+    if (modelId) {
+      const matched = activeCaps?.available_models?.find((m) => m.id === modelId);
+      if (matched) {
+        modelLabel = matched.label || (matched as any).name || modelId;
+      } else if (modelId === "auto" || modelId === "default") {
+        modelLabel = "Auto (Tự động)";
+      } else if (modelId === "gpt-4o") {
+        modelLabel = "GPT-4o";
+      } else if (modelId === "gpt-4o-mini") {
+        modelLabel = "GPT-4o mini";
+      } else if (modelId === "o1") {
+        modelLabel = "o1";
+      } else if (modelId === "o3-mini") {
+        modelLabel = "o3-mini";
+      } else {
+        modelLabel = modelId;
+      }
+    }
+  }
+
+  // 3. Reasoning Label
+  let reasoningLabel = "Auto (Tự động)";
+  if (!isFreeAccount) {
+    const reasoningId = raw.thinking_level_id;
+    if (reasoningId) {
+      const matched = activeCaps?.thinking_levels?.find((t) => t.id === reasoningId);
+      if (matched) {
+        reasoningLabel = matched.label || (matched as any).name || reasoningId;
+      } else if (reasoningId === "auto" || reasoningId === "default") {
+        reasoningLabel = "Auto (Tự động)";
+      } else if (reasoningId === "low") {
+        reasoningLabel = "Thấp (Low)";
+      } else if (reasoningId === "medium") {
+        reasoningLabel = "Trung bình (Medium)";
+      } else if (reasoningId === "high") {
+        reasoningLabel = "Cao (High)";
+      } else {
+        reasoningLabel = reasoningId;
+      }
+    }
+  }
+
+  // 4. Mode Label
+  let modeLabel = "Tiêu chuẩn (Standard)";
+  const modeId = raw.mode_id;
+  if (modeId) {
+    const matched = activeCaps?.modes?.find((m) => m.id === modeId);
+    if (matched) {
+      modeLabel = matched.label || (matched as any).name || modeId;
+    } else if (modeId === "thinking") {
+      modeLabel = "Suy luận (Thinking)";
+    } else {
+      modeLabel = "Tiêu chuẩn (Standard)";
+    }
+  }
+
+  // 5. Tools Label
+  let toolLabel = "Không sử dụng (Mặc định)";
+  const toolId = raw.tool_id;
+  if (toolId && toolId !== "none" && toolId !== "default") {
+    const matched = activeCaps?.tools?.find((t) => t.id === toolId);
+    if (matched) {
+      toolLabel = matched.label || (matched as any).name || toolId;
+    } else if (toolId === "web_search") {
+      toolLabel = "Web search (Tìm kiếm web)";
+    } else if (toolId === "create_image") {
+      toolLabel = "Create image (Tạo ảnh)";
+    } else if (toolId === "deep_research") {
+      toolLabel = "Deep research (Nghiên cứu sâu)";
+    } else {
+      toolLabel = toolId;
+    }
+  }
+
+  return {
+    model: modelLabel,
+    reasoning: reasoningLabel,
+    mode: modeLabel,
+    tool: toolLabel,
+    raw: {
+      model_id: raw.model_id || "auto",
+      thinking_level_id: raw.thinking_level_id || "auto",
+      mode_id: raw.mode_id || "standard",
+      tool_id: raw.tool_id || "none",
+    },
+  };
+}
+
 interface ProviderThinkingDetail {
   provider: string;
   displayName: string;
-  thinkingSteps: (ThinkingStep & { timestamp?: string })[];
+  thinkingSteps: (ThinkingStep & { timestamp?: string; options?: any })[];
   thinkingText: string;
   citations: SourceLink[];
   logs: StepLog[];
@@ -58,7 +224,8 @@ interface RightSidebarProps {
   isGenerating?: boolean;
   activeSteps?: StepLog[];
   inspectedProvider?: string;
-  depth?: DepthMode;
+  capabilitiesMap?: Record<string, ProviderLiveCapabilities>;
+  selectionsMap?: Record<string, ProviderSelectionConfig>;
   onSelectProvider?: (providerId: string) => void;
   onClose?: () => void;
   onRetryProvider?: (provider: string, jobId?: string) => void;
@@ -72,7 +239,8 @@ export function RightSidebar({
   isGenerating = false,
   activeSteps = [],
   inspectedProvider,
-  depth,
+  capabilitiesMap = {},
+  selectionsMap = {},
   onSelectProvider,
   onClose,
   onRetryProvider,
@@ -364,8 +532,16 @@ export function RightSidebar({
   };
 
   const displayProviders = selectedProviders.length > 0 ? selectedProviders : [selectedProvider];
-  const activeDepth: DepthMode = currentMessage?.depth || depth || "deep";
-  const reasoningModeLabel = activeDepth === "deep" ? "Deep Thinking" : "Standard";
+
+  const currentProviderOpts = activeDetail
+    ? resolveProviderOptions(
+        activeDetail.provider,
+        currentMessage,
+        stepsToInspect,
+        selectionsMap,
+        capabilitiesMap
+      )
+    : null;
 
   return (
     <aside
@@ -383,51 +559,7 @@ export function RightSidebar({
         title="Kéo sang trái/phải để thay đổi độ rộng (Drag to resize)"
       />
 
-      {/* Model Showcase Header */}
-      {/* <div className="model-header-showcase">
-        {displayProviders.length > 1 ? (
-          <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap", justifyContent: "center" }}>
-            {displayProviders.map((p) => (
-              <div key={p.id} title={`${p.name}: ${p.modelName}`}>
-                <ModelBadgeLogo type={p.iconType} size={38} />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <ModelBadgeLogo type={selectedProvider.iconType} size={54} />
-        )} */}
 
-      {/* <h2 className="model-title-text">
-          {displayProviders.length > 1
-            ? `${displayProviders.length} Models Selected`
-            : selectedProvider.modelName}
-        </h2>
-        <p className="model-desc-text">
-          {displayProviders.length > 1
-            ? displayProviders.map((p) => p.name).join(" • ")
-            : selectedProvider.shortDesc}
-        </p> */}
-
-      {/* Model Specs Grid */}
-      {/* <div className="model-specs-grid">
-          <div className="spec-item">
-            <span className="spec-label">Reasoning Mode</span>
-            <span
-              className="spec-value"
-              style={{
-                color: activeDepth === "deep" ? "var(--brand-blue)" : "var(--text-secondary)",
-                fontWeight: 700,
-              }}
-            >
-              {reasoningModeLabel}
-            </span>
-          </div>
-          <div className="spec-item">
-            <span className="spec-label">Active Models</span>
-            <span className="spec-value">{displayProviders.length} Engines</span>
-          </div>
-        </div>
-      </div> */}
 
       {/* Real-time Status / Execution Steps Pills */}
       {/* <div className="status-pills-list">
@@ -580,6 +712,8 @@ export function RightSidebar({
               )}
             </div>
 
+
+
             {/* Provider Action Required Banner (Manual Browser Trigger) */}
             {(() => {
               const actionInfo = detectProviderActionNeeded(activeDetail.provider, currentMessage, stepsToInspect);
@@ -609,6 +743,7 @@ export function RightSidebar({
               >
                 {activeDetail.thinkingSteps.map((stepItem, sIdx) => {
                   const isStepRunning = activeDetail.isRunning && stepItem.status === "running";
+
                   return (
                     <div
                       key={sIdx}
@@ -625,7 +760,7 @@ export function RightSidebar({
                     >
                       {/* Step Title, Index & Status */}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, color: "var(--text-primary)", flexWrap: "wrap" }}>
                           {isStepRunning ? (
                             <div
                               style={{
@@ -664,6 +799,84 @@ export function RightSidebar({
                               marginTop: 4,
                             }}
                           >
+                            {/* Applied options banner for generating this response */}
+                            {currentProviderOpts && (
+                              <div
+                                style={{
+                                  padding: "6px 8px",
+                                  backgroundColor: "#f0fdf4",
+                                  borderRadius: 4,
+                                  border: "1px solid #bbf7d0",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: 4,
+                                }}
+                              >
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                  <span style={{ fontSize: 10.5, fontWeight: 700, color: "#166534", display: "flex", alignItems: "center", gap: 4 }}>
+                                    <span>🎯</span> Tùy chọn đã dùng khi tạo câu trả lời:
+                                  </span>
+                                  <span style={{ fontSize: 9.5, color: "#15803d", fontWeight: 600 }}>
+                                    {activeDetail.displayName}
+                                  </span>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      padding: "1px 6px",
+                                      borderRadius: 3,
+                                      backgroundColor: "#ffffff",
+                                      border: "1px solid #dcfce7",
+                                      color: "#15803d",
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    Mô hình: {currentProviderOpts.model}
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      padding: "1px 6px",
+                                      borderRadius: 3,
+                                      backgroundColor: "#ffffff",
+                                      border: "1px solid #dcfce7",
+                                      color: "#15803d",
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    Suy luận: {currentProviderOpts.reasoning}
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      padding: "1px 6px",
+                                      borderRadius: 3,
+                                      backgroundColor: "#ffffff",
+                                      border: "1px solid #dcfce7",
+                                      color: "#15803d",
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    Chế độ: {currentProviderOpts.mode}
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      padding: "1px 6px",
+                                      borderRadius: 3,
+                                      backgroundColor: currentProviderOpts.raw.tool_id && currentProviderOpts.raw.tool_id !== "none" ? "#dcfce7" : "#ffffff",
+                                      border: `1px solid ${currentProviderOpts.raw.tool_id && currentProviderOpts.raw.tool_id !== "none" ? "#86efac" : "#dcfce7"}`,
+                                      color: "#15803d",
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    Công cụ: {currentProviderOpts.tool}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
                             <div
                               style={{
                                 display: "flex",

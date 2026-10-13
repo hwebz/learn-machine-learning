@@ -22,6 +22,7 @@ export interface ThinkingStep {
   title: string;
   description?: string;
   status?: "running" | "completed" | "pending";
+  options?: Record<string, any>;
 }
 
 export interface StepLog {
@@ -54,9 +55,13 @@ export interface Message {
   claims?: ClaimItem[];
   disagreements?: DisagreementItem[];
   provider_runs?: Record<string, any>;
+  provider_options?: Record<string, any>;
   factCheckStatus?: "verified" | "reviewing" | "unverified";
   steps?: StepLog[];
 }
+
+import { ProviderSelectionConfig } from "./capabilities";
+export * from "./capabilities";
 
 export interface ChatSession {
   id: string;
@@ -67,9 +72,10 @@ export interface ChatSession {
   messages: Message[];
   selectedProviders: string[];
   selectedProvider?: string;
-  depth: DepthMode;
+  depth?: DepthMode;
   jobId?: string;
   status?: "queued" | "running" | "completed" | "partial" | "failed" | "cancelled";
+  providerConfigurations?: Record<string, ProviderSelectionConfig>;
 }
 
 export interface ProviderInfo {

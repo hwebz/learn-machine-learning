@@ -1,12 +1,13 @@
-import { DepthMode, SourceLink, StepLog } from "../types/chat";
+import { DepthMode, SourceLink, StepLog, ProviderLiveCapabilities } from "../types/chat";
 
 const DEFAULT_API_KEY = "changeme";
 
 export interface ResearchRequestPayload {
   query: string;
-  depth: DepthMode;
+  depth?: DepthMode;
   providers: string[];
   max_sources_per_provider?: number;
+  provider_options?: Record<string, any>;
 }
 
 export interface ResearchResponseData {
@@ -23,6 +24,7 @@ export interface ResearchResponseData {
   title?: string;
   depth?: DepthMode;
   providers?: string[];
+  provider_options?: Record<string, any>;
   created_at?: string;
   finished_at?: string;
   steps?: StepLog[];
@@ -38,8 +40,9 @@ export interface ResearchHistoryItem {
   sources: SourceLink[];
   claims: any[];
   provider_runs: Record<string, any>;
+  provider_options?: Record<string, any>;
   error?: string | null;
-  depth: DepthMode;
+  depth?: DepthMode;
   providers: string[];
   created_at?: string;
   finished_at?: string;
@@ -541,6 +544,74 @@ export async function retryJobProvider(
   } catch (err) {
     console.warn("Failed to retry provider:", err);
     return null;
+  }
+}
+
+export async function fetchProviderCapabilities(
+  provider: string,
+  forceSync: boolean = false,
+  apiKey: string = DEFAULT_API_KEY
+): Promise<ProviderLiveCapabilities> {
+  const url = forceSync
+    ? `/api/backend/providers/${encodeURIComponent(provider)}/capabilities/sync`
+    : `/api/backend/providers/${encodeURIComponent(provider)}/capabilities`;
+  const method = forceSync ? "POST" : "GET";
+
+  const res = await fetch(url, {
+    method,
+    headers: {
+      "X-API-Key": apiKey,
+    },
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch capabilities for ${provider}: ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function syncAllProviderCapabilities(
+  apiKey: string = DEFAULT_API_KEY
+): Promise<Record<string, ProviderLiveCapabilities>> {
+  const res = await fetch("/api/backend/providers/capabilities/sync-all", {
+    method: "POST",
+    headers: {
+      "X-API-Key": apiKey,
+    },
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to sync all provider capabilities: ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function transcribeVoiceAudio(
+  audioBlob: Blob,
+  filename: string = "recording.webm",
+  apiKey: string = DEFAULT_API_KEY
+): Promise<{ text: string; success: boolean; error?: string }> {
+  try {
+    const res = await fetch("/api/backend/voice/transcribe", {
+      method: "POST",
+      headers: {
+        "X-API-Key": apiKey,
+        "Content-Type": audioBlob.type || "audio/webm",
+        "X-Audio-Filename": filename,
+      },
+      body: audioBlob,
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      return { text: "", success: false, error: `Transcribe HTTP ${res.status}: ${errText}` };
+    }
+
+    return await res.json();
+  } catch (err: any) {
+    return { text: "", success: false, error: err?.message || String(err) };
   }
 }
 

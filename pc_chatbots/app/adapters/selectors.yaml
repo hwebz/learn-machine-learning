@@ -174,6 +174,21 @@ providers:
       research_mode:
         - { role: button, name: "Deep research" }
         - { css: "button[data-testid='deep-research']" }
+      search_mode:
+        - { css: "button[data-testid='search-mode-button']" }
+        - { css: "button[aria-label*='Search' i]:not([aria-label*='ChatGPT' i])" }
+      model_switcher:
+        - { css: "button[data-testid='model-switcher-dropdown']" }
+        - { css: "button[id*='model-switcher']" }
+        - { css: "[data-testid='model-switcher'] button" }
+        - { css: "button:has-text('ChatGPT')" }
+      attach_button:
+        - { css: "button[data-testid='attach-button']" }
+        - { css: "button[aria-label*='Attach' i]" }
+      speech_button:
+        - { css: "button[data-testid='composer-speech-button']" }
+        - { css: "button[aria-label*='Dictate' i]" }
+        - { css: "button[aria-label*='voice' i]" }
 
     generating_indicator:
       - { css: "button[data-testid='stop-button']" }
@@ -182,9 +197,13 @@ providers:
     done_indicator:
       - { css: "button[aria-label*='Copy' i]" }
       - { css: "button[data-testid='copy-turn-action-button']" }
+      - { css: "button[aria-label*='Download' i]" }
+      - { css: "button[aria-label*='Tải xuống' i]" }
       - { css: "button[aria-label='Regenerate response']" }
       - { css: "button[aria-label='Read aloud']" }
     answer_container:
+      - { css: "div[data-message-author-role='assistant']" }
+      - { css: "article[data-testid^='conversation-turn-'] [data-message-author-role='assistant']" }
       - { css: "div[data-markdown-text-style='assistant-message']" }
       - { css: "[data-markdown-text-style='assistant-message']" }
       - { css: "div[class*='MarkdownRoot']" }
@@ -192,7 +211,6 @@ providers:
       - { css: "[data-chatgpt-selection-message-id]" }
       - { css: "div[data-markdown-copy='contents']" }
       - { css: "div[data-message-author-role='assistant'] .markdown" }
-      - { css: "div[data-message-author-role='assistant']" }
       - { css: "div.markdown.prose" }
       - { css: "article div.markdown" }
       - { css: "div.markdown" }

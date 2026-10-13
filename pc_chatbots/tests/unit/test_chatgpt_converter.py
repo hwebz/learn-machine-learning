@@ -381,6 +381,117 @@ def test_chatgpt_interactive_tool_components() -> None:
     assert "Outro text" in md
 
 
+def test_chatgpt_svg_icon_standalone() -> None:
+    html = """
+    <p>Status: <svg data-d-component="icon" width="16" height="16" viewBox="0 0 16 16"><path d="M1 2" /><circle cx="4" cy="4" r="2" /></svg> Active</p>
+    """
+    md = html_to_markdown(html, provider="chatgpt")
+    assert 'Status: <svg data-d-component="icon" width="16" height="16" viewBox="0 0 16 16"><path d="M1 2" /><circle cx="4" cy="4" r="2" /></svg> Active' in md
 
 
+def test_chatgpt_svg_icon_wrapped_in_span_and_div() -> None:
+    html = """
+    <p>Verified: <span data-d-component="icon" class="Icon-xyz"><svg width="14" height="14"><path d="M5 10l-3-3 1.4-1.4L5 7.2l6.6-6.6L13 2z" /></svg></span> by system.</p>
+    <div data-d-component="icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 22h20L12 2z" /></svg></div>
+    """
+    md = html_to_markdown(html, provider="chatgpt")
+    assert '<span data-d-component="icon" class="Icon-xyz"><svg width="14" height="14"><path d="M5 10l-3-3 1.4-1.4L5 7.2l6.6-6.6L13 2z" /></svg></span>' in md
+    assert '<div data-d-component="icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 22h20L12 2z" /></svg></div>' in md
 
+
+def test_chatgpt_svg_icon_in_table_and_list() -> None:
+    html = """
+    <table>
+        <thead>
+            <tr><th>Feature</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Search</td>
+                <td><span data-d-component="icon"><svg><path d="M1 1" /></svg></span> Enabled</td>
+            </tr>
+        </tbody>
+    </table>
+    <ul>
+        <li><svg data-d-component="icon"><path d="M2 2" /></svg> Fast reasoning</li>
+    </ul>
+    """
+    md = html_to_markdown(html, provider="chatgpt")
+    assert "| Feature | Status |" in md
+    assert '<span data-d-component="icon"><svg><path d="M1 1" /></svg></span> Enabled' in md
+    assert "- <svg data-d-component=\"icon\"><path d=\"M2 2\" /></svg> Fast reasoning" in md
+
+
+def test_chatgpt_svg_ui_clutter_skipped_properly() -> None:
+    html = """
+    <p>Check the response below:</p>
+    <div class="response-actions">
+        <button aria-label="Copy response" class="copy-button">
+            <svg class="copy-svg" width="24" height="24"><path d="M1 1" /></svg>
+            <span>Copy</span>
+        </button>
+        <button aria-label="Thumbs up">
+            <svg class="thumbs-up"><path d="M2 2" /></svg>
+        </button>
+    </div>
+    <p>All done!</p>
+    """
+    md = html_to_markdown(html, provider="chatgpt")
+    assert "Check the response below:" in md
+    assert "All done!" in md
+    assert "<svg" not in md
+    assert "copy-svg" not in md
+    assert "thumbs-up" not in md
+
+
+def test_chatgpt_svg_inside_raw_html_component_preserved() -> None:
+    html = """
+    <div data-d-component="box" class="Box-metric">
+        <div data-d-component="row">
+            <h4>Live Chart</h4>
+            <svg class="chart-sparkline" width="100" height="30"><path d="M0 15 Q50 0 100 15" /></svg>
+        </div>
+    </div>
+    """
+    md = html_to_markdown(html, provider="chatgpt")
+    assert '<div data-d-component="box" class="Box-metric">' in md
+    assert '<svg class="chart-sparkline" width="100" height="30"><path d="M0 15 Q50 0 100 15" /></svg>' in md
+
+def test_chatgpt_generated_image_extraction() -> None:
+    html = """
+    <div data-message-author-role="assistant">
+        <p>Here is the image you requested:</p>
+        <div class="relative rounded-lg overflow-hidden">
+            <img src="https://oaidalleapiprodscus.blob.core.windows.net/private/image-abc.png" alt="A cute futuristic cat robot in a neon city" />
+        </div>
+        <p>Hope you like this generated image!</p>
+    </div>
+    """
+    md = html_to_markdown(html, provider="chatgpt")
+    assert "Here is the image you requested:" in md
+    assert "![A cute futuristic cat robot in a neon city](https://oaidalleapiprodscus.blob.core.windows.net/private/image-abc.png)" in md
+    assert "Hope you like this generated image!" in md
+
+
+def test_chatgpt_full_page_with_assistant_image() -> None:
+    html = """
+    <!DOCTYPE html>
+    <html>
+        <body>
+            <nav>Skip to content</nav>
+            <div data-message-author-role="user"><p>Draw a mountain sunrise</p></div>
+            <div data-message-author-role="assistant">
+                <div class="image-wrapper">
+                    <img src="https://files.oaiusercontent.com/file-xyz/image.png" alt="Mountain sunrise with vivid orange colors" />
+                </div>
+                <div class="actions">
+                    <button aria-label="Copy" data-testid="copy-turn-action-button">Copy</button>
+                    <button aria-label="Good response">Like</button>
+                </div>
+            </div>
+        </body>
+    </html>
+    """
+    md = html_to_markdown(html, provider="chatgpt")
+    assert "![Mountain sunrise with vivid orange colors](https://files.oaiusercontent.com/file-xyz/image.png)" in md
+    assert "Copy" not in md

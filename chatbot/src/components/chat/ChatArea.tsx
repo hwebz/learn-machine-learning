@@ -1,12 +1,17 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { ChatSession, DepthMode, ProviderInfo, StepLog, ThinkingStep, SourceLink, Message } from "../../types/chat";
+import { ChatSession, ProviderInfo, StepLog, ThinkingStep, SourceLink, Message } from "../../types/chat";
 import { SUGGESTED_PROMPTS } from "../../lib/constants";
 import { extractProviderResponse } from "../../lib/providerResponse";
 import { MarkdownContent } from "./MarkdownContent";
 import { ProviderActionBanner } from "./ProviderActionBanner";
 import { detectAllProvidersNeedingAction } from "../../lib/providerAction";
+import { useVoiceRecording } from "../../lib/useVoiceRecording";
+import {
+  SupportedDataTypes,
+  VoiceChatSupport,
+} from "../../types/capabilities";
 import {
   PlusIcon,
   SettingsIcon,
@@ -504,7 +509,6 @@ interface ChatAreaProps {
   selectedProvider: ProviderInfo;
   selectedProviders: ProviderInfo[];
   onToggleProvider: (providerId: string) => void;
-  onToggleDepth: (depth: DepthMode) => void;
   onSendMessage: (content: string) => void;
   onToggleRightSidebar: () => void;
   isGenerating: boolean;
@@ -513,6 +517,8 @@ interface ChatAreaProps {
   onSelectThinking?: (provider?: string, message?: Message) => void;
   onStopResearch?: () => void;
   onRetryProvider?: (provider: string, jobId?: string) => void;
+  supportedDataTypes?: SupportedDataTypes;
+  voiceChatSupport?: VoiceChatSupport;
 }
 
 export function ChatArea({
@@ -521,7 +527,6 @@ export function ChatArea({
   selectedProvider,
   selectedProviders,
   onToggleProvider,
-  onToggleDepth,
   onSendMessage,
   onToggleRightSidebar,
   isGenerating,
@@ -530,14 +535,48 @@ export function ChatArea({
   onSelectThinking,
   onStopResearch,
   onRetryProvider,
+  supportedDataTypes,
+  voiceChatSupport,
 }: ChatAreaProps) {
   const [inputText, setInputText] = useState("");
   const [isCopied, setIsCopied] = useState<string | null>(null);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+  const [attachedFiles, setAttachedFiles] = useState<{ id: string; name: string; size: string; type: string }[]>([]);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // Voice recording integration
+  const {
+    isRecording,
+    isTranscribing,
+    error: voiceError,
+    toggleRecording,
+  } = useVoiceRecording({
+    onTranscribed: (text) => {
+      setInputText((prev) => (prev ? `${prev} ${text}` : text));
+    },
+  });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, isImage: boolean = false) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const newItems = Array.from(files).map((f) => ({
+      id: `${Date.now()}-${f.name}`,
+      name: f.name,
+      size: `${(f.size / 1024).toFixed(1)} KB`,
+      type: isImage ? "image" : "file",
+    }));
+    setAttachedFiles((prev) => [...prev, ...newItems]);
+    e.target.value = "";
+  };
+
+  const handleRemoveFile = (id: string) => {
+    setAttachedFiles((prev) => prev.filter((f) => f.id !== id));
+  };
 
   // Close model dropdown when clicking outside or pressing Escape
   useEffect(() => {
@@ -636,9 +675,15 @@ export function ChatArea({
   };
 
   const handleSend = () => {
-    if (!inputText.trim() || isGenerating) return;
-    onSendMessage(inputText.trim());
+    if ((!inputText.trim() && attachedFiles.length === 0) || isGenerating) return;
+    let finalPrompt = inputText.trim();
+    if (attachedFiles.length > 0) {
+      const attachmentsList = attachedFiles.map((f) => `[Tệp đính kèm: ${f.name} (${f.size})]`).join(" ");
+      finalPrompt = finalPrompt ? `${finalPrompt}\n\n${attachmentsList}` : attachmentsList;
+    }
+    onSendMessage(finalPrompt);
     setInputText("");
+    setAttachedFiles([]);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
@@ -775,23 +820,6 @@ export function ChatArea({
                 </div>
               </div>
             )}
-          </div>
-
-          {/* Depth Mode Switcher (Standard vs Think Deeper) */}
-          <div className="depth-pill-toggle" title="Chuyển đổi mức độ suy luận / Thinking Effort">
-            <button
-              className={`depth-pill-btn ${session.depth === "standard" ? "active" : ""}`}
-              onClick={() => onToggleDepth("standard")}
-            >
-              Standard
-            </button>
-            <button
-              className={`depth-pill-btn ${session.depth === "deep" ? "active" : ""}`}
-              onClick={() => onToggleDepth("deep")}
-            >
-              <BrainIcon size={12} color={session.depth === "deep" ? "var(--brand-blue)" : "currentColor"} />
-              Think Deeper
-            </button>
           </div>
         </div>
 
@@ -1174,7 +1202,7 @@ export function ChatArea({
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <BrainIcon size={16} color="var(--brand-blue)" />
                   <span style={{ fontSize: 13, fontWeight: 700, color: "var(--brand-blue)" }}>
-                    {session.depth === "deep" ? "Deep Reasoning Pipeline Đang Chạy..." : "Đang xử lý song song..."}
+                    Đang xử lý đa mô hình song song...
                   </span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -1271,15 +1299,148 @@ export function ChatArea({
 
       {/* Floating Composer Card */}
       <div className="composer-floating-container">
+
         <div className="composer-card">
+          {/* Attached Files Pill Row */}
+          {attachedFiles.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "8px 12px 2px 12px" }}>
+              {attachedFiles.map((f) => (
+                <div
+                  key={f.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "3px 8px",
+                    borderRadius: 6,
+                    backgroundColor: "#f1f5f9",
+                    border: "1px solid #cbd5e1",
+                    fontSize: 11.5,
+                    color: "var(--text-primary)",
+                  }}
+                >
+                  <span>{f.type === "image" ? "📷" : "📄"}</span>
+                  <span style={{ fontWeight: 600 }}>{f.name}</span>
+                  <span style={{ color: "var(--text-muted)", fontSize: 10 }}>({f.size})</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveFile(f.id)}
+                    style={{
+                      border: "none",
+                      background: "none",
+                      color: "#94a3b8",
+                      cursor: "pointer",
+                      padding: "0 2px",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                    title="Xóa tệp đính kèm"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Voice status banner if recording or transcribing */}
+          {(isRecording || isTranscribing || voiceError) && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "6px 12px",
+                backgroundColor: isRecording ? "#fef2f2" : isTranscribing ? "#eff6ff" : "#fffbeb",
+                borderBottom: "1px solid #f1f5f9",
+                fontSize: 12,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {isRecording ? (
+                  <>
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        backgroundColor: "#ef4444",
+                        animation: "micPulse 1.2s infinite",
+                      }}
+                    />
+                    <span style={{ fontWeight: 600, color: "#b91c1c" }}>
+                      Đang lắng nghe giọng nói... Bấm biểu tượng micro để dừng và chuyển văn bản.
+                    </span>
+                  </>
+                ) : isTranscribing ? (
+                  <>
+                    <div
+                      style={{
+                        width: 10,
+                        height: 10,
+                        border: "2px solid #93c5fd",
+                        borderTopColor: "#2563eb",
+                        borderRadius: "50%",
+                        animation: "spin 1s linear infinite",
+                      }}
+                    />
+                    <span style={{ fontWeight: 600, color: "#1d4ed8" }}>
+                      Đang gửi âm thanh tới backend STT để nhận diện văn bản...
+                    </span>
+                  </>
+                ) : (
+                  <span style={{ color: "#b45309" }}>{voiceError}</span>
+                )}
+              </div>
+              {isRecording && (
+                <button
+                  type="button"
+                  onClick={toggleRecording}
+                  style={{
+                    border: "none",
+                    backgroundColor: "#ef4444",
+                    color: "#ffffff",
+                    borderRadius: 4,
+                    padding: "2px 8px",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Dừng thu âm
+                </button>
+              )}
+            </div>
+          )}
+
           <textarea
             ref={textareaRef}
             className="composer-textarea"
-            placeholder={`Đặt câu hỏi nghiên cứu tới ${selectedCount} mô hình AI (${selectedProviders.map((p) => p.name.split(" ")[0]).join(", ")})...`}
+            placeholder={
+              isRecording
+                ? "Đang lắng nghe giọng nói từ micro của bạn..."
+                : `Đặt câu hỏi nghiên cứu tới ${selectedCount} mô hình AI (${selectedProviders.map((p) => p.name.split(" ")[0]).join(", ")})...`
+            }
             rows={1}
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
+          />
+
+          {/* Hidden File and Image Inputs */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            style={{ display: "none" }}
+            accept={supportedDataTypes?.supported_mime_types?.join(",") || "*"}
+            onChange={(e) => handleFileChange(e, false)}
+          />
+          <input
+            type="file"
+            ref={imageInputRef}
+            style={{ display: "none" }}
+            accept="image/*"
+            onChange={(e) => handleFileChange(e, true)}
           />
 
           <div className="composer-bottom-row">
@@ -1293,14 +1454,82 @@ export function ChatArea({
                 <span>{selectedCount} Models</span>
               </button>
 
-              <button className="icon-btn" title="Đính kèm tệp" aria-label="Đính kèm tệp">
+              {/* Attach File Button - dynamically enabled/disabled */}
+              <button
+                className="icon-btn"
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!supportedDataTypes?.file}
+                style={{
+                  opacity: supportedDataTypes?.file ? 1 : 0.38,
+                  cursor: supportedDataTypes?.file ? "pointer" : "not-allowed",
+                }}
+                title={
+                  supportedDataTypes?.file
+                    ? `Đính kèm tệp (${supportedDataTypes.supported_mime_types?.slice(0, 4).join(", ") || "PDF, TXT, Code"})`
+                    : "Mô hình hiện tại không hỗ trợ đính kèm tệp tin"
+                }
+                aria-label="Đính kèm tệp"
+              >
                 <PaperclipIcon size={17} />
               </button>
-              <button className="icon-btn" title="Tải ảnh lên" aria-label="Tải ảnh lên">
+
+              {/* Upload Image Button - dynamically enabled/disabled */}
+              <button
+                className="icon-btn"
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={!supportedDataTypes?.image}
+                style={{
+                  opacity: supportedDataTypes?.image ? 1 : 0.38,
+                  cursor: supportedDataTypes?.image ? "pointer" : "not-allowed",
+                }}
+                title={
+                  supportedDataTypes?.image
+                    ? "Tải ảnh lên (Hỗ trợ PNG, JPG, WebP)"
+                    : "Mô hình hiện tại không hỗ trợ tải ảnh"
+                }
+                aria-label="Tải ảnh lên"
+              >
                 <ImageIcon size={17} />
               </button>
-              <button className="icon-btn" title="Nhập liệu giọng nói" aria-label="Nhập liệu giọng nói">
-                <MicIcon size={17} />
+
+              {/* Microphone / Voice Input Button */}
+              <button
+                className={`icon-btn ${isRecording ? "active-recording" : ""}`}
+                type="button"
+                onClick={toggleRecording}
+                disabled={!voiceChatSupport?.supported || isTranscribing}
+                style={{
+                  backgroundColor: isRecording ? "#fee2e2" : isTranscribing ? "#eff6ff" : "transparent",
+                  color: isRecording ? "#dc2626" : isTranscribing ? "#2563eb" : "currentColor",
+                  border: isRecording ? "1px solid #f87171" : "none",
+                  borderRadius: "50%",
+                  transition: "all 0.2s ease",
+                }}
+                title={
+                  isRecording
+                    ? "Đang thu âm... Bấm để dừng và chuyển thành văn bản"
+                    : isTranscribing
+                    ? "Đang chuyển thành văn bản qua backend..."
+                    : "Nhập liệu bằng giọng nói (Voice Chat STT)"
+                }
+                aria-label="Nhập liệu giọng nói"
+              >
+                {isTranscribing ? (
+                  <div
+                    style={{
+                      width: 14,
+                      height: 14,
+                      border: "2px solid #93c5fd",
+                      borderTopColor: "#2563eb",
+                      borderRadius: "50%",
+                      animation: "spin 1s linear infinite",
+                    }}
+                  />
+                ) : (
+                  <MicIcon size={17} color={isRecording ? "#dc2626" : "currentColor"} />
+                )}
               </button>
             </div>
 
@@ -1318,7 +1547,7 @@ export function ChatArea({
               <button
                 className="btn-composer-send"
                 onClick={handleSend}
-                disabled={!inputText.trim()}
+                disabled={!inputText.trim() && attachedFiles.length === 0}
                 type="button"
                 title="Gửi câu hỏi"
               >

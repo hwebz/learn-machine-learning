@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import { PROVIDERS_LIST, DEFAULT_SELECTED_PROVIDERS } from "../../lib/constants";
-import { ChatSession, DepthMode, Message, StepLog, ProviderInfo } from "../../types/chat";
+import { ChatSession, Message, StepLog, ProviderInfo } from "../../types/chat";
 import { LeftSidebar } from "../sidebar/LeftSidebar";
 import { ChatArea } from "./ChatArea";
 import { RightSidebar } from "../inspector/RightSidebar";
@@ -21,6 +21,7 @@ import {
   fetchConversationCitations,
   retryJobProvider,
 } from "../../lib/api";
+import { useProviderCapabilities } from "../../lib/useProviderCapabilities";
 
 const DELETED_SESSIONS_KEY = "deep_research_deleted_sessions";
 
@@ -54,7 +55,6 @@ const FALLBACK_SESSION: ChatSession = {
   createdTimestamp: 0,
   selectedProviders: DEFAULT_SELECTED_PROVIDERS,
   selectedProvider: "copilot",
-  depth: "deep",
   messages: [],
 };
 
@@ -130,12 +130,12 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                 : "",
               content: job.report_markdown,
               providers: jobProviders,
-              depth: job.depth || "deep",
               tokens: 1600,
               latencySeconds: 14.5,
               sources: job.sources || [],
               claims: job.claims || [],
               provider_runs: job.provider_runs || {},
+              provider_options: (job as any).provider_options || {},
               factCheckStatus: "verified",
               steps: (job as any).steps || [],
             });
@@ -155,7 +155,6 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             createdTimestamp: job.created_at ? new Date(job.created_at).getTime() : Date.now(),
             selectedProviders: jobProviders,
             selectedProvider: jobProviders[0] || "copilot",
-            depth: job.depth || "deep",
             status: job.status,
             messages: [userMsg, ...assistantMsgs],
           });
@@ -192,12 +191,12 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                   : "",
                 content: directJob.report_markdown,
                 providers: directProviders,
-                depth: directJob.depth || "deep",
                 tokens: 1600,
                 latencySeconds: 14.5,
                 sources: directJob.sources || [],
                 claims: directJob.claims || [],
                 provider_runs: directJob.provider_runs || {},
+                provider_options: directJob.provider_options || {},
                 factCheckStatus: "verified",
                 steps: directJob.steps || [],
               });
@@ -214,7 +213,6 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               createdTimestamp: directJob.created_at ? new Date(directJob.created_at).getTime() : Date.now(),
               selectedProviders: directProviders,
               selectedProvider: directProviders[0] || "copilot",
-              depth: directJob.depth || "deep",
               status: directJob.status as any,
               messages: [userMsg, ...asstMsgs],
             };
@@ -254,7 +252,6 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             createdTimestamp: Date.now(),
             selectedProviders: DEFAULT_SELECTED_PROVIDERS,
             selectedProvider: DEFAULT_SELECTED_PROVIDERS[0],
-            depth: "deep",
             messages: [],
           },
         ];
@@ -318,6 +315,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
   const primarySelectedProvider: ProviderInfo =
     selectedProviders[0] || PROVIDERS_LIST[0];
+
+  const capsHook = useProviderCapabilities(primarySelectedProvider.id);
 
   const handleSelectSession = async (id: string, updateUrl: boolean = true) => {
     setActiveSessionId(id);
@@ -395,7 +394,6 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             : (existingAsst?.timestamp || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })),
           content: fullJob.report_markdown || existingAsst?.content || "",
           providers: fullJobProviders,
-          depth: session?.depth || fullJob.depth || "deep",
           sources: jobSources,
           claims: fullJob.claims || [],
           provider_runs: fullJob.provider_runs || {},
@@ -437,7 +435,6 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       createdTimestamp: Date.now(),
       selectedProviders: DEFAULT_SELECTED_PROVIDERS,
       selectedProvider: DEFAULT_SELECTED_PROVIDERS[0],
-      depth: activeSession.depth || "deep",
       messages: [],
     };
     setSessions([newSession, ...sessions]);
@@ -540,12 +537,6 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     );
   };
 
-  const handleToggleDepth = (depth: DepthMode) => {
-    setSessions((prev) =>
-      prev.map((s) => (s.id === activeSessionId || s.jobId === activeSessionId ? { ...s, depth } : s))
-    );
-  };
-
   const handleStopResearch = useCallback(async () => {
     if (!isGenerating) return;
 
@@ -597,8 +588,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           content: stoppedText,
           providers: currentProviderIds,
-          depth: s.depth,
           steps: activeSteps,
+          provider_options: capsHook.selectionsMap,
           factCheckStatus: "unverified",
         };
 
@@ -659,14 +650,13 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     const currentProviderIds = activeSession.selectedProviders && activeSession.selectedProviders.length > 0
       ? activeSession.selectedProviders
       : [primarySelectedProvider.id];
-    const currentDepth = activeSession.depth;
 
     try {
       // 1. Dispatch research job to backend with all selected providers
       const jobAccepted = await createResearchJob({
         query: content,
-        depth: currentDepth,
         providers: currentProviderIds,
+        provider_options: capsHook.selectionsMap,
       });
 
       if (isCancelledRef.current) {
@@ -724,13 +714,13 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               content: result.report_markdown || "Đã hoàn thành nghiên cứu và tổng hợp câu trả lời từ các mô hình.",
               providers: currentProviderIds,
-              depth: currentDepth,
               tokens: 1540,
               latencySeconds: 10.8,
               sources: consolidatedSources,
               claims: result.claims || [],
               disagreements: result.disagreements || [],
               provider_runs: result.provider_runs || {},
+              provider_options: (result as any).provider_options || capsHook.selectionsMap,
               factCheckStatus: "verified",
               steps: latestSteps,
             };
@@ -757,7 +747,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         onError: (err) => {
           if (isCancelledRef.current) return;
           console.warn("SSE stream issue, falling back to multi-model simulation:", err);
-          handleSimulatedMultiModelResponse(content, currentProviderIds, currentDepth);
+          handleSimulatedMultiModelResponse(content, currentProviderIds);
         },
         onDone: () => {
           if (isCancelledRef.current) return;
@@ -772,7 +762,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     } catch (err) {
       if (isCancelledRef.current) return;
       console.info("Backend API offline or unreachable, engaging interactive multi-model simulation:", err);
-      handleSimulatedMultiModelResponse(content, currentProviderIds, currentDepth);
+      handleSimulatedMultiModelResponse(content, currentProviderIds);
     }
   };
 
@@ -827,7 +817,6 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                 timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
                 content: result.report_markdown || "Đã cập nhật câu trả lời từ các mô hình.",
                 providers: result.providers || activeSession.selectedProviders || [provider],
-                depth: activeSession.depth,
                 tokens: 1540,
                 latencySeconds: 10.8,
                 sources: consolidatedSources,
@@ -876,8 +865,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
   const handleSimulatedMultiModelResponse = (
     content: string,
-    providerIds: string[],
-    depth: DepthMode
+    providerIds: string[]
   ) => {
     const activeInfoList = providerIds
       .map((id) => PROVIDERS_LIST.find((p) => p.id === id))
@@ -945,7 +933,6 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         content: simulatedMarkdown,
         providers: providerIds,
-        depth,
         tokens: 1250,
         latencySeconds: 2.4,
         sources: [
@@ -969,6 +956,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         ],
         disagreements: [],
         factCheckStatus: "verified",
+        provider_options: capsHook.selectionsMap,
         steps: step2Updated,
       };
 
@@ -1014,7 +1002,6 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         selectedProvider={primarySelectedProvider}
         selectedProviders={selectedProviders}
         onToggleProvider={handleToggleProvider}
-        onToggleDepth={handleToggleDepth}
         onSendMessage={handleSendMessage}
         onToggleRightSidebar={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
         isGenerating={isGenerating}
@@ -1023,6 +1010,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         onSelectThinking={handleSelectThinking}
         onStopResearch={handleStopResearch}
         onRetryProvider={handleRetryProvider}
+        supportedDataTypes={capsHook.supportedDataTypes}
+        voiceChatSupport={capsHook.voiceChatSupport}
       />
 
       {/* 3. Right Sidebar (Inspection & Details) */}
@@ -1038,7 +1027,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           isGenerating={isGenerating}
           activeSteps={activeSteps}
           inspectedProvider={inspectedProvider}
-          depth={inspectedMessage?.depth || activeSession.depth}
+          capabilitiesMap={capsHook.capabilitiesMap}
+          selectionsMap={capsHook.selectionsMap}
           onSelectProvider={(p) => setInspectedProvider(p)}
           onClose={() => setIsRightSidebarOpen(false)}
           onRetryProvider={handleRetryProvider}
@@ -1053,6 +1043,14 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         selectedProviderIds={activeProviderIds}
         onToggleProvider={handleToggleProvider}
         onSelectMultipleProviders={handleSelectMultipleProviders}
+        capabilitiesMap={capsHook.capabilitiesMap}
+        selectionsMap={capsHook.selectionsMap}
+        onUpdateSelection={capsHook.updateSelection}
+        onSyncProvider={capsHook.syncProvider}
+        loadingProvider={capsHook.loadingProvider}
+        onSyncAll={capsHook.syncAll}
+        isSyncingAll={capsHook.isSyncingAll}
+        onLoadCapabilities={capsHook.loadProviderCapabilities}
       />
 
       {/* 5. Live Jobs & Orchestrator Health Modal */}

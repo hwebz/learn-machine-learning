@@ -78,6 +78,8 @@ class BaseMarkdownConverter(HTMLParser):
         self._math_stack: list[dict[str, Any]] = []
         self._table_stack: list[dict[str, Any]] = []
         self._raw_html_stack: list[dict[str, Any]] = []
+        self._icon_stack: list[dict[str, Any]] = []
+        self._skip_stack: list[str] = []
         self._skip_depth = 0
         self._li_depth = 0
 
@@ -103,7 +105,15 @@ class BaseMarkdownConverter(HTMLParser):
 
     def is_skip_tag(self, tag: str, attr_map: dict[str, str], cls: str) -> bool:
         """Return True if element should be completely ignored (including children)."""
+        if self._raw_html_stack or self._icon_stack:
+            return False
+        if self.is_icon_start(tag, attr_map, cls):
+            return False
         return tag in _SKIP_TAGS
+
+    def is_icon_start(self, tag: str, attr_map: dict[str, str], cls: str) -> bool:
+        """Return True if element is an icon that should be extracted and preserved inline."""
+        return (attr_map.get("data-d-component") or "").strip().lower() == "icon"
 
     def is_raw_html_block_start(self, tag: str, attr_map: dict[str, str], cls: str) -> bool:
         """Hook to declare standalone HTML components that should be preserved as raw HTML."""
@@ -457,9 +467,10 @@ class BaseMarkdownConverter(HTMLParser):
         cls = attr_map.get("class", "")
 
         if self.is_skip_tag(tag, attr_map, cls):
-            self._skip_depth += 1
+            self._skip_stack.append(tag)
+            self._skip_depth = len(self._skip_stack)
             return
-        if self._skip_depth:
+        if self._skip_stack:
             return
 
         # Raw HTML standalone component block
@@ -467,10 +478,12 @@ class BaseMarkdownConverter(HTMLParser):
             if self.is_raw_html_block_start(tag, attr_map, cls):
                 self._at_li_start = False
                 raw_start = self._format_starttag_fallback(tag, attr_map)
+                is_self_closing = raw_start.rstrip().endswith("/>") or tag in _VOID_TAGS
                 self._raw_html_stack.append({
                     "tag": tag,
                     "depth": 1,
                     "parts": [raw_start],
+                    "open_tags": [] if is_self_closing else [tag],
                 })
                 return
 
@@ -480,6 +493,33 @@ class BaseMarkdownConverter(HTMLParser):
                 top["depth"] += 1
             raw_start = self._format_starttag_fallback(tag, attr_map)
             top["parts"].append(raw_start)
+            is_self_closing = raw_start.rstrip().endswith("/>") or tag in _VOID_TAGS
+            if not is_self_closing:
+                top.setdefault("open_tags", []).append(tag)
+            return
+
+        # Icon handling (e.g. data-d-component="icon" or <svg data-d-component="icon">)
+        if not self._icon_stack and not self._raw_html_stack:
+            if self.is_icon_start(tag, attr_map, cls):
+                raw_start = self._format_starttag_fallback(tag, attr_map)
+                is_self_closing = raw_start.rstrip().endswith("/>") or tag in _VOID_TAGS
+                self._icon_stack.append({
+                    "tag": tag,
+                    "depth": 1,
+                    "parts": [raw_start],
+                    "open_tags": [] if is_self_closing else [tag],
+                })
+                return
+
+        if self._icon_stack:
+            top = self._icon_stack[-1]
+            if tag == top["tag"]:
+                top["depth"] += 1
+            raw_start = self._format_starttag_fallback(tag, attr_map)
+            top["parts"].append(raw_start)
+            is_self_closing = raw_start.rstrip().endswith("/>") or tag in _VOID_TAGS
+            if not is_self_closing:
+                top.setdefault("open_tags", []).append(tag)
             return
 
         # Table handling
@@ -706,24 +746,78 @@ class BaseMarkdownConverter(HTMLParser):
         elif tag == "a":
             self._href_stack.append(attr_map.get("href"))
             self._link_text = []
+        elif tag == "img":
+            src = (attr_map.get("src") or attr_map.get("data-src") or "").strip()
+            alt = (attr_map.get("alt") or attr_map.get("aria-label") or "").strip()
+            if src and not src.startswith("data:image/svg+xml;base64,PHN2Zy"):
+                alt = re.sub(r'[\r\n\t]+', ' ', alt).strip()
+                if not alt:
+                    alt = "Generated image"
+                img_md = f"![{alt}]({src})"
+                if self._inline_code_buffer:
+                    self._inline_code_buffer[-1].append(img_md)
+                elif self._table_stack and self._table_stack[-1]["in_cell"]:
+                    self._table_stack[-1]["curr_cell"].append(img_md)
+                elif self._citation_text_stack:
+                    self._citation_text_stack[-1].append(img_md)
+                elif self._link_text is not None:
+                    self._link_text.append(img_md)
+                else:
+                    if self._at_li_start:
+                        self.parts.append(img_md)
+                        self._at_li_start = False
+                    else:
+                        if self.parts and not self.parts[-1].endswith("\n\n"):
+                            if self.parts[-1].endswith("\n"):
+                                self.parts.append("\n")
+                            else:
+                                self.parts.append("\n\n")
+                        self.parts.append(img_md)
+                        self.parts.append("\n\n")
 
     def handle_endtag(self, tag: str) -> None:
-        if tag in _SKIP_TAGS:
-            self._skip_depth = max(0, self._skip_depth - 1)
-            return
-        if self._skip_depth:
+        if self._skip_stack:
+            if self._skip_stack[-1] == tag:
+                self._skip_stack.pop()
+                self._skip_depth = len(self._skip_stack)
             return
 
         if self._raw_html_stack:
             top = self._raw_html_stack[-1]
-            if tag not in _VOID_TAGS:
+            if tag in top.get("open_tags", []):
+                while top["open_tags"] and top["open_tags"][-1] != tag:
+                    unclosed = top["open_tags"].pop()
+                    top["parts"].append(f"</{unclosed}>")
+                if top["open_tags"]:
+                    top["open_tags"].pop()
+                    top["parts"].append(f"</{tag}>")
+            elif "open_tags" not in top and tag not in _VOID_TAGS:
                 top["parts"].append(f"</{tag}>")
+
             if tag == top["tag"]:
                 top["depth"] -= 1
                 if top["depth"] <= 0:
                     self._raw_html_stack.pop()
                     html_block = "".join(top["parts"]).strip()
                     self._emit_raw_html_block(html_block)
+            return
+
+        if self._icon_stack:
+            top = self._icon_stack[-1]
+            if tag in top.get("open_tags", []):
+                while top["open_tags"] and top["open_tags"][-1] != tag:
+                    unclosed = top["open_tags"].pop()
+                    top["parts"].append(f"</{unclosed}>")
+                if top["open_tags"]:
+                    top["open_tags"].pop()
+                    top["parts"].append(f"</{tag}>")
+
+            if tag == top["tag"]:
+                top["depth"] -= 1
+                if top["depth"] <= 0:
+                    self._icon_stack.pop()
+                    icon_html = "".join(top["parts"]).strip()
+                    self._emit(icon_html)
             return
 
         if self._math_stack:
@@ -863,10 +957,13 @@ class BaseMarkdownConverter(HTMLParser):
                 self._emit(text)
 
     def handle_data(self, data: str) -> None:
-        if self._skip_depth:
+        if self._skip_stack:
             return
         if self._raw_html_stack:
             self._raw_html_stack[-1]["parts"].append(html.escape(data, quote=False))
+            return
+        if self._icon_stack:
+            self._icon_stack[-1]["parts"].append(html.escape(data, quote=False))
             return
         if self._math_stack:
             top = self._math_stack[-1]

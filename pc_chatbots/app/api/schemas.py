@@ -18,9 +18,10 @@ JobStatus = Literal[
 
 class ResearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=20_000)
-    depth: Literal["standard", "deep"] = "standard"
+    depth: Literal["standard", "deep"] | None = Field(default=None)
     providers: list[ProviderName] = Field(default_factory=lambda: ["perplexity", "gemini"], min_length=1)
     max_minutes: int = Field(default=20, ge=1, le=180)
+    provider_options: dict[str, dict[str, Any]] | None = Field(default=None)
 
     @field_validator("query")
     @classmethod
@@ -87,6 +88,7 @@ class ResearchResponse(BaseModel):
     provider_runs: list[ProviderRunResponse]
     steps: list[dict[str, Any]] = Field(default_factory=list)
     error: str | None
+    provider_options: dict[str, Any] | None = Field(default=None)
     created_at: datetime
     finished_at: datetime | None
 
@@ -110,5 +112,12 @@ class SettingsUpdateRequest(BaseModel):
     work_mode: str | None = None
     max_concurrent_browsers: int | None = None
     headless_providers: dict[str, bool] | None = None
+
+
+class VoiceTranscriptionResponse(BaseModel):
+    text: str
+    provider: str | None = None
+    success: bool = True
+    error: str | None = None
 
 
