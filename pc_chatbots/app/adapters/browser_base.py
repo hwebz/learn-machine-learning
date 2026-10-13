@@ -155,7 +155,7 @@ class BrowserProviderAdapter(ABC):
                 return ""
             target = locator.last if count > 1 else locator
             html = await target.inner_html(timeout=5000)
-            markdown = html_to_markdown(html)
+            markdown = html_to_markdown(html, provider=self.name)
             if markdown.strip():
                 return clean_markdown_text(markdown)
             raw_text = await target.inner_text(timeout=5000)

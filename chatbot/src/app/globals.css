@@ -1528,14 +1528,16 @@ textarea {
   border: 1px solid var(--border-default);
 }
 
-.markdown-table {
+.markdown-table,
+.markdown-table-wrapper table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
   text-align: left;
 }
 
-.markdown-table th {
+.markdown-table th,
+.markdown-table-wrapper th {
   background-color: #f8fafc;
   padding: 8px 12px;
   font-weight: 700;
@@ -1544,18 +1546,21 @@ textarea {
   border-right: 1px solid var(--border-subtle);
 }
 
-.markdown-table td {
+.markdown-table td,
+.markdown-table-wrapper td {
   padding: 8px 12px;
   border-bottom: 1px solid var(--border-subtle);
   border-right: 1px solid var(--border-subtle);
   color: var(--text-secondary);
 }
 
-.markdown-table tr:nth-child(even) td {
+.markdown-table tr:nth-child(even) td,
+.markdown-table-wrapper tr:nth-child(even) td {
   background-color: #fcfcfd;
 }
 
-.markdown-table tr:last-child td {
+.markdown-table tr:last-child td,
+.markdown-table-wrapper tr:last-child td {
   border-bottom: none;
 }
 

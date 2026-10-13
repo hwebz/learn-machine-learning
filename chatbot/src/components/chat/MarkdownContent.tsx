@@ -178,42 +178,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
         language = "";
       }
 
-      // Check for LaTeX / Math code blocks: render with KaTeX
-      if (["latex", "tex", "math"].includes(language)) {
-        try {
-          const renderedMath = katex.renderToString(codeText, {
-            displayMode: true,
-            throwOnError: false,
-          });
-          const highlightedLatex = hljs.getLanguage("latex")
-            ? hljs.highlight(codeText, { language: "latex", ignoreIllegals: true }).value
-            : hljs.highlight(codeText, { language: "plaintext" }).value;
 
-          return `
-            <div class="code-block-container latex-block-container">
-              <div class="code-block-header">
-                <span class="code-block-lang">∑ LATEX FORMULA</span>
-                <button class="code-copy-btn" type="button" aria-label="Copy LaTeX code">
-                  <span class="copy-icon">📋</span>
-                  <span class="copy-text">Copy LaTeX</span>
-                </button>
-              </div>
-              <div class="latex-card-display">
-                ${renderedMath}
-              </div>
-              <details class="latex-card-source">
-                <summary>Xem mã nguồn LaTeX</summary>
-                <div class="code-block-body">
-                  <pre><code class="hljs language-latex">${highlightedLatex}</code></pre>
-                </div>
-              </details>
-              <div style="display:none"><code class="latex-raw-code">${codeText.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></div>
-            </div>
-          `;
-        } catch (e) {
-          console.warn("Failed to render LaTeX formula with KaTeX:", e);
-        }
-      }
 
       let highlightedCode = codeText;
       let validLang = "plaintext";
@@ -271,12 +236,30 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
     };
 
     // Custom table renderer with responsive wrapper
-    renderer.table = function ({ header, rows }) {
+    renderer.table = function (token: any) {
+      let headerCells = "";
+      for (const cell of token.header || []) {
+        headerCells += this.tablecell(cell);
+      }
+      const headerRow = this.tablerow({ text: headerCells });
+
+      let bodyRows = "";
+      for (const row of token.rows || []) {
+        let rowCells = "";
+        for (const cell of row) {
+          rowCells += this.tablecell(cell);
+        }
+        bodyRows += this.tablerow({ text: rowCells });
+      }
+      const tbody = bodyRows ? `<tbody>\n${bodyRows}</tbody>` : "";
+
       return `
         <div class="markdown-table-wrapper">
           <table class="markdown-table">
-            <thead>${header}</thead>
-            <tbody>${rows}</tbody>
+            <thead>
+              ${headerRow}
+            </thead>
+            ${tbody}
           </table>
         </div>
       `;
@@ -292,6 +275,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
           : token?.text || "";
       return `<blockquote class="markdown-blockquote">${body}</blockquote>`;
     };
+
 
     marked.setOptions({
       renderer,
@@ -547,6 +531,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       }
     }
 
+
     // Ensure all code block fences have clean inner code without leaked trailing ``
     sanitizedContent = cleanMarkdownCodeBlocks(sanitizedContent);
 
@@ -562,30 +547,9 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
           displayMode,
           throwOnError: false,
         });
-        const highlightedLatex = hljs.getLanguage("latex")
-          ? hljs.highlight(cleanTex, { language: "latex", ignoreIllegals: true }).value
-          : hljs.highlight(cleanTex, { language: "plaintext" }).value;
 
         const wrapper = displayMode
-          ? `<div class="code-block-container latex-block-container" style="margin: 14px 0;">
-              <div class="code-block-header">
-                <span class="code-block-lang">∑ LATEX FORMULA</span>
-                <button class="code-copy-btn" type="button" aria-label="Copy LaTeX code">
-                  <span class="copy-icon">📋</span>
-                  <span class="copy-text">Copy LaTeX</span>
-                </button>
-              </div>
-              <div class="latex-card-display">
-                ${rendered}
-              </div>
-              <details class="latex-card-source">
-                <summary>Xem mã nguồn LaTeX</summary>
-                <div class="code-block-body">
-                  <pre><code class="hljs language-latex">${highlightedLatex}</code></pre>
-                </div>
-              </details>
-              <div style="display:none"><code class="latex-raw-code">${cleanTex.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></div>
-            </div>`
+          ? `<div class="katex-display-block">${rendered}</div>`
           : `<span class="katex-inline-block">${rendered}</span>`;
         mathPlaceholders.set(key, wrapper);
       } catch (err) {
@@ -608,13 +572,9 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       }
     );
 
-    // 2. Block math: $$ ... $$ and \[ ... \]
+    // 2. Block math: $$ ... $$
     processedContent = processedContent.replace(
       /(?<!\\)\$\$([\s\S]+?)\$\$/g,
-      (_, math) => `\n\n${storeMath(math, true)}\n\n`
-    );
-    processedContent = processedContent.replace(
-      /(?<!\\)\\\[([\s\S]+?)\\\]/g,
       (_, math) => `\n\n${storeMath(math, true)}\n\n`
     );
 

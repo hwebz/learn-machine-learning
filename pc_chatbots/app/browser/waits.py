@@ -347,6 +347,28 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
         } catch (e) {}
     }
 
+    // 1.4. ChatGPT-specific: Open thought/reasoning accordion if present and closed
+    if (provider === "chatgpt" || !provider) {
+        try {
+            const thoughtToggles = document.querySelectorAll(
+                "button[aria-label*='Thought' i], " +
+                "button[aria-label*='Thinking' i], " +
+                "button[data-testid*='thought'], " +
+                "[class*='thought'] button"
+            );
+            for (const toggle of thoughtToggles) {
+                const isExpanded = toggle.getAttribute("aria-expanded");
+                if (isExpanded === "false") {
+                    const attempts = parseInt(toggle.dataset.expandAttempts || "0", 10);
+                    if (attempts < 5) {
+                        toggle.dataset.expandAttempts = (attempts + 1).toString();
+                        triggerClick(toggle);
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
     // 2. Extract structured thinking steps without duplicates
     const seenStepKeys = new Set();
     try {
@@ -899,6 +921,8 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
 
     // 4.4. General link selectors for citations across providers
     const linkSelectors = [
+        "[data-markdown-text-style='assistant-message'] a[href^='http']",
+        "[class*='MarkdownRoot'] a[href^='http']",
         "a[data-testid='citation']",
         "a.citation",
         "a[data-citation]",
@@ -928,7 +952,7 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
             for (const a of links) {
                 const href = a.href || a.getAttribute("href");
                 if (href && href.startsWith("http") && !seenUrls.has(href)) {
-                    if (!href.includes("login") && !href.includes("auth") && !href.includes("accounts.google")) {
+                    if (!href.includes("login") && !href.includes("auth") && !href.includes("accounts.google") && !href.includes("chatgpt.com") && !href.includes("openai.com")) {
                         seenUrls.add(href);
                         let title = (a.innerText || a.textContent || a.getAttribute("title") || "").trim();
                         citations.push({

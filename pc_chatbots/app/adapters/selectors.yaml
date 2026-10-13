@@ -178,12 +178,25 @@ providers:
     done_indicator:
       - { css: "button[aria-label*='Copy' i]" }
       - { css: "button[data-testid='copy-turn-action-button']" }
+      - { css: "button[aria-label='Regenerate response']" }
+      - { css: "button[aria-label='Read aloud']" }
     answer_container:
+      - { css: "div[data-markdown-text-style='assistant-message']" }
+      - { css: "[data-markdown-text-style='assistant-message']" }
+      - { css: "div[class*='MarkdownRoot']" }
+      - { css: "[class*='MarkdownRoot']" }
+      - { css: "[data-chatgpt-selection-message-id]" }
+      - { css: "div[data-markdown-copy='contents']" }
       - { css: "div[data-message-author-role='assistant'] .markdown" }
       - { css: "div[data-message-author-role='assistant']" }
       - { css: "div.markdown.prose" }
+      - { css: "article div.markdown" }
+      - { css: "div.markdown" }
     source_links:
+      - { css: "div[data-markdown-text-style='assistant-message'] a[href^='http']" }
+      - { css: "[class*='MarkdownRoot'] a[href^='http']" }
       - { css: "div[data-message-author-role='assistant'] a[href^='http']" }
+      - { css: "a[href^='http']:not([href*='chatgpt.com']):not([href*='openai.com'])" }
 
   # ─────────────────────────────────────── Claude
   claude:
