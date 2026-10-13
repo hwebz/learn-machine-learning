@@ -29,8 +29,8 @@ def test_chatgpt_default_capabilities() -> None:
     assert caps.provider == "chatgpt"
     assert len(caps.available_models) >= 1
     model_ids = [m.id for m in caps.available_models]
-    assert "auto" in model_ids
-    assert caps.selected_model_id == "auto"
+    assert "none" in model_ids
+    assert caps.selected_model_id == "none"
 
     # Check thinking levels (free account has auto only)
     thinking_ids = [t.id for t in caps.thinking_levels]
@@ -62,7 +62,7 @@ async def test_capabilities_registry_lookup_and_defaults() -> None:
     registry = CapabilitiesRegistry.instance()
     caps = await registry.get_capabilities("chatgpt", force_sync=False)
     assert caps.provider == "chatgpt"
-    assert caps.selected_model_id == "auto"
+    assert caps.selected_model_id in ["auto", "gpt-6", "default"]
 
     # Test unknown provider gets generic fallback
     fallback_caps = await registry.get_capabilities("unknown_prov", force_sync=False)

@@ -62,7 +62,7 @@ export function resolveProviderOptions(
 ): FormattedProviderOptions {
   const norm = normalizeProvider(provider);
   const activeCaps = capabilitiesMap?.[norm];
-  const isFreeAccount = norm === "chatgpt" || activeCaps?.account_type === "free";
+  const isFreeAccount = activeCaps?.account_type === "free";
 
   // 1. Raw options from available sources:
   // User's explicitly chosen configuration in selectionsMap takes highest priority for real user choice,
@@ -102,19 +102,15 @@ export function resolveProviderOptions(
     tool_id: userSelection?.tool_id || msgOpts?.tool_id || runOpts?.tool_id || stepOpts?.tool_id || "none",
   };
 
-  // For Free account tier on ChatGPT: always lock Model and Reasoning to Auto as specified
-  if (isFreeAccount) {
-    raw.model_id = "auto";
+  // For Free account tier on ChatGPT: lock Model to none and Reasoning to Auto
+  if (norm === "chatgpt" && isFreeAccount) {
+    raw.model_id = "none";
     raw.thinking_level_id = "auto";
-  }
-
-  // Tools for ChatGPT are disabled: always lock to none ("Không sử dụng (Mặc định)")
-  if (norm === "chatgpt") {
     raw.tool_id = "none";
   }
 
   // 2. Model Label
-  let modelLabel = "Auto (Tự động)";
+  let modelLabel = (norm === "chatgpt" && isFreeAccount) ? "Auto (Mặc định)" : "Auto (Tự động)";
   if (!isFreeAccount) {
     const modelId = raw.model_id;
     if (modelId) {
@@ -123,6 +119,12 @@ export function resolveProviderOptions(
         modelLabel = matched.label || (matched as any).name || modelId;
       } else if (modelId === "auto" || modelId === "default") {
         modelLabel = "Auto (Tự động)";
+      } else if (modelId === "gpt-6") {
+        modelLabel = "GPT-6";
+      } else if (modelId === "gpt-5_6-sol") {
+        modelLabel = "GPT-5.6 Sol";
+      } else if (modelId === "gpt-5_5") {
+        modelLabel = "GPT-5.5";
       } else if (modelId === "gpt-4o") {
         modelLabel = "GPT-4o";
       } else if (modelId === "gpt-4o-mini") {
@@ -489,7 +491,12 @@ export function RightSidebar({
     if (inspectedProvider) {
       setSelectedTab(inspectedProvider.toLowerCase());
     } else {
-      setSelectedTab(providerDetailsList[0]?.provider);
+      setSelectedTab((prev) => {
+        if (prev && providerDetailsList.some((p) => p.provider === prev)) {
+          return prev;
+        }
+        return providerDetailsList[0]?.provider;
+      });
     }
   }, [inspectedProvider, providerDetailsList.length]);
 

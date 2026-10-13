@@ -232,14 +232,15 @@ export function ProviderModal({
               const sel = selectionsMap[p.id] || {};
               const isSyncingThis = loadingProvider === p.id;
 
-              const isFreeAccount = p.id === "chatgpt" || caps?.account_type === "free";
+              const isFreeAccount = caps?.account_type === "free";
+              const isFreeChatGPT = p.id === "chatgpt" && isFreeAccount;
 
               // 1. Models: For free account, lock to Auto
-              const models = isFreeAccount
+              const models = isFreeChatGPT
                 ? [
                     {
-                      id: "auto",
-                      label: "Auto (Tự động)",
+                      id: "none",
+                      label: "Auto (Mặc định)",
                       description: "Tài khoản Free: Mặc định Auto (Tự động)",
                       selected: true,
                       badge: "Free",
@@ -322,12 +323,11 @@ export function ProviderModal({
               const dataTypes = caps?.supported_data_types;
               const voice = caps?.voice_chat;
 
-              const isChatGPT = p.id === "chatgpt";
-              const currentToolId = isChatGPT ? "none" : (sel.tool_id || caps?.selected_tool_id || "none");
+              const currentToolId = isFreeChatGPT ? "none" : (sel.tool_id || caps?.selected_tool_id || "none");
               const isThinkingDisabled = currentToolId === "web_search" || currentToolId === "create_image";
 
-              const currentModelId = isFreeAccount
-                ? "auto"
+              const currentModelId = isFreeChatGPT
+                ? "none"
                 : sel.model_id || caps?.selected_model_id || models[0]?.id;
               const currentModel = models.find((m) => m.id === currentModelId) || models[0];
 
@@ -509,40 +509,44 @@ export function ProviderModal({
                               fontSize: 9.5,
                               padding: "1px 5px",
                               borderRadius: 3,
-                              backgroundColor: isFreeAccount ? "#f1f5f9" : "var(--brand-blue)",
-                              color: isFreeAccount ? "#64748b" : "#ffffff",
+                              backgroundColor: isFreeChatGPT ? "#f1f5f9" : "var(--brand-blue)",
+                              color: isFreeChatGPT ? "#64748b" : "#ffffff",
                               fontWeight: 700,
                             }}
                           >
-                            {isFreeAccount ? "Free (Auto)" : (currentModel?.badge || "Active")}
+                            {isFreeChatGPT ? "Free (Auto)" : (currentModel?.badge || "Active")}
                           </span>
                         </div>
                         <select
-                          disabled={isFreeAccount}
-                          value={currentModelId || "auto"}
+                          disabled={isFreeChatGPT}
+                          value={isFreeChatGPT ? "none" : currentModelId || "none"}
                           onChange={(e) => onUpdateSelection?.(p.id, { model_id: e.target.value })}
                           style={{
                             width: "100%",
                             padding: "6px 8px",
                             borderRadius: 6,
                             border: "1px solid var(--border-default, #cbd5e1)",
-                            backgroundColor: isFreeAccount ? "#f8fafc" : "#ffffff",
+                            backgroundColor: isFreeChatGPT ? "#f8fafc" : "#ffffff",
                             fontSize: 12,
                             fontWeight: 600,
-                            color: isFreeAccount ? "#64748b" : "var(--text-primary, #0f172a)",
-                            cursor: isFreeAccount ? "not-allowed" : "pointer",
+                            color: isFreeChatGPT ? "#64748b" : "var(--text-primary, #0f172a)",
+                            cursor: isFreeChatGPT ? "not-allowed" : "pointer",
                             outline: "none",
                           }}
-                          title={isFreeAccount ? "Tài khoản Free: Mặc định Auto (Tự động)" : "Chọn mô hình AI"}
+                          title={isFreeChatGPT ? "Mặc định hệ thống tự chọn (Tài khoản Free)" : "Chọn mô hình AI"}
                         >
-                          {models.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.label}
-                            </option>
-                          ))}
+                          {isFreeChatGPT ? (
+                            <option value="none">Auto (Mặc định)</option>
+                          ) : (
+                            models.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.label}
+                              </option>
+                            ))
+                          )}
                         </select>
                         <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
-                          {isFreeAccount ? "Tài khoản Free: Mặc định Auto (Tự động)" : (currentModel?.description || "")}
+                          {isFreeChatGPT ? "Mặc định hệ thống tự chọn (Tài khoản Free)" : (currentModel?.description || "")}
                         </span>
                       </div>
 
@@ -689,7 +693,7 @@ export function ProviderModal({
                             >
                               Công cụ hỗ trợ (Tools)
                             </label>
-                            {isChatGPT ? (
+                            {isFreeChatGPT ? (
                               <span
                                 style={{
                                   fontSize: 9.5,
@@ -718,10 +722,10 @@ export function ProviderModal({
                             )}
                           </div>
                           <select
-                            disabled={isChatGPT}
+                            disabled={isFreeChatGPT}
                             value={currentToolId}
                             onChange={(e) => {
-                              if (isChatGPT) return;
+                              if (isFreeChatGPT) return;
                               const nextTool = e.target.value;
                               if (nextTool === "web_search" || nextTool === "create_image") {
                                 onUpdateSelection?.(p.id, { tool_id: nextTool, mode_id: "standard" });
@@ -734,14 +738,14 @@ export function ProviderModal({
                               padding: "6px 8px",
                               borderRadius: 6,
                               border: "1px solid var(--border-default, #cbd5e1)",
-                              backgroundColor: isChatGPT ? "#f8fafc" : "#ffffff",
+                              backgroundColor: isFreeChatGPT ? "#f8fafc" : "#ffffff",
                               fontSize: 12,
                               fontWeight: 600,
-                              color: isChatGPT ? "#64748b" : "var(--text-primary, #0f172a)",
-                              cursor: isChatGPT ? "not-allowed" : "pointer",
+                              color: isFreeChatGPT ? "#64748b" : "var(--text-primary, #0f172a)",
+                              cursor: isFreeChatGPT ? "not-allowed" : "pointer",
                               outline: "none",
                             }}
-                            title={isChatGPT ? "ChatGPT: Luôn chọn 'Không sử dụng (Mặc định)'" : "Chọn công cụ từ menu Plus của ChatGPT"}
+                            title={isFreeChatGPT ? "Tài khoản Free: Mặc định không sử dụng công cụ" : "Chọn công cụ hỗ trợ"}
                           >
                             {tools.map((t) => (
                               <option key={t.id} value={t.id}>
@@ -749,8 +753,8 @@ export function ProviderModal({
                               </option>
                             ))}
                           </select>
-                          <span style={{ fontSize: 10.5, color: isChatGPT ? "#64748b" : "var(--text-muted)", lineHeight: 1.25 }}>
-                            {isChatGPT ? "ChatGPT: Luôn chọn 'Không sử dụng (Mặc định)'" : (currentTool?.description || "Chọn công cụ từ menu Plus của ChatGPT")}
+                          <span style={{ fontSize: 10.5, color: isFreeChatGPT ? "#64748b" : "var(--text-muted)", lineHeight: 1.25 }}>
+                            {isFreeChatGPT ? "Tài khoản Free: Mặc định không sử dụng công cụ" : (currentTool?.description || "Chọn công cụ hỗ trợ")}
                           </span>
                         </div>
                       )}

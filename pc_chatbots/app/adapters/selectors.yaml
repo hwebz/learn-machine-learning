@@ -168,9 +168,10 @@ providers:
       - { css: "button[aria-label*='Send' i]" }
     mode_selectors:
       think_toggle:
-        - { css: "button.__composer-pill:has-text('Think')" }
         - { css: "button:has-text('Think')" }
+        - { css: "button[aria-label*='Think' i]" }
         - { role: button, name: "Think" }
+        - { css: "button.__composer-pill:has-text('Think')" }
       research_mode:
         - { role: button, name: "Deep research" }
         - { css: "button[data-testid='deep-research']" }
@@ -178,13 +179,16 @@ providers:
         - { css: "button[data-testid='search-mode-button']" }
         - { css: "button[aria-label*='Search' i]:not([aria-label*='ChatGPT' i])" }
       model_switcher:
+        - { css: "button[aria-label*='Select ChatGPT model' i]" }
         - { css: "button[data-testid='model-switcher-dropdown']" }
         - { css: "button[id*='model-switcher']" }
         - { css: "[data-testid='model-switcher'] button" }
         - { css: "button:has-text('ChatGPT')" }
       attach_button:
+        - { css: "button[aria-label*='Add files' i]" }
         - { css: "button[data-testid='attach-button']" }
         - { css: "button[aria-label*='Attach' i]" }
+        - { css: "button[aria-label*='Đính kèm' i]" }
       speech_button:
         - { css: "button[data-testid='composer-speech-button']" }
         - { css: "button[aria-label*='Dictate' i]" }

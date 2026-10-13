@@ -243,6 +243,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
         const freshId = `session-${Date.now()}`;
         setActiveSessionId(freshId);
+        if (!targetId) {
+          setIsProvidersModalOpen(true);
+        }
         return [
           {
             id: freshId,
@@ -443,6 +446,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     setInspectedMessage(undefined);
     setInspectedProvider(undefined);
     setIsRightSidebarOpen(false);
+    setIsProvidersModalOpen(true);
 
     // Update URL back to root
     if (typeof window !== "undefined" && window.location.pathname !== "/") {
@@ -653,10 +657,21 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
     try {
       // 1. Dispatch research job to backend with all selected providers
+      const sanitizedOptions: Record<string, any> = {};
+      for (const [pId, opts] of Object.entries(capsHook.selectionsMap || {})) {
+        const pCaps = capsHook.capabilitiesMap[pId];
+        const isFree = pId === "chatgpt" && pCaps?.account_type === "free";
+        sanitizedOptions[pId] = {
+          ...opts,
+          model_id: isFree ? "none" : opts.model_id,
+          tool_id: isFree ? "none" : (opts.tool_id || "none"),
+        };
+      }
+
       const jobAccepted = await createResearchJob({
         query: content,
         providers: currentProviderIds,
-        provider_options: capsHook.selectionsMap,
+        provider_options: sanitizedOptions,
       });
 
       if (isCancelledRef.current) {

@@ -699,7 +699,7 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 
 .assistant-card-top-bar {

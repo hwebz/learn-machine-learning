@@ -17,6 +17,24 @@ logger = structlog.get_logger(__name__)
 # adapters actually drive a browser, so they call BrowserSession.start() which
 # performs the import.
 
+def _cleanup_stale_profile_processes(profile_dir: Path) -> None:
+    """Kill orphaned browser processes locking the specified user-data-dir."""
+    import subprocess
+    import sys
+
+    if sys.platform != "win32":
+        return
+    try:
+        prof_str = str(profile_dir).replace("/", "\\")
+        cmd = (
+            f'Get-CimInstance Win32_Process | '
+            f'Where-Object {{ $_.CommandLine -like "*{prof_str}*" }} | '
+            f'ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force }}'
+        )
+        subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, timeout=10)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("cleanup_stale_processes_failed", error=str(exc))
+
 
 class BrowserSession:
     """Persistent Chromium context backed by a dedicated profile dir.
@@ -103,6 +121,12 @@ class BrowserSession:
                         max_attempts=max_attempts,
                         error=str(exc),
                     )
+                    if "existing browser session" in str(exc).lower() or "singleton" in str(exc).lower():
+                        logger.warning(
+                            "stale_browser_session_detected_cleaning",
+                            profile=str(self.profile_dir),
+                        )
+                        _cleanup_stale_profile_processes(self.profile_dir)
                     if attempt < max_attempts:
                         await asyncio.sleep(1.5)
 

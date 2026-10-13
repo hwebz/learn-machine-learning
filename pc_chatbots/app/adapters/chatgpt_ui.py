@@ -37,12 +37,16 @@ class ChatGPTUIAdapter(BrowserProviderAdapter):
             except Exception:
                 pass
 
-        is_deep = mode in {"deep", "deep_research", "research", "pro"}
+        is_deep = mode in {"deep", "deep_research", "research", "pro", "thinking"}
         cfg_modes = self._cfg.get("mode_selectors") or {}
 
         # 1. Try toggling the "Think" button pill first
         think_chain = cfg_modes.get("think_toggle")
         if think_chain:
+            try:
+                await page.locator("button:has-text('Think'), button[aria-label*='Think' i]").first.wait_for(state="visible", timeout=3000)
+            except Exception:
+                pass
             locator, _ = await resolve_locator(page, think_chain)
             if locator is not None:
                 try:

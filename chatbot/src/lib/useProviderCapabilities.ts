@@ -43,6 +43,11 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
   useEffect(() => {
     const cachedCaps = loadStorage<Record<string, ProviderLiveCapabilities>>(CAPS_STORAGE_KEY, {});
     const cachedSelections = loadStorage<Record<string, ProviderSelectionConfig>>(SELECTIONS_STORAGE_KEY, {});
+    if (cachedSelections["chatgpt"] && cachedCaps["chatgpt"]?.account_type === "free") {
+      cachedSelections["chatgpt"].model_id = "none";
+      cachedSelections["chatgpt"].thinking_level_id = "auto";
+      cachedSelections["chatgpt"].tool_id = "none";
+    }
     setCapabilitiesMap(cachedCaps);
     setSelectionsMap(cachedSelections);
   }, []);
@@ -65,16 +70,18 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
         // Initialize selections if not set yet
         setSelectionsMap((prev) => {
           const existing = prev[p] || {};
+          const isFree = p === "chatgpt" && caps.account_type === "free";
           const updated = {
             ...prev,
             [p]: {
-              model_id: existing.model_id || caps.selected_model_id || caps.available_models[0]?.id,
+              model_id: isFree ? "none" : (existing.model_id || caps.selected_model_id || caps.available_models[0]?.id || "none"),
               thinking_level_id:
                 existing.thinking_level_id ||
                 caps.selected_thinking_level_id ||
-                caps.thinking_levels[0]?.id,
-              mode_id: existing.mode_id || caps.selected_mode_id || caps.modes[0]?.id,
-              tool_id: existing.tool_id || caps.selected_tool_id || caps.tools?.[0]?.id || "none",
+                caps.thinking_levels[0]?.id ||
+                "auto",
+              mode_id: existing.mode_id || caps.selected_mode_id || caps.modes[0]?.id || "standard",
+              tool_id: isFree ? "none" : (existing.tool_id || caps.selected_tool_id || caps.tools?.[0]?.id || "none"),
             },
           };
           saveStorage(SELECTIONS_STORAGE_KEY, updated);
@@ -136,15 +143,18 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
       const p = provider.toLowerCase();
       setSelectionsMap((prev) => {
         const existing = prev[p] || {};
+        const caps = capabilitiesMap[p];
+        const isFree = p === "chatgpt" && caps?.account_type === "free";
+        const safeUpdates = isFree ? { ...updates, model_id: "none", tool_id: "none" } : updates;
         const updated = {
           ...prev,
-          [p]: { ...existing, ...updates },
+          [p]: { ...existing, ...safeUpdates },
         };
         saveStorage(SELECTIONS_STORAGE_KEY, updated);
         return updated;
       });
     },
-    []
+    [capabilitiesMap]
   );
 
   // Active provider data computed
