@@ -534,9 +534,40 @@ export function ChatArea({
   const [inputText, setInputText] = useState("");
   const [isCopied, setIsCopied] = useState<string | null>(null);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+  const modelDropdownRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Close model dropdown when clicking outside or pressing Escape
+  useEffect(() => {
+    if (!isModelDropdownOpen) return;
+
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (
+        modelDropdownRef.current &&
+        !modelDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsModelDropdownOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsModelDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isModelDropdownOpen]);
 
   const [canScrollTop, setCanScrollTop] = useState(false);
   const [canScrollBottom, setCanScrollBottom] = useState(false);
@@ -629,7 +660,7 @@ export function ChatArea({
           {/* <h1 className="chat-title">{session.title}</h1> */}
 
           {/* Model Selector Pill / Multi-Model Dropdown */}
-          <div style={{ position: "relative" }}>
+          <div style={{ position: "relative" }} ref={modelDropdownRef}>
             <button
               className="model-badge-trigger"
               onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
@@ -1254,7 +1285,7 @@ export function ChatArea({
           <div className="composer-bottom-row">
             <div className="composer-left-actions">
               <button
-                className="btn-composer-pill"
+                className="btn-composer-pill hidden"
                 onClick={onOpenProvidersModal}
                 title="Mở Thư viện AI Models"
               >

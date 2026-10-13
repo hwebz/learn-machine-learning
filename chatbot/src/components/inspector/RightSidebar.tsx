@@ -78,7 +78,7 @@ export function RightSidebar({
   onRetryProvider,
 }: RightSidebarProps) {
   const [copiedStepIdx, setCopiedStepIdx] = useState<number | null>(null);
-  const [responseViewMode, setResponseViewMode] = useState<"preview" | "raw">("preview");
+  const [responseViewMode, setResponseViewMode] = useState<"preview" | "raw">("raw");
 
   const copyStepText = (text: string, idx: number) => {
     navigator.clipboard.writeText(text);
@@ -676,7 +676,7 @@ export function RightSidebar({
                               }}
                             >
                               <span style={{ fontSize: 11, fontWeight: 700, color: "var(--brand-blue)" }}>
-                                ✦ Phản hồi thực tế từ mô hình (Response Content)
+                                ✦ Phản hồi thực tế từ mô hình
                               </span>
                               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                 {/* Switcher toggle between Preview and Raw */}

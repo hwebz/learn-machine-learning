@@ -922,6 +922,10 @@ textarea {
   gap: 6px;
 }
 
+.hidden {
+  display: none !important;
+}
+
 .btn-composer-pill {
   display: inline-flex;
   align-items: center;
