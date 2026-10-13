@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { openProviderBrowser, closeProviderBrowser } from "../../lib/api";
+import { ModelBadgeLogo } from "../icons/Icons";
 
 interface ProviderActionBannerProps {
   provider: string;
@@ -93,7 +94,7 @@ export function ProviderActionBanner({
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#b45309", fontWeight: 600 }}>
-          <span>⚠️</span>
+          <ModelBadgeLogo type={provider} size={15} />
           <span>{displayProvider} yêu cầu đăng nhập / xác thực</span>
         </div>
         {reason && (
@@ -174,11 +175,10 @@ export function ProviderActionBanner({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: 16,
               flexShrink: 0,
             }}
           >
-            🔒
+            <ModelBadgeLogo type={provider} size={18} />
           </div>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>

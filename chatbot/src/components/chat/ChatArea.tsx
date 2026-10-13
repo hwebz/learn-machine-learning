@@ -639,29 +639,14 @@ export function ChatArea({
                 <>
                   <span style={{ display: "inline-flex", gap: 3, alignItems: "center" }}>
                     {selectedProviders.slice(0, 3).map((p) => (
-                      <span
-                        key={p.id}
-                        style={{
-                          width: 7,
-                          height: 7,
-                          borderRadius: "50%",
-                          backgroundColor: p.color,
-                        }}
-                      />
+                      <ModelBadgeLogo key={p.id} type={p.iconType} size={15} />
                     ))}
                   </span>
                   <span>{selectedCount} Models Selected</span>
                 </>
               ) : (
                 <>
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: "50%",
-                      backgroundColor: selectedProvider.color,
-                    }}
-                  />
+                  <ModelBadgeLogo type={selectedProvider.iconType} size={16} />
                   <span>{selectedProvider.name.split(" ")[0]}</span>
                 </>
               )}
@@ -744,15 +729,7 @@ export function ChatArea({
                           style={{ cursor: "pointer", accentColor: "var(--brand-blue)" }}
                           onClick={(e) => e.stopPropagation()}
                         />
-                        <span
-                          style={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: "50%",
-                            backgroundColor: p.color,
-                            flexShrink: 0,
-                          }}
-                        />
+                        <ModelBadgeLogo type={p.iconType} size={18} />
                         <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
                           <span style={{ fontWeight: isChecked ? 600 : 400, color: "var(--text-primary)" }}>
                             {p.name}
@@ -915,9 +892,12 @@ export function ChatArea({
                     background:
                       selectedProvider.avatarBg ||
                       "linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                   }}
                 >
-                  AI
+                  <ModelBadgeLogo type={selectedProvider.iconType} size={18} />
                 </div>
               )}
               <span className="author-name">{msg.authorName}</span>
@@ -934,13 +914,17 @@ export function ChatArea({
                         style={{
                           fontSize: 10,
                           fontWeight: 600,
-                          padding: "1px 6px",
+                          padding: "2px 7px",
                           borderRadius: 4,
                           backgroundColor: "#f1f5f9",
                           color: pInfo?.color || "var(--text-secondary)",
                           border: "1px solid #e2e8f0",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
                         }}
                       >
+                        <ModelBadgeLogo type={pInfo?.iconType || pId} size={12} />
                         {pInfo?.name || pId}
                       </span>
                     );
@@ -1128,9 +1112,12 @@ export function ChatArea({
                 style={{
                   background: selectedProvider.avatarBg,
                   animation: "pulseGlow 1.5s infinite",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
-                AI
+                <ModelBadgeLogo type={selectedProvider.iconType} size={18} />
               </div>
               <span className="author-name">
                 Multi-Model Engine ({selectedProviders.map((p) => p.name).join(", ")})

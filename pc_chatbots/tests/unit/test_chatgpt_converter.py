@@ -272,6 +272,36 @@ def test_chatgpt_standalone_raw_html_component_row() -> None:
     assert "After calculator" in md
 
 
+def test_chatgpt_standalone_box_component_with_nested_styles_and_controls() -> None:
+    html = """
+    <p>Top section</p>
+    <div class="Box-d8a1c9 custom-tool" data-d-component="row">
+        <div class="Box-col" data-d-component="column">
+            <label><span data-d-weight="bold">Select Option:</span></label>
+            <select name="options">
+                <option value="1">Option 1</option>
+                <option value="2">Option 2</option>
+            </select>
+        </div>
+        <div class="Box-col" data-d-component="column">
+            <input type="text" placeholder="Custom value" value="Test" />
+            <button class="btn-action">Apply</button>
+        </div>
+    </div>
+    <p>Bottom section</p>
+    """
+    md = html_to_markdown(html, provider="chatgpt")
+    assert "Top section" in md
+    assert '<div class="Box-d8a1c9 custom-tool" data-d-component="row">' in md
+    assert '<select name="options">' in md
+    assert '<option value="1">Option 1</option>' in md
+    assert '<input type="text" placeholder="Custom value" value="Test" />' in md
+    assert '<button class="btn-action">Apply</button>' in md
+    assert "Bottom section" in md
+    # Markdown symbols should not leak outside or inside the raw HTML block
+    assert "**Select Option:**" not in md
+
+
 def test_chatgpt_full_page_snapshot_isolation() -> None:
     full_page_html = """
     <!DOCTYPE html>
@@ -300,6 +330,56 @@ def test_chatgpt_full_page_snapshot_isolation() -> None:
     assert "Recents" not in md
     assert "Old chat 1" not in md
     assert "You said:" not in md
+
+
+def test_chatgpt_full_page_ignores_tertiary_thinking_container() -> None:
+    full_page_html = """
+    <!DOCTYPE html>
+    <html>
+    <body>
+        <nav><a href="#content">Skip to content</a></nav>
+        <div data-markdown-text-style="assistant-message" data-markdown-text-tone="tertiary">
+            <span>Thinking process: Finalized assumptions and formulas...</span>
+        </div>
+        <div data-markdown-text-style="assistant-message" class="MarkdownRoot">
+            <p>Here is your <strong>ROI Calculator</strong> result.</p>
+        </div>
+    </body>
+    </html>
+    """
+    md = html_to_markdown(full_page_html, provider="chatgpt")
+    assert "Here is your **ROI Calculator** result." in md
+    assert "Thinking process" not in md
+
+
+def test_chatgpt_interactive_tool_components() -> None:
+    html = """
+    <p>Intro text</p>
+    <div class="Box-qIMv6G" data-d-component="box" data-d-direction="col">
+        <div class="Box-header" data-d-component="row">
+            <h3>AI Workflow ROI Calculator</h3>
+        </div>
+        <div class="Slider-veC4c6" data-d-component="slider">
+            <div class="SliderContainer-csaRc8">
+                <span role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="65" class="Thumb-ZDGlbm"></span>
+            </div>
+        </div>
+        <div role="radiogroup" data-d-component="radio-group" class="RadioGroup-tMSWPY">
+            <button type="button" role="radio" aria-checked="true" data-state="checked" value="USD"></button>
+            <button type="button" role="radio" aria-checked="false" data-state="unchecked" value="EUR"></button>
+        </div>
+        <input data-d-component="input" type="number" value="10" />
+    </div>
+    <p>Outro text</p>
+    """
+    md = html_to_markdown(html, provider="chatgpt")
+    assert "Intro text" in md
+    assert '<div class="Box-qIMv6G" data-d-component="box" data-d-direction="col">' in md
+    assert 'data-d-component="slider"' in md
+    assert 'role="radiogroup"' in md
+    assert '<input data-d-component="input" type="number" value="10" />' in md
+    assert "Outro text" in md
+
 
 
 

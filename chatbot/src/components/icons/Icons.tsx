@@ -277,58 +277,24 @@ export function CloseIcon({ className = "", size = 14, color = "currentColor" }:
   );
 }
 
-export function ModelBadgeLogo({ type = "chatgpt", size = 48 }: { type: string; size?: number }) {
-  // SVG avatars / icons for major providers
-  if (type === "chatgpt") {
-    return (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="11" fill="#10a37f" />
-        <path d="M12 4a8 8 0 0 1 7.4 5H16a4 4 0 0 0-3.5-2V4zm5.5 6a4 4 0 0 0-1.5 3.2l2.6 1.5a8 8 0 0 0 .9-4.7h-2zm-2.8 4.7a4 4 0 0 0-3.2 1.5v3a8 8 0 0 0 4.7-.9l-1.5-2.6v-1zm-4.7 2.8a4 4 0 0 0-3.5-2H4.6a8 8 0 0 0 7.4 5v-3zm-5.5-6a4 4 0 0 0 1.5-3.2L4.4 6.8a8 8 0 0 0-.9 4.7h2zm2.8-4.7a4 4 0 0 0 3.2-1.5V4a8 8 0 0 0-4.7.9l1.5 2.6v.5z" fill="#ffffff" />
-      </svg>
-    );
-  }
-  if (type === "gemini") {
-    return (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="11" fill="url(#geminiGrad)" />
-        <path d="M12 4c.4 4 3.6 7.6 7.6 8-4 .4-7.2 4-7.6 8-.4-4-3.6-7.6-7.6-8 4-.4 7.2-4 7.6-8z" fill="#ffffff" />
-        <defs>
-          <linearGradient id="geminiGrad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#4285f4" />
-            <stop offset="0.5" stopColor="#9b72cf" />
-            <stop offset="1" stopColor="#d96570" />
-          </linearGradient>
-        </defs>
-      </svg>
-    );
-  }
-  if (type === "copilot") {
-    return (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="11" fill="#0078d4" />
-        <path d="M7 9a5 5 0 0 1 10 0v6a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3V9z" fill="#ffffff" opacity="0.3" />
-        <circle cx="10" cy="11" r="1.5" fill="#ffffff" />
-        <circle cx="14" cy="11" r="1.5" fill="#ffffff" />
-        <path d="M9 15h6" stroke="#ffffff" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    );
-  }
-  if (type === "deepseek") {
-    return (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="11" fill="#0284c7" />
-        <path d="M8 8h8v2H8zm0 4h6v2H8zm0 4h4v2H8z" fill="#ffffff" />
-        <circle cx="16" cy="16" r="2" fill="#38bdf8" />
-      </svg>
-    );
-  }
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="11" fill="#2563eb" />
-      <path d="M12 7v10M7 12h10" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
-    </svg>
-  );
-}
+export {
+  ProviderLogo,
+  ModelBadgeLogo,
+  ChatGptLogo,
+  GeminiLogo,
+  CopilotLogo,
+  ClaudeLogo,
+  DeepSeekLogo,
+  QwenLogo,
+  PerplexityLogo,
+  KimiLogo,
+  GrokLogo,
+  MistralLogo,
+  ZhipuLogo,
+  MinimaxLogo,
+  MetaLogo,
+  PiLogo,
+} from "./ProviderLogos";
 
 export function ArrowUpCircleIcon({ className = "", size = 20, color = "currentColor" }: IconProps) {
   return (

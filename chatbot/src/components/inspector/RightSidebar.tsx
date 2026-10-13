@@ -530,11 +530,12 @@ export function RightSidebar({
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
-                    gap: 5,
+                    gap: 6,
                     whiteSpace: "nowrap",
                     transition: "all 0.15s ease",
                   }}
                 >
+                  <ModelBadgeLogo type={prov.provider} size={15} />
                   <span>{prov.displayName}</span>
                   <span
                     style={{
@@ -568,8 +569,9 @@ export function RightSidebar({
                 fontSize: 11.5,
               }}
             >
-              <span style={{ fontWeight: 700, color: "var(--brand-blue)" }}>
-                ✦ {activeDetail.displayName} ({activeDetail.thinkingSteps.length} bước suy luận & tìm kiếm)
+              <span style={{ fontWeight: 700, color: "var(--brand-blue)", display: "flex", alignItems: "center", gap: 6 }}>
+                <ModelBadgeLogo type={activeDetail.provider} size={16} />
+                <span>{activeDetail.displayName} ({activeDetail.thinkingSteps.length} bước suy luận & tìm kiếm)</span>
               </span>
               {activeDetail.timestamp && (
                 <span style={{ color: "var(--text-muted)", fontSize: 11 }}>

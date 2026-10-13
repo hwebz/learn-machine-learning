@@ -240,13 +240,17 @@ class ChatGPTMarkdownConverter(BaseMarkdownConverter):
         if not is_full_page:
             return full_html
 
-        match = re.search(r'<div[^>]*data-markdown-text-style="assistant-message"[^>]*>', full_html)
-        if not match:
-            match = re.search(r'<div[^>]*class="[^"]*MarkdownRoot[^"]*"[^>]*>', full_html)
-        if not match:
+        matches = list(re.finditer(r'<div[^>]*data-markdown-text-style="assistant-message"[^>]*>', full_html))
+        if not matches:
+            matches = list(re.finditer(r'<div[^>]*class="[^"]*MarkdownRoot[^"]*"[^>]*>', full_html))
+        if not matches:
             return full_html
 
-        start_tag_end = match.end()
+        # Prefer non-tertiary assistant message containers (reasoning models produce tertiary thinking pills)
+        non_tertiary = [m for m in matches if 'data-markdown-text-tone="tertiary"' not in m.group(0)]
+        target_match = non_tertiary[-1] if non_tertiary else matches[-1]
+
+        start_tag_end = target_match.end()
         depth = 1
         pos = start_tag_end
         tag_regex = re.compile(r'</?div[^>]*>', re.IGNORECASE)
@@ -283,9 +287,11 @@ class ChatGPTMarkdownConverter(BaseMarkdownConverter):
     def is_raw_html_block_start(self, tag: str, attr_map: dict[str, str], cls: str) -> bool:
         if super().is_raw_html_block_start(tag, attr_map, cls):
             return True
-        if attr_map.get("data-d-component") == "row":
+        # Standalone HTML UI components, calculators, tools, and custom layout rows
+        comp = attr_map.get("data-d-component")
+        if comp in {"box", "row", "grid", "slider", "radio-group", "calculator", "tool", "interactive", "form"}:
             return True
-        if "Box-" in cls and attr_map.get("data-d-component") == "row":
+        if "Box-" in cls and (comp or attr_map.get("data-d-direction")):
             return True
         return False
 
@@ -336,9 +342,15 @@ class ChatGPTMarkdownConverter(BaseMarkdownConverter):
         return escaped
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        self._format_depth += 1
         attr_map = {k: (v or "") for k, v in attrs}
         cls = attr_map.get("class", "")
+
+        # If inside raw HTML block or starting one, delegate directly to super()
+        if self._raw_html_stack or self.is_raw_html_block_start(tag, attr_map, cls):
+            super().handle_starttag(tag, attrs)
+            return
+
+        self._format_depth += 1
 
         # Dividers / Horizontal rules
         if attr_map.get("data-d-component") == "divider" or "Divider-" in cls:
@@ -380,6 +392,9 @@ class ChatGPTMarkdownConverter(BaseMarkdownConverter):
         super().handle_starttag(tag, attrs)
 
     def handle_endtag(self, tag: str) -> None:
+        if self._raw_html_stack:
+            super().handle_endtag(tag)
+            return
         if (
             self._format_stack
             and self._format_stack[-1][0] == self._format_depth

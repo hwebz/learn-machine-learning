@@ -443,6 +443,15 @@ class BaseMarkdownConverter(HTMLParser):
     # HTMLParser Callback Implementations
     # -------------------------------------------------------------------------
 
+    def _format_starttag_fallback(self, tag: str, attr_map: dict[str, str]) -> str:
+        raw = self.get_starttag_text()
+        if raw:
+            return raw
+        if not attr_map:
+            return f"<{tag}>"
+        attrs_str = " ".join(f'{k}="{html.escape(v, quote=True)}"' if v != "" else k for k, v in attr_map.items())
+        return f"<{tag} {attrs_str}>"
+
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attr_map = {k: (v or "") for k, v in attrs}
         cls = attr_map.get("class", "")
@@ -457,7 +466,7 @@ class BaseMarkdownConverter(HTMLParser):
         if not self._raw_html_stack and not self._table_stack and not self._code_stack and not self._math_stack:
             if self.is_raw_html_block_start(tag, attr_map, cls):
                 self._at_li_start = False
-                raw_start = self.get_starttag_text() or f"<{tag}>"
+                raw_start = self._format_starttag_fallback(tag, attr_map)
                 self._raw_html_stack.append({
                     "tag": tag,
                     "depth": 1,
@@ -469,7 +478,7 @@ class BaseMarkdownConverter(HTMLParser):
             top = self._raw_html_stack[-1]
             if tag == top["tag"]:
                 top["depth"] += 1
-            raw_start = self.get_starttag_text() or f"<{tag}>"
+            raw_start = self._format_starttag_fallback(tag, attr_map)
             top["parts"].append(raw_start)
             return
 

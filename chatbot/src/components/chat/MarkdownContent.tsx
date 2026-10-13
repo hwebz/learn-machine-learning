@@ -316,8 +316,8 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
         token && token.tokens && this.parser
           ? this.parser.parse(token.tokens)
           : typeof token === "string"
-          ? token
-          : token?.text || "";
+            ? token
+            : token?.text || "";
       return `<blockquote class="markdown-blockquote">${body}</blockquote>`;
     };
 
@@ -760,9 +760,40 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       }
     };
 
-    // 3. Copy button handler delegation
+    // 3. Copy button handler delegation & Radio groups
     const handleContainerClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
+
+      // Radio group interaction delegation
+      const radioBtn = target.closest<HTMLButtonElement>("button[role='radio'], .RadioItem-eqbQKh");
+      const radioLabel = target.closest<HTMLLabelElement>(".RadioLabel-aEyICO, [data-d-component='radio']");
+      let selectedRadio = radioBtn;
+      if (!selectedRadio && radioLabel) {
+        selectedRadio = radioLabel.querySelector<HTMLButtonElement>("button[role='radio'], .RadioItem-eqbQKh");
+      }
+
+      if (selectedRadio) {
+        const radioGroup = selectedRadio.closest("[role='radiogroup'], [data-d-component='radio-group']");
+        if (radioGroup) {
+          const allRadios = radioGroup.querySelectorAll<HTMLButtonElement>("button[role='radio'], .RadioItem-eqbQKh");
+          allRadios.forEach((r) => {
+            r.setAttribute("aria-checked", "false");
+            r.setAttribute("data-state", "unchecked");
+            const indicator = r.querySelector(".RadioIndicator-QSL7RM");
+            if (indicator) indicator.remove();
+          });
+          selectedRadio.setAttribute("aria-checked", "true");
+          selectedRadio.setAttribute("data-state", "checked");
+          if (!selectedRadio.querySelector(".RadioIndicator-QSL7RM")) {
+            const ind = document.createElement("span");
+            ind.className = "RadioIndicator-QSL7RM";
+            ind.setAttribute("data-state", "checked");
+            selectedRadio.appendChild(ind);
+          }
+        }
+        return;
+      }
+
       const copyBtn = target.closest(".code-copy-btn") as HTMLButtonElement | null;
       if (!copyBtn) return;
 
@@ -793,11 +824,67 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       });
     };
 
+    // 4. Interactive Slider pointer/drag delegation
+    const handleSliderPointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement;
+      const sliderContainer = target.closest<HTMLElement>(
+        ".SliderContainer-csaRc8, .Slider-veC4c6, [data-d-component='slider']"
+      );
+      if (!sliderContainer) return;
+
+      const track = sliderContainer.querySelector<HTMLElement>(".Track-J8JrvV") || sliderContainer;
+      const range = sliderContainer.querySelector<HTMLElement>(".Range-OINGKj");
+      const thumb = sliderContainer.querySelector<HTMLElement>(".Thumb-ZDGlbm, [role='slider']");
+      const thumbWrapper = thumb?.parentElement;
+      if (!thumb || !thumbWrapper) return;
+
+      const updateSliderValue = (clientX: number) => {
+        const rect = track.getBoundingClientRect();
+        if (rect.width <= 0) return;
+        const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        const min = parseFloat(thumb.getAttribute("aria-valuemin") || "0");
+        const max = parseFloat(thumb.getAttribute("aria-valuemax") || "100");
+        const val = Math.round(min + ratio * (max - min));
+
+        thumb.setAttribute("aria-valuenow", String(val));
+        thumbWrapper.style.left = `calc(${ratio * 100}% - 3px)`;
+        if (range) {
+          range.style.right = `${(1 - ratio) * 100}%`;
+        }
+
+        const parentBox = sliderContainer.closest(
+          "[data-d-component='box'], [data-d-component='grid-item'], div[class*='Box-']"
+        );
+        if (parentBox) {
+          const valueTitle = parentBox.querySelector<HTMLElement>(
+            "[data-d-component='title'] span, .Title-HRvkwB span, [data-d-component='title']"
+          );
+          if (valueTitle) {
+            valueTitle.textContent = `${val}%`;
+          }
+        }
+      };
+
+      updateSliderValue(e.clientX);
+
+      const onPointerMove = (moveEvt: PointerEvent) => {
+        updateSliderValue(moveEvt.clientX);
+      };
+      const onPointerUp = () => {
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerup", onPointerUp);
+      };
+      window.addEventListener("pointermove", onPointerMove);
+      window.addEventListener("pointerup", onPointerUp);
+    };
+
     container.addEventListener("change", handleCheckboxChange);
     container.addEventListener("click", handleContainerClick);
+    container.addEventListener("pointerdown", handleSliderPointerDown);
     return () => {
       container.removeEventListener("change", handleCheckboxChange);
       container.removeEventListener("click", handleContainerClick);
+      container.removeEventListener("pointerdown", handleSliderPointerDown);
     };
   }, [htmlContent]);
 
