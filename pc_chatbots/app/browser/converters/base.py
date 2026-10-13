@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from html.parser import HTMLParser
 from typing import Any, Iterable
+import html
 import json
 import re
 
 _BLOCK_TAGS = {"p", "div", "section", "article", "header", "footer"}
 _SKIP_TAGS = {"script", "style", "noscript", "svg"}
+_VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
 _HEADING = {"h1": "#", "h2": "##", "h3": "###", "h4": "####", "h5": "#####", "h6": "######"}
 _LIST_MARK = {"ul": "- ", "ol": "1. "}
 
@@ -67,6 +69,7 @@ class BaseMarkdownConverter(HTMLParser):
         self._at_li_start = False
         self._in_pre = False
         self._in_code = False
+        self._inline_code_buffer: list[list[str]] = []
         self._href_stack: list[str | None] = []
         self._link_text: list[str] | None = None
         self._citation_stack: list[tuple[str, list[tuple[str, str | None, str | None]]]] = []
@@ -74,7 +77,9 @@ class BaseMarkdownConverter(HTMLParser):
         self._code_stack: list[dict[str, Any]] = []
         self._math_stack: list[dict[str, Any]] = []
         self._table_stack: list[dict[str, Any]] = []
+        self._raw_html_stack: list[dict[str, Any]] = []
         self._skip_depth = 0
+        self._li_depth = 0
 
     @property
     def parts(self) -> list[str]:
@@ -92,9 +97,17 @@ class BaseMarkdownConverter(HTMLParser):
         """Hook to clean up or transform markdown after parsing."""
         return self.default_cleanup(markdown)
 
+    def escape_plain_text(self, text: str) -> str:
+        """Hook to escape literal markdown syntax characters in plain text."""
+        return text
+
     def is_skip_tag(self, tag: str, attr_map: dict[str, str], cls: str) -> bool:
         """Return True if element should be completely ignored (including children)."""
         return tag in _SKIP_TAGS
+
+    def is_raw_html_block_start(self, tag: str, attr_map: dict[str, str], cls: str) -> bool:
+        """Hook to declare standalone HTML components that should be preserved as raw HTML."""
+        return False
 
     def is_table_start(self, tag: str, attr_map: dict[str, str], cls: str) -> bool:
         """Return True if element starts a table."""
@@ -212,7 +225,27 @@ class BaseMarkdownConverter(HTMLParser):
             first = first[5:]
         return first.replace(" ", "")
 
+    @staticmethod
+    def format_inline_code(code_text: str) -> str:
+        if not code_text:
+            return ""
+        runs = re.findall(r"`+", code_text)
+        max_run = max((len(r) for r in runs), default=0)
+        fence_len = max_run + 1 if max_run > 0 else 1
+        fence = "`" * fence_len
+        needs_space_padding = (
+            code_text.startswith("`")
+            or code_text.endswith("`")
+            or (code_text.startswith(" ") and code_text.endswith(" ") and bool(code_text.strip()))
+        )
+        if needs_space_padding:
+            return f"{fence} {code_text} {fence}"
+        return f"{fence}{code_text}{fence}"
+
     def _emit(self, text: str) -> None:
+        if self._inline_code_buffer:
+            self._inline_code_buffer[-1].append(text)
+            return
         if self._table_stack and self._table_stack[-1]["in_cell"]:
             self._table_stack[-1]["curr_cell"].append(text)
             return
@@ -295,6 +328,18 @@ class BaseMarkdownConverter(HTMLParser):
         curr.append(fenced)
         curr.append("\n\n")
 
+    def _emit_raw_html_block(self, html_block: str) -> None:
+        if not html_block:
+            return
+        curr = self.parts
+        if curr and not curr[-1].endswith("\n\n"):
+            if curr[-1].endswith("\n"):
+                curr.append("\n")
+            else:
+                curr.append("\n\n")
+        curr.append(html_block)
+        curr.append("\n\n")
+
     def _emit_math_block(self, top: dict[str, Any]) -> None:
         formula = (top.get("formula") or "").strip()
         if not formula and top.get("annotation_text"):
@@ -346,11 +391,24 @@ class BaseMarkdownConverter(HTMLParser):
         max_cols = max(len(r[0]) for r in rows_with_meta)
         if max_cols == 0:
             return
+        alignments = info.get("col_alignments", [])
+        sep_cells: list[str] = []
+        for c in range(max_cols):
+            align = alignments[c] if c < len(alignments) else ""
+            if align == "center":
+                sep_cells.append(":---:")
+            elif align == "right":
+                sep_cells.append("---:")
+            elif align == "left":
+                sep_cells.append(":---")
+            else:
+                sep_cells.append("---")
+
         table_md_lines: list[str] = []
         first_row, _ = rows_with_meta[0]
         first_row_padded = first_row + [""] * (max_cols - len(first_row))
         table_md_lines.append("| " + " | ".join(first_row_padded) + " |")
-        table_md_lines.append("| " + " | ".join(["---"] * max_cols) + " |")
+        table_md_lines.append("| " + " | ".join(sep_cells) + " |")
         for row, _ in rows_with_meta[1:]:
             padded = row + [""] * (max_cols - len(row))
             table_md_lines.append("| " + " | ".join(padded) + " |")
@@ -395,6 +453,26 @@ class BaseMarkdownConverter(HTMLParser):
         if self._skip_depth:
             return
 
+        # Raw HTML standalone component block
+        if not self._raw_html_stack and not self._table_stack and not self._code_stack and not self._math_stack:
+            if self.is_raw_html_block_start(tag, attr_map, cls):
+                self._at_li_start = False
+                raw_start = self.get_starttag_text() or f"<{tag}>"
+                self._raw_html_stack.append({
+                    "tag": tag,
+                    "depth": 1,
+                    "parts": [raw_start],
+                })
+                return
+
+        if self._raw_html_stack:
+            top = self._raw_html_stack[-1]
+            if tag == top["tag"]:
+                top["depth"] += 1
+            raw_start = self.get_starttag_text() or f"<{tag}>"
+            top["parts"].append(raw_start)
+            return
+
         # Table handling
         if self.is_table_start(tag, attr_map, cls):
             self._table_stack.append({
@@ -404,6 +482,7 @@ class BaseMarkdownConverter(HTMLParser):
                 "in_cell": False,
                 "in_header": False,
                 "header_count": 0,
+                "col_alignments": [],
             })
             return
 
@@ -421,6 +500,19 @@ class BaseMarkdownConverter(HTMLParser):
                 top["curr_cell"] = []
                 if tag == "th" or top["in_header"]:
                     top["header_count"] += 1
+                col_idx = len(top["curr_row"])
+                raw_align = (attr_map.get("data-d-align") or attr_map.get("align") or "").lower()
+                align = ""
+                if raw_align in {"start", "left"}:
+                    align = "left"
+                elif raw_align in {"center", "middle"}:
+                    align = "center"
+                elif raw_align in {"end", "right"}:
+                    align = "right"
+                while len(top["col_alignments"]) <= col_idx:
+                    top["col_alignments"].append("")
+                if align and not top["col_alignments"][col_idx]:
+                    top["col_alignments"][col_idx] = align
                 return
 
         # Math / LaTeX elements
@@ -524,6 +616,30 @@ class BaseMarkdownConverter(HTMLParser):
             self._citation_text_stack.append([])
             return
 
+        # Checkboxes (task lists)
+        is_checkbox = (
+            attr_map.get("role") == "checkbox"
+            or attr_map.get("data-d-component") == "checkbox"
+            or attr_map.get("type") == "checkbox"
+            or "Checkbox-" in cls
+        )
+        if is_checkbox:
+            is_checked = (
+                attr_map.get("aria-checked") == "true"
+                or attr_map.get("data-state") == "checked"
+                or attr_map.get("checked") in {"", "true", "checked"}
+            )
+            box_mark = "[x] " if is_checked else "[ ] "
+            if self._at_li_start:
+                self.parts.append(box_mark)
+                self._at_li_start = False
+            else:
+                if self.parts and not self.parts[-1].endswith("\n"):
+                    self.parts.append("\n")
+                indent = "    " * max(0, len(self._list_stack))
+                self.parts.append(f"{indent}- {box_mark}")
+            return
+
         # Standard HTML5 text elements
         if tag in _HEADING:
             self._at_li_start = False
@@ -542,31 +658,42 @@ class BaseMarkdownConverter(HTMLParser):
             if self.parts and not self.parts[-1].endswith("\n"):
                 self.parts.append("\n")
         elif tag == "li":
+            self._li_depth += 1
             depth = max(0, len(self._list_stack) - 1)
-            indent = "  " * depth
+            indent = "    " * depth
             if self._list_stack and self._list_stack[-1] == "ol" and self._list_counters:
                 idx = self._list_counters[-1]
                 marker = f"{idx}. "
                 self._list_counters[-1] += 1
             else:
                 marker = "- "
-            if self.parts and not self.parts[-1].endswith("\n"):
-                self.parts.append("\n")
+            if self.parts:
+                while len(self.parts) > 1 and self.parts[-1] == "\n" and self.parts[-2].endswith("\n"):
+                    self.parts.pop()
+                if self.parts and self.parts[-1].endswith("\n\n"):
+                    self.parts[-1] = self.parts[-1][:-1]
+                elif self.parts and not self.parts[-1].endswith("\n"):
+                    self.parts.append("\n")
             self.parts.append(indent + marker)
             self._at_li_start = True
         elif tag in _BLOCK_TAGS:
-            if not self._at_li_start:
+            if not self._at_li_start and self._li_depth == 0:
                 self.parts.append("\n\n")
         elif tag == "blockquote":
             self._at_li_start = False
             self._buffers.append([])
         elif tag in {"code", "tt"}:
             self._in_code = True
-            self._emit("`")
+            self._inline_code_buffer.append([])
         elif tag in {"strong", "b"}:
-            self._emit("**")
+            if not self._in_code:
+                self._emit("**")
         elif tag in {"em", "i"}:
-            self._emit("*")
+            if not self._in_code:
+                self._emit("*")
+        elif tag in {"u", "ins"}:
+            if not self._in_code:
+                self._emit("<u>")
         elif tag == "a":
             self._href_stack.append(attr_map.get("href"))
             self._link_text = []
@@ -576,6 +703,18 @@ class BaseMarkdownConverter(HTMLParser):
             self._skip_depth = max(0, self._skip_depth - 1)
             return
         if self._skip_depth:
+            return
+
+        if self._raw_html_stack:
+            top = self._raw_html_stack[-1]
+            if tag not in _VOID_TAGS:
+                top["parts"].append(f"</{tag}>")
+            if tag == top["tag"]:
+                top["depth"] -= 1
+                if top["depth"] <= 0:
+                    self._raw_html_stack.pop()
+                    html_block = "".join(top["parts"]).strip()
+                    self._emit_raw_html_block(html_block)
             return
 
         if self._math_stack:
@@ -597,7 +736,8 @@ class BaseMarkdownConverter(HTMLParser):
             top = self._table_stack[-1]
             if tag in {"th", "td"} and top["in_cell"]:
                 cell_text = "".join(top["curr_cell"]).strip()
-                cell_text = cell_text.replace("\n", " ").replace("|", "\\|")
+                cell_text = cell_text.replace("\n", " ")
+                cell_text = re.sub(r'(?<!\\)\|', r'\|', cell_text)
                 top["curr_row"].append(cell_text)
                 top["in_cell"] = False
                 top["curr_cell"] = None
@@ -673,22 +813,37 @@ class BaseMarkdownConverter(HTMLParser):
             self._at_li_start = False
             self.parts.append("\n")
         elif tag == "li":
+            self._li_depth = max(0, self._li_depth - 1)
             self._at_li_start = False
-            self.parts.append("\n")
+            if self.parts and not self.parts[-1].endswith("\n"):
+                self.parts.append("\n")
         elif tag in _BLOCK_TAGS:
-            self.parts.append("\n\n")
+            if self._li_depth == 0:
+                self.parts.append("\n\n")
         elif tag == "blockquote":
             if len(self._buffers) > 1:
                 inner = self._buffers.pop()
                 self._emit_blockquote("".join(inner))
         elif tag in {"code", "tt"}:
-            if self._in_code:
-                self._emit("`")
+            if self._inline_code_buffer:
+                buf = self._inline_code_buffer.pop()
+                if not self._inline_code_buffer:
+                    self._in_code = False
+                code_text = "".join(buf)
+                formatted_code = self.format_inline_code(code_text)
+                self._emit(formatted_code)
+            elif self._in_code:
                 self._in_code = False
+                self._emit("`")
         elif tag in {"strong", "b"}:
-            self._emit("**")
+            if not self._in_code:
+                self._emit("**")
         elif tag in {"em", "i"}:
-            self._emit("*")
+            if not self._in_code:
+                self._emit("*")
+        elif tag in {"u", "ins"}:
+            if not self._in_code:
+                self._emit("</u>")
         elif tag == "a":
             text = "".join(self._link_text or []).strip()
             href = self._href_stack.pop() if self._href_stack else None
@@ -700,6 +855,9 @@ class BaseMarkdownConverter(HTMLParser):
 
     def handle_data(self, data: str) -> None:
         if self._skip_depth:
+            return
+        if self._raw_html_stack:
+            self._raw_html_stack[-1]["parts"].append(html.escape(data, quote=False))
             return
         if self._math_stack:
             top = self._math_stack[-1]
@@ -714,6 +872,9 @@ class BaseMarkdownConverter(HTMLParser):
                 top["math_text"].append(data)
                 return
             top["raw_text"].append(data)
+            return
+        if self._inline_code_buffer:
+            self._inline_code_buffer[-1].append(data)
             return
         if self._table_stack and not self._math_stack:
             top = self._table_stack[-1]
@@ -731,7 +892,8 @@ class BaseMarkdownConverter(HTMLParser):
             else:
                 top["general_text"].append(data)
             return
-        self._emit(data)
+        escaped_data = self.escape_plain_text(data)
+        self._emit(escaped_data)
 
     def default_cleanup(self, raw: str) -> str:
         """Standard Markdown normalization: trims empty list items and code blocks."""

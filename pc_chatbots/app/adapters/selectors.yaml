@@ -30,7 +30,11 @@ blocking:
     - "unusual traffic"
     - "captcha"
     - "Sign in to continue"
-    - "rate limit"
+    - "rate limit reached"
+    - "rate limit exceeded"
+    - "hit the rate limit"
+    - "reached your usage limit"
+    - "reached your limit"
     - "Too many requests"
     # "Please try again later" is too broad — catches Kimi's "System is currently busy..."
     # instead of a real CAPTCHA/login wall. Keep per-provider overrides if needed.

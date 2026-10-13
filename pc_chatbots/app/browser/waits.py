@@ -54,7 +54,9 @@ def match_blocking_url(url: str, patterns: list[str]) -> str | None:
 
 
 def match_blocking_text(text: str, patterns: list[str]) -> str | None:
-    lowered = (text or "").lower()
+    if not isinstance(text, str):
+        return None
+    lowered = text.lower()
     for pattern in patterns:
         if pattern.lower() in lowered:
             return pattern
@@ -149,6 +151,103 @@ async def wait_for_input(
         await asyncio.sleep(poll_s)
 
 
+DOM_EXTRACT_NON_CONVERSATION_TEXT = """
+() => {
+    // 1. Check for Cloudflare / bot challenge containers first
+    const challenge = document.querySelector(
+        '#challenge-stage, .cf-turnstile, iframe[src*="cloudflare"], iframe[src*="challenges"]'
+    );
+    if (challenge) {
+        return document.body ? (document.body.innerText || '') : '';
+    }
+
+    // 2. Selectors that represent user & assistant chat messages and inputs
+    const excludeSelector = [
+        'article',
+        '[data-message-author-role]',
+        '[data-message-id]',
+        '.conversation-turn',
+        '[data-testid*="conversation"]',
+        '[data-testid*="chat-message"]',
+        '[data-testid*="user-message"]',
+        '[data-testid*="assistant-message"]',
+        '.agent-turn',
+        '#prompt-textarea',
+        'textarea',
+        '[contenteditable="true"]',
+        '.markdown',
+        '.prose',
+        'pre',
+        'code',
+        '[data-markdown-text-style]',
+        '[class*="MarkdownRoot"]'
+    ].join(', ');
+
+    const excludedNodes = document.querySelectorAll(excludeSelector);
+    if (!excludedNodes || excludedNodes.length === 0) {
+        return document.body ? (document.body.innerText || '') : '';
+    }
+
+    // 3. Always include visible text from alerts, dialogs, toasts, error banners
+    const alertSelector = [
+        '[role="alert"]',
+        '[role="alertdialog"]',
+        '[role="dialog"]',
+        '[data-state="open"]',
+        '.toast',
+        '[data-testid*="toast"]',
+        '[data-testid*="error"]',
+        'div[class*="error"]',
+        'div[class*="banner"]'
+    ].join(', ');
+
+    const alertElements = Array.from(document.querySelectorAll(alertSelector));
+    let alertText = alertElements.map(el => el.innerText || '').join(' ');
+
+    // 4. Gather text from visible elements in body that are NOT inside excludeSelector
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+        acceptNode: (node) => {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+                const tag = node.tagName.toLowerCase();
+                if (['script', 'style', 'noscript', 'template'].includes(tag)) {
+                    return NodeFilter.FILTER_REJECT;
+                }
+                if (node.matches && node.matches(excludeSelector)) {
+                    return NodeFilter.FILTER_REJECT;
+                }
+                return NodeFilter.FILTER_SKIP;
+            }
+            if (node.nodeType === Node.TEXT_NODE) {
+                let parent = node.parentElement;
+                while (parent && parent !== document.body) {
+                    const ptag = parent.tagName.toLowerCase();
+                    if (['script', 'style', 'noscript', 'template'].includes(ptag)) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    if (parent.matches && parent.matches(excludeSelector)) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    parent = parent.parentElement;
+                }
+                return NodeFilter.FILTER_ACCEPT;
+            }
+            return NodeFilter.FILTER_SKIP;
+        }
+    });
+
+    let otherText = '';
+    while (walker.nextNode()) {
+        const val = walker.currentNode.nodeValue;
+        if (val && val.trim()) {
+            otherText += ' ' + val.trim();
+        }
+    }
+
+    return (alertText + ' ' + otherText).trim();
+}
+"""
+
+
 async def detect_blocking_state(page: Any, blocking: dict[str, Any]) -> BlockingState | None:
     """Check URL + visible text against blocking patterns. Never attempts bypass.
 
@@ -160,14 +259,28 @@ async def detect_blocking_state(page: Any, blocking: dict[str, Any]) -> Blocking
     if url_pattern:
         return BlockingState(kind=classify_blocking(url_pattern), detail=f"URL matched pattern {url_pattern!r}: {url}")
 
-    text = ""
-    try:
-        text = await page.locator("body").inner_text(timeout=3000)
-    except Exception as exc:  # noqa: BLE001 — page may still be loading
-        if is_target_closed_error(exc):
-            raise
-        pass
-    text_pattern = match_blocking_text(text, blocking.get("text_patterns", []) or [])
+    text: str | None = None
+    if hasattr(page, "evaluate"):
+        try:
+            res = await page.evaluate(DOM_EXTRACT_NON_CONVERSATION_TEXT)
+            if isinstance(res, str):
+                text = res
+        except Exception as exc:  # noqa: BLE001
+            if is_target_closed_error(exc):
+                raise
+            text = None
+
+    if text is None:
+        try:
+            res_locator = await page.locator("body").inner_text(timeout=3000)
+            if isinstance(res_locator, str):
+                text = res_locator
+        except Exception as exc:  # noqa: BLE001 — page may still be loading
+            if is_target_closed_error(exc):
+                raise
+            text = ""
+
+    text_pattern = match_blocking_text(text or "", blocking.get("text_patterns", []) or [])
     if text_pattern:
         return BlockingState(kind=classify_blocking(text_pattern), detail=f"Visible text matched pattern {text_pattern!r}")
     return None

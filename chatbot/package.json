@@ -13,6 +13,7 @@
     "katex": "^0.18.10",
     "marked": "^18.1.0",
     "marked-katex-extension": "^5.1.13",
+    "mermaid": "^12.2.0",
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"

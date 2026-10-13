@@ -5,6 +5,7 @@ import pytest
 from app.browser.waits import (
     StabilityTracker,
     classify_blocking,
+    detect_blocking_state,
     evaluate_completion,
     is_target_closed_error,
     match_blocking_text,
@@ -224,3 +225,76 @@ async def test_wait_for_completion_page_closed_returns_immediately() -> None:
     assert result.done is False
     assert result.reason == "page_closed"
     assert sleep_calls == 0  # aborted on first poll, never slept
+
+
+@pytest.mark.asyncio
+async def test_detect_blocking_state_url_match() -> None:
+    class MockPage:
+        url = "https://accounts.google.com/signin/v2"
+
+    blocking = {
+        "url_patterns": ["accounts.google.com", "/login"],
+        "text_patterns": ["captcha"],
+    }
+    state = await detect_blocking_state(MockPage(), blocking)
+    assert state is not None
+    assert state.kind == "login"
+    assert "accounts.google.com" in state.detail
+
+
+@pytest.mark.asyncio
+async def test_detect_blocking_state_evaluates_non_conversation() -> None:
+    class MockPage:
+        url = "https://chatgpt.com/"
+
+        async def evaluate(self, script: str) -> str:
+            # Simulate DOM evaluate extracting non-conversation text (e.g. rate limit error banner)
+            return "Alert: Rate limit reached. Please try again later."
+
+    blocking = {
+        "url_patterns": [],
+        "text_patterns": ["rate limit reached", "captcha"],
+    }
+    state = await detect_blocking_state(MockPage(), blocking)
+    assert state is not None
+    assert state.kind == "rate_limit"
+
+
+@pytest.mark.asyncio
+async def test_detect_blocking_state_ignores_excluded_conversation() -> None:
+    class MockPage:
+        url = "https://chatgpt.com/"
+
+        async def evaluate(self, script: str) -> str:
+            # When the assistant mentions rate limit inside an article, the JS function filters it out
+            # and returns clean non-conversation text
+            return "Navigation Library Loading profile"
+
+    blocking = {
+        "url_patterns": [],
+        "text_patterns": ["rate limit reached", "rate limit exceeded", "captcha"],
+    }
+    state = await detect_blocking_state(MockPage(), blocking)
+    assert state is None
+
+
+@pytest.mark.asyncio
+async def test_detect_blocking_state_fallback_locator() -> None:
+    class MockLocator:
+        async def inner_text(self, timeout: int = 3000) -> str:
+            return "Please Verify you are human to proceed"
+
+    class MockPageWithoutEvaluate:
+        url = "https://chatgpt.com/"
+
+        def locator(self, selector: str) -> MockLocator:
+            return MockLocator()
+
+    blocking = {
+        "url_patterns": [],
+        "text_patterns": ["Verify you are human"],
+    }
+    state = await detect_blocking_state(MockPageWithoutEvaluate(), blocking)
+    assert state is not None
+    assert state.kind == "captcha"
+

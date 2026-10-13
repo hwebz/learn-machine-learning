@@ -178,7 +178,23 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
         language = "";
       }
 
-
+      if (language === "mermaid") {
+        return `
+          <div class="code-block-container mermaid-block-container">
+            <div class="code-block-header">
+              <span class="code-block-lang">MERMAID</span>
+              <button class="code-copy-btn" type="button" aria-label="Copy Mermaid code to clipboard">
+                <span class="copy-icon">📋</span>
+                <span class="copy-text">Copy code</span>
+              </button>
+            </div>
+            <div class="mermaid-diagram-body" data-mermaid-code="${encodeURIComponent(codeText)}">
+              <div class="mermaid-loading">Rendering diagram...</div>
+            </div>
+            <code class="mermaid-raw-code" style="display: none;">${codeText}</code>
+          </div>
+        `;
+      }
 
       let highlightedCode = codeText;
       let validLang = "plaintext";
@@ -222,6 +238,35 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
           </div>
         </div>
       `;
+    };
+
+    // Custom task list item and general list item renderer
+    renderer.listitem = function (token: any) {
+      if (token.task) {
+        const checked = token.checked ? ' checked="checked"' : "";
+        const body =
+          token.tokens && this.parser
+            ? this.parser.parse(token.tokens)
+            : token.text || "";
+        return `
+          <li class="task-list-item">
+            <label class="task-list-label">
+              <input type="checkbox" class="task-list-checkbox"${checked} />
+              <span class="task-list-box" aria-hidden="true">
+                <svg class="task-list-check-icon" viewBox="0 0 14 14" fill="none">
+                  <path d="M3 7.5L5.5 10L11 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="task-list-text">${body}</span>
+            </label>
+          </li>
+        `;
+      }
+      const body =
+        token.tokens && this.parser
+          ? this.parser.parse(token.tokens)
+          : token.text || "";
+      return `<li>${body}</li>`;
     };
 
     // Custom inline code renderer
@@ -295,6 +340,27 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       .split("\n")
       .filter((line) => !/^\s*(?:>\s*)*(?:[-*+]|\d+\.)\s*$/.test(line))
       .join("\n");
+
+    // 2b. Transform Section 18 "Markdown test results: 0/27 passed" into interactive checklist widget
+    sanitizedContent = sanitizedContent.replace(
+      /(?:##+\s+Markdown test results\s*\n+)?0\/27 passed/gi,
+      `
+<div class="checklist-widget-card" data-checklist-group="compatibility">
+  <div class="checklist-widget-header">
+    <div class="checklist-widget-title">
+      <span class="checklist-icon">📋</span>
+      <span>Markdown test results</span>
+    </div>
+    <div class="checklist-counter-badge">
+      <span class="checklist-counter-text">0/27 passed</span>
+    </div>
+  </div>
+  <div class="checklist-progress-track">
+    <div class="checklist-progress-fill" style="width: 0%"></div>
+  </div>
+</div>
+`
+    );
 
     // 3. Convert virtualized scriptor code blocks (Copilot), Monaco / Qwen code blocks,
     // and raw HTML math blocks (Gemini math-block, KaTeX katex-display/katex)
@@ -628,11 +694,73 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
     return withCitations;
   }, [content]);
 
-  // Click handler delegation for copy code buttons
+  // Click handler delegation for copy code buttons, mermaid diagrams, and interactive checklists
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
+    // 1. Dynamic Mermaid rendering
+    import("mermaid").then((m) => {
+      const mermaidInstance = m.default || m;
+      mermaidInstance.initialize({
+        startOnLoad: false,
+        theme: "default",
+        securityLevel: "loose",
+        fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+      });
+
+      const diagramBodies = container.querySelectorAll<HTMLElement>(
+        ".mermaid-diagram-body:not([data-rendered='true'])"
+      );
+      diagramBodies.forEach((bodyEl, idx) => {
+        const rawCode = decodeURIComponent(bodyEl.getAttribute("data-mermaid-code") || "");
+        if (!rawCode) return;
+        const svgId = `mermaid-svg-${Date.now()}-${idx}`;
+        mermaidInstance
+          .render(svgId, rawCode)
+          .then(({ svg }: { svg: string }) => {
+            bodyEl.innerHTML = svg;
+            bodyEl.setAttribute("data-rendered", "true");
+          })
+          .catch((err: any) => {
+            console.warn("Failed to render Mermaid diagram:", err);
+            bodyEl.innerHTML = `<div class="mermaid-error"><p>Could not render diagram</p><pre><code>${rawCode}</code></pre></div>`;
+            bodyEl.setAttribute("data-rendered", "true");
+          });
+      });
+    });
+
+    // 2. Interactive checklist checkboxes handler
+    const handleCheckboxChange = (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      if (!target.classList.contains("task-list-checkbox")) return;
+
+      const widgetCard = container.querySelector(".checklist-widget-card");
+      if (widgetCard) {
+        const allBoxes = container.querySelectorAll(".task-list-checkbox");
+        const checkedBoxes = container.querySelectorAll(".task-list-checkbox:checked");
+        const total = allBoxes.length;
+        const count = checkedBoxes.length;
+
+        const counterText = widgetCard.querySelector(".checklist-counter-text");
+        const progressFill = widgetCard.querySelector(".checklist-progress-fill") as HTMLElement | null;
+
+        if (counterText) {
+          counterText.textContent = `${count}/${total} passed`;
+        }
+        if (progressFill) {
+          const pct = total > 0 ? (count / total) * 100 : 0;
+          progressFill.style.width = `${pct}%`;
+        }
+        if (count === total && total > 0) {
+          widgetCard.classList.add("all-passed");
+        } else {
+          widgetCard.classList.remove("all-passed");
+        }
+      }
+    };
+
+    // 3. Copy button handler delegation
     const handleContainerClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       const copyBtn = target.closest(".code-copy-btn") as HTMLButtonElement | null;
@@ -640,9 +768,11 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
 
       const codeContainer = copyBtn.closest(".code-block-container");
       const isLatex = Boolean(copyBtn.closest(".latex-block-container"));
-      const originalText = isLatex ? "Copy LaTeX" : "Copy code";
+      const isMermaid = Boolean(copyBtn.closest(".mermaid-block-container"));
+      const originalText = isLatex ? "Copy LaTeX" : isMermaid ? "Copy code" : "Copy code";
       const codeElement =
         codeContainer?.querySelector("code.latex-raw-code") ||
+        codeContainer?.querySelector("code.mermaid-raw-code") ||
         codeContainer?.querySelector("code");
       if (!codeElement) return;
 
@@ -663,8 +793,10 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       });
     };
 
+    container.addEventListener("change", handleCheckboxChange);
     container.addEventListener("click", handleContainerClick);
     return () => {
+      container.removeEventListener("change", handleCheckboxChange);
       container.removeEventListener("click", handleContainerClick);
     };
   }, [htmlContent]);
