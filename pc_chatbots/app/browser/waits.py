@@ -1098,6 +1098,7 @@ async def wait_for_completion(
     completion_cfg: dict[str, Any],
     timeout_s: float,
     on_poll: Any | None = None,
+    response_ready: Any | None = None,
     thinking_interval_s: float | None = None,
     clock: Any = time.monotonic,
     sleep: Any = asyncio.sleep,
@@ -1168,6 +1169,18 @@ async def wait_for_completion(
             done_marker_visible=done_marker,
             generating=generating,
         )
+
+        if response_ready is not None:
+            try:
+                ready = await response_ready(page)
+            except Exception as exc:
+                if is_target_closed_error(exc):
+                    return CompletionResult(done=False, reason="page_closed", text=last_text, blocking_detail=str(exc))
+                raise
+            if ready is False:
+                done, reason = False, "in_progress"
+            elif ready is True and not generating:
+                done, reason = True, "media_ready"
 
         poll_count += 1
         elapsed = clock() - start_time

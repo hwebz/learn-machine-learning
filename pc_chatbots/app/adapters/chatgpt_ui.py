@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import asyncio
+import base64
+import re
 from typing import Any
 
 import structlog
 
-from app.adapters.browser_base import BrowserProviderAdapter
+from app.adapters.browser_base import AnswerExtractionError, BrowserProviderAdapter
+from app.browser.chatgpt_response import CAPTURE_RESPONSES, EXTRACT_RESPONSE, RESPONSE_READY
+from app.browser.extraction import clean_markdown_text, html_to_markdown
 from app.browser.locators import resolve_locator
+from app.browser.media import MAX_IMAGE_BYTES, MAX_IMAGES, save_image
+from app.core.config import settings
 
 logger = structlog.get_logger(__name__)
 
@@ -14,6 +21,45 @@ class ChatGPTUIAdapter(BrowserProviderAdapter):
     """Drive the signed-in chatgpt.com web UI via Playwright (DOM locators only)."""
 
     name = "chatgpt"
+
+    async def _prepare_response(self, page: Any) -> None:
+        await page.evaluate(CAPTURE_RESPONSES)
+
+    async def _response_ready(self, page: Any) -> bool | None:
+        return await page.evaluate(RESPONSE_READY)
+
+    async def _extract_answer(self, page: Any, prompt: str = "") -> str:
+        try:
+            response = await asyncio.wait_for(
+                page.evaluate(EXTRACT_RESPONSE, {"maxBytes": MAX_IMAGE_BYTES, "maxImages": MAX_IMAGES}),
+                timeout=MAX_IMAGES * 16,
+            )
+        except Exception as exc:
+            raise AnswerExtractionError(f"Could not retrieve ChatGPT generated images: {exc}") from exc
+        if response is None:
+            return await super()._extract_answer(page, prompt=prompt)
+
+        answer = html_to_markdown(response.get("html", ""), provider=self.name)
+        parts = [answer] if answer.strip() else []
+        failures = []
+        for image in response.get("images", []):
+            try:
+                if image.get("error"):
+                    raise ValueError(image["error"])
+                encoded = image["data"]
+                if len(encoded) > ((MAX_IMAGE_BYTES + 2) // 3) * 4:
+                    raise ValueError("Generated image exceeds size limit")
+                data = base64.b64decode(encoded, validate=True)
+                filename = await asyncio.to_thread(save_image, data, image["type"], settings.media_dir)
+                alt = re.sub(r"[\r\n\t]+", " ", image.get("alt") or "Generated image")
+                alt = alt.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+                parts.append(f"![{alt}](/api/media/{filename})")
+            except Exception as exc:
+                failures.append(str(exc))
+        result = clean_markdown_text("\n\n".join(parts))
+        if failures:
+            raise AnswerExtractionError("Could not save ChatGPT generated image: " + "; ".join(failures), result)
+        return result
 
     async def _select_mode(self, page: Any, mode: str) -> None:
         """Switch ChatGPT thinking mode (Think button pill), model, or Deep research."""

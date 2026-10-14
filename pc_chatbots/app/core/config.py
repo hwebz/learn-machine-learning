@@ -165,6 +165,7 @@ class Settings:
     thinking_interval_check: float
     browser_executable: str | None = None
     headless_providers: dict[str, bool] = field(default_factory=dict)
+    media_dir: Path = Path("./data/media")
 
     @property
     def adapter_default_timeout_s(self) -> int:
@@ -215,6 +216,7 @@ class Settings:
             browser_headless=_env_bool("BROWSER_HEADLESS", default=False),
             browser_channel=browser_channel,
             artifact_dir=Path(os.getenv("ARTIFACT_DIR", "./data/artifacts")),
+            media_dir=Path(os.getenv("MEDIA_DIR", "./data/media")),
             db_url=os.getenv("DB_URL", "sqlite+aiosqlite:///./data/app.db"),
             max_questions_per_hour=int(os.getenv("MAX_QUESTIONS_PER_HOUR", "20")),
             default_timeout_min=int(os.getenv("DEFAULT_TIMEOUT_MIN", "20")),

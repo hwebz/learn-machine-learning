@@ -9,7 +9,7 @@ from uuid import uuid4
 from openai import AsyncOpenAI
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlmodel import select
 
 from app.api.auth import require_api_key
@@ -33,6 +33,21 @@ from app.core.models import Claim, Job, JobEvent, ProviderRun, Report, Source, S
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 protected = [Depends(require_api_key)]
+
+
+@router.get("/media/{filename}", dependencies=protected)
+async def generated_media(filename: str) -> FileResponse:
+    from app.browser.media import resolve_image
+
+    try:
+        path, content_type = await asyncio.to_thread(resolve_image, settings.media_dir, filename)
+    except (OSError, ValueError):
+        raise HTTPException(status_code=404, detail="Generated image not found")
+    return FileResponse(
+        path,
+        media_type=content_type,
+        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=86400"},
+    )
 
 
 def _job_response(

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from app.browser.waits import (
@@ -225,6 +227,143 @@ async def test_wait_for_completion_page_closed_returns_immediately() -> None:
     assert result.done is False
     assert result.reason == "page_closed"
     assert sleep_calls == 0  # aborted on first poll, never slept
+
+
+@pytest.mark.asyncio
+async def test_wait_for_completion_response_ready_overrides_stable() -> None:
+    """A pending generated image suppresses done-marker/stable completion."""
+    from app.browser.waits import wait_for_completion
+
+    clock = FakeClock()
+
+    class ReadyLocator:
+        async def count(self) -> int:
+            return 1
+
+        async def is_visible(self, timeout: int | None = None) -> bool:
+            return False
+
+        async def is_editable(self, timeout: int | None = None) -> bool:
+            return True
+
+        async def inner_text(self, timeout: int | None = None) -> str:
+            return "Here is your image"
+
+    class PendingPage:
+        url = "https://chatgpt.com/"
+
+        def get_by_role(self, role: str, name: str | None = None, **kwargs: object) -> ReadyLocator:
+            return ReadyLocator()
+
+        def get_by_test_id(self, testid: str) -> ReadyLocator:
+            return ReadyLocator()
+
+        def locator(self, css: str) -> ReadyLocator:
+            return ReadyLocator()
+
+        def get_by_placeholder(self, placeholder: str) -> ReadyLocator:
+            return ReadyLocator()
+
+        def get_by_text(self, text: str, **kwargs: object) -> ReadyLocator:
+            return ReadyLocator()
+
+    provider_cfg = {
+        "question_input": [{"role": "textbox"}],
+        "generating_indicator": [{"testid": "generating"}],
+        "answer_container": [{"css": "div.prose"}],
+        "done_indicator": [{"css": "button[aria-label*='Copy' i]"}],
+    }
+    blocking = {"url_patterns": [], "text_patterns": []}
+    completion_cfg = {"stable_seconds": 8, "poll_interval_s": 2, "min_poll_s": 1, "max_poll_s": 2}
+
+    async def fake_sleep(seconds: float) -> None:
+        clock.advance(seconds)
+
+    calls = {"n": 0}
+
+    async def response_ready(_page):
+        calls["n"] += 1
+        return False if calls["n"] <= 2 else True  # pending, pending, ready
+
+    result = await wait_for_completion(
+        PendingPage(),
+        provider_cfg=provider_cfg,
+        blocking=blocking,
+        completion_cfg=completion_cfg,
+        timeout_s=60,
+        on_poll=None,
+        response_ready=response_ready,
+        clock=clock,
+        sleep=fake_sleep,
+    )
+    assert result.done is True
+    assert result.reason == "media_ready"
+
+
+@pytest.mark.asyncio
+async def test_wait_for_completion_response_ready_blocks_done_marker() -> None:
+    """Done marker + stable text must not complete while the hook says pending."""
+    from app.browser.waits import wait_for_completion
+
+    clock = FakeClock()
+
+    class ReadyLocator:
+        async def count(self) -> int:
+            return 1
+
+        async def is_visible(self, timeout: int | None = None) -> bool:
+            return True  # done marker (Copy button) always visible
+
+        async def is_editable(self, timeout: int | None = None) -> bool:
+            return True
+
+        async def inner_text(self, timeout: int | None = None) -> str:
+            return "stable caption"
+
+    class GeneratingFirstPage(ReadyLocator):
+        def get_by_role(self, role: str, name: str | None = None, **kwargs: object) -> ReadyLocator:
+            return ReadyLocator()
+
+        def get_by_test_id(self, testid: str) -> Any:
+            class Gen:
+                async def count(self) -> int:
+                    return 1
+
+                async def is_visible(self, timeout: int | None = None) -> bool:
+                    return testid == "generating" and clock.now < 1005
+
+            return Gen() if testid == "generating" else ReadyLocator()
+
+        def locator(self, css: str) -> ReadyLocator:
+            return ReadyLocator()
+
+    provider_cfg = {
+        "question_input": [{"role": "textbox"}],
+        "generating_indicator": [{"testid": "generating"}],
+        "answer_container": [{"css": "div.prose"}],
+        "done_indicator": [{"css": "button[aria-label*='Copy' i]"}],
+    }
+    blocking = {"url_patterns": [], "text_patterns": []}
+    completion_cfg = {"stable_seconds": 8, "poll_interval_s": 2, "min_poll_s": 1, "max_poll_s": 2}
+
+    async def fake_sleep(seconds: float) -> None:
+        clock.advance(seconds)
+
+    async def response_ready(_page):
+        return False  # image never finishes within the window
+
+    result = await wait_for_completion(
+        GeneratingFirstPage(),
+        provider_cfg=provider_cfg,
+        blocking=blocking,
+        completion_cfg=completion_cfg,
+        timeout_s=10,
+        response_ready=response_ready,
+        clock=clock,
+        sleep=fake_sleep,
+    )
+    assert result.done is False
+    assert result.reason == "timeout"
 
 
 @pytest.mark.asyncio

@@ -739,6 +739,10 @@ textarea {
   margin-bottom: 10px;
 }
 
+.message-content-body img {
+  max-width: 100%;
+}
+
 .message-content-body strong {
   color: var(--text-primary);
   font-weight: 600;

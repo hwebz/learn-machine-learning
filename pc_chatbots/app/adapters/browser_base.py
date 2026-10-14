@@ -26,6 +26,14 @@ class ProviderNeedsUserAction(RuntimeError):
     """Raised when the adapter cannot proceed without human help (login, CAPTCHA, rate limit)."""
 
 
+class AnswerExtractionError(RuntimeError):
+    """An extraction failure that may retain usable partial text."""
+
+    def __init__(self, message: str, answer: str = "") -> None:
+        super().__init__(message)
+        self.answer = answer
+
+
 class TokenBucket:
     """Simple in-process token bucket for per-provider hourly caps."""
 
@@ -114,6 +122,13 @@ class BrowserProviderAdapter(ABC):
     @abstractmethod
     async def _select_mode(self, page: Any, mode: str) -> None:
         """Optionally switch the site's research/pro mode. Must be best-effort."""
+
+    async def _prepare_response(self, page: Any) -> None:
+        """Record provider-specific response state before submitting."""
+
+    async def _response_ready(self, page: Any) -> bool | None:
+        """Return None for normal completion, or readiness for a rich response."""
+        return None
 
     async def _extract_answer(self, page: Any, prompt: str = "") -> str:
         # 1. Attempt to use the site's Copy button if available (cleanest Markdown)
@@ -341,6 +356,7 @@ class BrowserProviderAdapter(ABC):
                                     error = f"Could not enter prompt: {type(exc2).__name__}: {exc2}"
                             if status != "error":
                                 await asyncio.sleep(0.75)  # let the submit button render
+                                await self._prepare_response(page)
                                 submit_locator, _ = await resolve_locator(page, self._cfg.get("submit", []))
                                 if submit_locator is None:
                                     # Fall back to submitting via Enter key (common in SPAs).
@@ -460,6 +476,7 @@ class BrowserProviderAdapter(ABC):
                                     completion_cfg=completion_cfg,
                                     timeout_s=timeout_s,
                                     on_poll=_on_thinking_poll,
+                                    response_ready=self._response_ready,
                                     thinking_interval_s=settings.thinking_interval_check,
                                 )
                                 # Some sites (e.g., Kimi) finish with "System is
@@ -598,6 +615,10 @@ class BrowserProviderAdapter(ABC):
                             if not answer.strip():
                                 status = "partial" if status == "partial" else "error"
                                 error = error or "Extracted answer was empty"
+                        except AnswerExtractionError as exc:
+                            answer = exc.answer
+                            status = "partial" if answer.strip() else "error"
+                            error = str(exc)
                         except RuntimeError as exc:
                             if "closed" in str(exc).lower():
                                 status = "error"
