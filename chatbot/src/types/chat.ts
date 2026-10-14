@@ -37,6 +37,7 @@ export interface StepLog {
   thinkingSteps?: ThinkingStep[];
   citations?: SourceLink[];
   isThinking?: boolean;
+  streamingText?: string;
 }
 
 export interface Message {

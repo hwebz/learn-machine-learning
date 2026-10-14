@@ -16,7 +16,9 @@ def _read_dotenv(path: Path = Path(".env")) -> None:
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        os.environ[key.strip()] = value.strip().strip("\"'")
+        k = key.strip()
+        if k not in os.environ:
+            os.environ[k] = value.strip().strip("\"'")
 
 
 SETTINGS_FILE = Path("./data/settings.json")
@@ -163,6 +165,7 @@ class Settings:
     max_concurrent_browsers: int
     browser_profiles_base_dir: Path
     thinking_interval_check: float
+    response_interval_check: float = 1.0
     browser_executable: str | None = None
     headless_providers: dict[str, bool] = field(default_factory=dict)
     media_dir: Path = Path("./data/media")
@@ -228,6 +231,7 @@ class Settings:
             max_concurrent_browsers=max_concurrent,
             browser_profiles_base_dir=profile_dir.parent if profile_dir.parent.name == "profiles" else Path("./data/profiles"),
             thinking_interval_check=_parse_interval(os.getenv("THINKING_INTERVAL_CHECK", "1s"), default=1.0),
+            response_interval_check=_parse_interval(os.getenv("RESPONSE_INTERVAL_CHECK", "1s"), default=1.0),
             browser_executable=browser_executable,
             headless_providers=headless_providers,
         )

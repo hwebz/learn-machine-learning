@@ -506,9 +506,10 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             report += "\n\n".join(answers)
         else:
             report += "No provider returned a usable answer.\n"
-        if sources:
-            report += "\n\n## Sources\n\n"
-            report += "\n".join(f"- [{source['title'] or source['url']}]({source['url']})" for source in sources)
+        # We have sources below so NO NEED to specify source here.
+        # if sources:
+        #     report += "\n\n## Sources\n\n"
+        #     report += "\n".join(f"- [{source['title'] or source['url']}]({source['url']})" for source in sources)
         failed_runs = [run for run in runs if run.get("status") != "ok"]
         if failed_runs:
             report += "\n\n## Provider issues\n\n"

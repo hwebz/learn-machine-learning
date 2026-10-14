@@ -422,16 +422,17 @@ class BrowserProviderAdapter(ABC):
                                         "steps": norm_steps,
                                         "thinking_text": (thinking_text or "").strip(),
                                         "citations": norm_citations,
+                                        "last_text": (last_text or "").strip(),
                                     }
 
-                                    # Deduplication: If thinking steps and citations have not changed, do NOT push new event to SSE
+                                    # Deduplication: If thinking steps, citations, and response text have not changed, do NOT push new event to SSE
                                     if last_thinking_snapshot is not None and current_snapshot == last_thinking_snapshot:
                                         return
 
                                     last_thinking_snapshot = current_snapshot
 
                                     # Compose descriptive message without time counter so message is stable
-                                    if steps_list:
+                                    if is_thinking and steps_list:
                                         active_step = steps_list[-1]
                                         step_title = (active_step.get("title") or "").strip() or "Thinking..."
                                         step_desc = (active_step.get("description") or "").strip()
@@ -440,9 +441,21 @@ class BrowserProviderAdapter(ABC):
                                             msg = f"{self.name} đang suy luận: {step_title} — {desc_preview}"
                                         else:
                                             msg = f"{self.name} đang suy luận: {step_title}"
-                                    elif thinking_text:
+                                    elif is_thinking and thinking_text:
                                         text_preview = thinking_text[:140] + "..." if len(thinking_text) > 140 else thinking_text
                                         msg = f"{self.name} đang suy luận: {text_preview}"
+                                    elif last_text and (generating or not is_thinking):
+                                        preview = last_text[-120:].strip()
+                                        msg = f"{self.name} đang phản hồi: {preview}..." if preview else f"{self.name} đang sinh câu trả lời..."
+                                    elif steps_list:
+                                        active_step = steps_list[-1]
+                                        step_title = (active_step.get("title") or "").strip() or "Thinking..."
+                                        step_desc = (active_step.get("description") or "").strip()
+                                        if step_desc:
+                                            desc_preview = step_desc[:120] + "..." if len(step_desc) > 120 else step_desc
+                                            msg = f"{self.name}: {step_title} — {desc_preview}"
+                                        else:
+                                            msg = f"{self.name}: {step_title}"
                                     elif cits_list:
                                         msg = f"{self.name} đang đối chiếu {len(cits_list)} nguồn tài liệu ({state})..."
                                     elif generating:
@@ -463,6 +476,7 @@ class BrowserProviderAdapter(ABC):
                                             "citations": cits_list,
                                             "citations_count": len(cits_list),
                                             "text_preview": last_text[-250:] if last_text else "",
+                                            "streaming_text": last_text,
                                             "elapsed_s": elapsed_s,
                                             "poll_count": poll_count,
                                         },
@@ -478,6 +492,7 @@ class BrowserProviderAdapter(ABC):
                                     on_poll=_on_thinking_poll,
                                     response_ready=self._response_ready,
                                     thinking_interval_s=settings.thinking_interval_check,
+                                    response_interval_s=settings.response_interval_check,
                                 )
                                 # Some sites (e.g., Kimi) finish with "System is
                                 # currently busy..." and a Retry button — retry a
@@ -502,6 +517,7 @@ class BrowserProviderAdapter(ABC):
                                         timeout_s=timeout_s,
                                         on_poll=_on_thinking_poll,
                                         thinking_interval_s=settings.thinking_interval_check,
+                                        response_interval_s=settings.response_interval_check,
                                     )
                                 completion_text = completion.text
                                 if completion.reason == "blocked":

@@ -286,7 +286,7 @@ async def detect_blocking_state(page: Any, blocking: dict[str, Any]) -> Blocking
     return None
 
 
-async def _answer_text(page: Any, answer_container: SelectorChain) -> str:
+async def _answer_text(page: Any, answer_container: SelectorChain, provider: str = "") -> str:
     locator, _ = await resolve_locator(page, answer_container)
     if locator is None:
         return ""
@@ -297,6 +297,16 @@ async def _answer_text(page: Any, answer_container: SelectorChain) -> str:
         target = locator
         if count > 1 and hasattr(locator, "last"):
             target = locator.last
+        if provider != "chatgpt":
+            try:
+                html = await target.inner_html(timeout=2000)
+                if html and ("<" in html and ">" in html):
+                    from app.browser.extraction import clean_markdown_text, html_to_markdown
+                    markdown = html_to_markdown(html, provider=provider)
+                    if markdown and markdown.strip():
+                        return clean_markdown_text(markdown)
+            except Exception:
+                pass
         return (await target.inner_text(timeout=3000)).strip()
     except Exception as exc:  # noqa: BLE001
         if is_target_closed_error(exc):
@@ -1406,6 +1416,7 @@ async def wait_for_completion(
     on_poll: Any | None = None,
     response_ready: Any | None = None,
     thinking_interval_s: float | None = None,
+    response_interval_s: float | None = None,
     clock: Any = time.monotonic,
     sleep: Any = asyncio.sleep,
 ) -> CompletionResult:
@@ -1454,7 +1465,7 @@ async def wait_for_completion(
             raise
 
         try:
-            last_text = await _answer_text(page, answer_chain)
+            last_text = await _answer_text(page, answer_chain, provider=provider)
         except RuntimeError as exc:
             if is_target_closed_error(exc):
                 return CompletionResult(done=False, reason="page_closed", text=last_text, blocking_detail=str(exc))
@@ -1552,12 +1563,21 @@ async def wait_for_completion(
                 # answer text — give the UI time to catch up, then re-read.
                 logger.info("done_marker_delay", delay_s=done_marker_delay_s, provider=provider_cfg.get("name", ""))
                 await sleep(done_marker_delay_s)
-                last_text = await _answer_text(page, answer_chain)
+                last_text = await _answer_text(page, answer_chain, provider=provider)
             return CompletionResult(done=True, reason=reason, text=last_text)
 
-        # In thinking/generating mode, use thinking_interval_s (default 1.0s from THINKING_INTERVAL_CHECK=1s)
-        effective_interval = thinking_interval_s if thinking_interval_s is not None else 1.0
-        if generating or is_thinking:
+        # In thinking/generating mode, use response_interval_s when answer text is streaming,
+        # or thinking_interval_s when in thinking mode
+        is_streaming_response = bool(last_text and not text_stable)
+        if generating or is_thinking or is_streaming_response:
+            if last_text and response_interval_s is not None:
+                effective_interval = response_interval_s
+            elif thinking_interval_s is not None:
+                effective_interval = thinking_interval_s
+            elif response_interval_s is not None:
+                effective_interval = response_interval_s
+            else:
+                effective_interval = 1.0
             await sleep(effective_interval)
         else:
             await sleep(random.uniform(min_poll, max_poll))

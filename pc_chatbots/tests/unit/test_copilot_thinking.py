@@ -169,3 +169,86 @@ async def test_copilot_cot_dom_scan_evaluation() -> None:
         if "Executable doesn't exist" in str(exc) or "browserType.launch" in str(exc):
             pytest.skip(f"Browser not available in this test environment: {exc}")
         raise
+
+
+def test_response_interval_check_config(monkeypatch) -> None:
+    from app.core.config import Settings, _parse_interval
+
+    monkeypatch.setenv("RESPONSE_INTERVAL_CHECK", "2.5s")
+    s = Settings.from_env()
+    assert s.response_interval_check == 2.5
+
+    monkeypatch.setenv("RESPONSE_INTERVAL_CHECK", "500ms")
+    s = Settings.from_env()
+    assert s.response_interval_check == 0.5
+
+
+@pytest.mark.asyncio
+async def test_wait_for_completion_uses_response_interval_when_streaming() -> None:
+    from app.browser.waits import wait_for_completion
+
+    sleeps: list[float] = []
+
+    async def fake_sleep(dur: float) -> None:
+        sleeps.append(dur)
+
+    mock_page = MagicMock()
+    mock_page.url = "https://copilot.microsoft.com"
+    mock_page.locator.return_value.inner_text = AsyncMock(return_value="Partial response text...")
+    mock_page.locator.return_value.count = AsyncMock(return_value=1)
+    mock_page.locator.return_value.is_visible = AsyncMock(return_value=True)
+    mock_page.evaluate = AsyncMock(return_value={
+        "is_thinking": False,
+        "thinking_text": "",
+        "thinking_steps": [],
+        "citations": [],
+    })
+
+    clock_val = 1000.0
+
+    def fake_clock() -> float:
+        nonlocal clock_val
+        clock_val += 0.2
+        return clock_val
+
+    provider_cfg = {
+        "question_input": [{"css": "#input"}],
+        "answer_container": [{"css": ".answer"}],
+        "generating_indicator": [{"css": ".stop-btn"}],  # generating is True
+        "done_indicator": None,
+    }
+
+    # Pass thinking_interval_s=1.0 and response_interval_s=0.25
+    result = await wait_for_completion(
+        mock_page,
+        provider="copilot",
+        provider_cfg=provider_cfg,
+        blocking={},
+        completion_cfg={"stable_seconds": 1.0, "poll_interval_s": 2.0},
+        timeout_s=0.5,
+        thinking_interval_s=1.0,
+        response_interval_s=0.25,
+        clock=fake_clock,
+        sleep=fake_sleep,
+    )
+
+    # When last_text is present and generating, it should sleep response_interval_s (0.25)
+    assert 0.25 in sleeps
+
+
+@pytest.mark.asyncio
+async def test_answer_text_extracts_markdown_for_copilot() -> None:
+    from app.browser.waits import _answer_text
+
+    mock_page = MagicMock()
+    mock_target = MagicMock()
+    mock_target.inner_html = AsyncMock(return_value="<h3>Heading 3</h3><p>Paragraph with <strong>bold</strong> text</p>")
+    mock_target.inner_text = AsyncMock(return_value="Heading 3\n\nParagraph with bold text")
+    mock_target.count = AsyncMock(return_value=1)
+    mock_page.locator.return_value = mock_target
+
+    res = await _answer_text(mock_page, [{"css": ".answer"}], provider="copilot")
+    assert "### Heading 3" in res
+    assert "**bold**" in res
+
+

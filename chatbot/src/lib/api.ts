@@ -235,6 +235,7 @@ export function subscribeJobEvents(
           thinkingSteps: payloadData.thinking_steps || undefined,
           citations: payloadData.citations || undefined,
           isThinking: Boolean(payloadData.is_thinking || data.event_type === "thinking"),
+          streamingText: payloadData.streaming_text || payloadData.text_preview || undefined,
         };
         callbacks.onStep(stepLog);
       }

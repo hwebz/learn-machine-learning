@@ -682,10 +682,10 @@ export function ChatArea({
     }
   };
 
-  // Auto-scroll to bottom on new message
+  // Auto-scroll to bottom on new message or live streaming updates
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [session.messages, isGenerating]);
+  }, [session.messages, isGenerating, activeSteps.length]);
 
   // Adjust textarea height automatically
   useEffect(() => {
@@ -1043,52 +1043,6 @@ export function ChatArea({
               <div className="message-card-assistant">
                 {/* Assistant Top Tool Badges */}
 
-                {/* Real-time Thinking Process & Pipeline Steps Accordion */}
-                {msg.steps && msg.steps.length > 0 && (
-                  <details
-                    className="message-steps-accordion"
-                    style={{
-                      backgroundColor: "#f8fafc",
-                      borderRadius: "var(--radius-md)",
-                      border: "1px solid #e2e8f0",
-                      padding: "10px 14px",
-                      display: "flex",
-                      flexDirection: "column"
-                    }}
-                  >
-                    <summary
-                      style={{
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: "var(--brand-blue)",
-                        userSelect: "none",
-                        outline: "none",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <BrainIcon size={14} color="var(--brand-blue)" />
-                        <span>Real-time Thinking Steps ({msg.steps.length})</span>
-                      </div>
-                      <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 500 }}>
-                        SSE Pipeline Log
-                      </span>
-                    </summary>
-
-                    <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
-                      <ChronologicalTimeline
-                        steps={msg.steps}
-                        isLive={false}
-                        message={msg}
-                        onSelectThinking={onSelectThinking}
-                      />
-                    </div>
-                  </details>
-                )}
-
                 {/* Action Required Banner for providers needing login/manual action */}
                 {(() => {
                   const neededActions = detectAllProvidersNeedingAction(msg);
@@ -1286,28 +1240,166 @@ export function ChatArea({
                 );
               })()}
 
-              {/* Real-time Chronological Timeline Feed */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "4px 0" }}>
-                {activeSteps.length > 0 ? (
-                  <ChronologicalTimeline steps={activeSteps} isLive={true} onSelectThinking={onSelectThinking} />
-                ) : (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
-                    <div
-                      style={{
-                        width: 14,
-                        height: 14,
-                        border: "2px solid #cbd5e1",
-                        borderTopColor: "var(--brand-blue)",
-                        borderRadius: "50%",
-                        animation: "spin 1s linear infinite",
+              {/* Active Step in message-steps-accordion (Only 1 active step shown) */}
+              {(() => {
+                const activeStep = activeSteps.length > 0 ? activeSteps[activeSteps.length - 1] : null;
+                const activeProvider = activeStep ? extractProvider(activeStep) : "";
+                const activePInfo = providers.find((p) => p.id === activeProvider);
+
+                let activeTitle = activeStep?.message || `Khởi tạo phiên nghiên cứu và kết nối tới ${selectedCount} trình duyệt...`;
+                let activeDesc = "";
+
+                if (activeStep?.thinkingSteps && activeStep.thinkingSteps.length > 0) {
+                  const latestThinking = activeStep.thinkingSteps[activeStep.thinkingSteps.length - 1];
+                  if (latestThinking?.title) {
+                    const provPrefix = activePInfo?.name ? `${activePInfo.name}: ` : activeProvider ? `${activeProvider.toUpperCase()}: ` : "";
+                    activeTitle = `${provPrefix}${latestThinking.title}`;
+                    activeDesc = latestThinking.description || "";
+                  }
+                } else if (activeStep?.data?.thinking_steps && activeStep.data.thinking_steps.length > 0) {
+                  const latestThinking = activeStep.data.thinking_steps[activeStep.data.thinking_steps.length - 1];
+                  if (latestThinking?.title) {
+                    const provPrefix = activePInfo?.name ? `${activePInfo.name}: ` : activeProvider ? `${activeProvider.toUpperCase()}: ` : "";
+                    activeTitle = `${provPrefix}${latestThinking.title}`;
+                    activeDesc = latestThinking.description || "";
+                  }
+                }
+
+                return (
+                  <div
+                    className="message-steps-accordion"
+                    style={{
+                      backgroundColor: "#f8fafc",
+                      borderRadius: "var(--radius-md)",
+                      border: "1px solid #e2e8f0",
+                      padding: "8px 12px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
+                      <div
+                        style={{
+                          width: 14,
+                          height: 14,
+                          border: "2px solid #3b82f6",
+                          borderTopColor: "transparent",
+                          borderRadius: "50%",
+                          animation: "spin 0.8s linear infinite",
+                          flexShrink: 0,
+                        }}
+                      />
+                      <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <BrainIcon size={14} color="var(--brand-blue)" />
+                          <span
+                            style={{
+                              fontSize: 12.5,
+                              fontWeight: 600,
+                              color: "var(--text-primary)",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                            title={activeTitle}
+                          >
+                            {activeTitle}
+                          </span>
+                        </div>
+                        {activeDesc && (
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: "var(--text-secondary)",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              marginTop: 2,
+                            }}
+                            title={activeDesc}
+                          >
+                            {activeDesc}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onSelectThinking) {
+                          onSelectThinking(activeProvider);
+                        } else {
+                          onToggleRightSidebar();
+                        }
                       }}
-                    />
-                    <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-                      Khởi tạo phiên nghiên cứu và kết nối tới {selectedCount} trình duyệt...
-                    </span>
+                      style={{
+                        border: "1px solid #bfdbfe",
+                        backgroundColor: "#ffffff",
+                        color: "var(--brand-blue)",
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                        padding: "3px 9px",
+                        borderRadius: 4,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        flexShrink: 0,
+                        boxShadow: "0 1px 2px rgba(37, 99, 235, 0.05)",
+                        transition: "all 0.15s ease",
+                      }}
+                      title="Xem toàn bộ tiến trình và các bước suy luận chi tiết trong thanh bên phải"
+                    >
+                      <span>Chi tiết ({activeSteps.length || 1})</span>
+                      <ChevronRightIcon size={12} color="var(--brand-blue)" />
+                    </button>
                   </div>
-                )}
-              </div>
+                );
+              })()}
+
+              {/* Real-time Streaming Response - Directly reusing real response preview with markdown-rendered-content */}
+              {(() => {
+                const liveStreamingByProvider: { provider: string; text: string }[] = [];
+                const seenStreamingProviders = new Set<string>();
+
+                for (let i = activeSteps.length - 1; i >= 0; i--) {
+                  const st = activeSteps[i];
+                  const p = extractProvider(st) || (selectedProviders.length === 1 ? selectedProviders[0].id : "");
+                  const text = (st.streamingText || (st.data as any)?.streaming_text || "").trim();
+                  if (text && !seenStreamingProviders.has(p)) {
+                    seenStreamingProviders.add(p);
+                    liveStreamingByProvider.unshift({ provider: p, text });
+                  }
+                }
+
+                if (liveStreamingByProvider.length === 0) return null;
+
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    {liveStreamingByProvider.map((item, idx) => {
+                      const pInfo = providers.find((p) => p.id === item.provider);
+                      return (
+                        <div key={item.provider || idx}>
+                          {liveStreamingByProvider.length > 1 && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                              <ModelBadgeLogo type={pInfo?.iconType || item.provider} size={15} />
+                              <span style={{ fontSize: 13, fontWeight: 700, color: pInfo?.color || "var(--brand-blue)" }}>
+                                {pInfo?.name || item.provider}
+                              </span>
+                            </div>
+                          )}
+                          <div className="message-content-body">
+                            <MarkdownContent content={item.text} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}

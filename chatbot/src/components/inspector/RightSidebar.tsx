@@ -239,7 +239,7 @@ export function RightSidebar({
   onRetryProvider,
 }: RightSidebarProps) {
   const [copiedStepIdx, setCopiedStepIdx] = useState<number | null>(null);
-  const [responseViewMode, setResponseViewMode] = useState<"preview" | "raw">("raw");
+  const [responseViewMode, setResponseViewMode] = useState<"preview" | "raw">("preview");
 
   const copyStepText = (text: string, idx: number) => {
     navigator.clipboard.writeText(text);
@@ -494,7 +494,7 @@ export function RightSidebar({
       filteredSteps.push({
         title: "Response generated",
         description: providerResponse,
-        status: "completed",
+        status: detail.isRunning ? "running" : "completed",
         timestamp: lastStepWithTime?.timestamp || "",
       });
       detail.thinkingSteps = filteredSteps;

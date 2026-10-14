@@ -94,9 +94,9 @@ export function extractProviderResponse(
     }
   }
 
-  // 5. Fallback: check pSteps for response_preview
+  // 5. Fallback: check pSteps for streaming_text or response_preview
   for (const st of [...pSteps].reverse()) {
-    const preview = st.data?.response_preview;
+    const preview = st.streamingText || st.data?.streaming_text || st.data?.response_preview;
     if (preview && typeof preview === "string" && preview.trim().length > 0) {
       return preview.trim();
     }
