@@ -27,18 +27,23 @@ PNG_1PX = base64.b64decode(
 
 PAGE_HTML = """<!doctype html>
 <div data-talvt-turn-state="complete" id="old-turn"><p>Old turn</p></div>
-<div data-talvt-turn-state="complete" id="new-turn">
-  <p>Here is your dog on the moon.</p>
-  <div data-testid="generated-image-gallery">
-    <div data-testid="generated-image-preview">
-      <img id="gen-img" alt="Generated image 1">
-    </div>
-  </div>
-</div>
 <script>
-  const bytes = Uint8Array.from(atob("%s"), c => c.charCodeAt(0));
-  const blob = new Blob([bytes], {type: "image/png"});
-  document.getElementById("gen-img").src = URL.createObjectURL(blob);
+  // Simulates the assistant response arriving after submission: the page gains a
+  // new turn containing a gallery with a blob: image.
+  window.addResponse = () => {
+    const turn = document.createElement('div');
+    turn.setAttribute('data-talvt-turn-state', 'complete');
+    turn.innerHTML = `<p>Here is your dog on the moon.</p>
+      <div data-testid="generated-image-gallery">
+        <div data-testid="generated-image-preview">
+          <img id="gen-img" alt="Generated image 1">
+        </div>
+      </div>`;
+    document.body.appendChild(turn);
+    const bytes = Uint8Array.from(atob("%s"), c => c.charCodeAt(0));
+    const blob = new Blob([bytes], {type: "image/png"});
+    document.getElementById("gen-img").src = URL.createObjectURL(blob);
+  };
 </script>
 """ % base64.b64encode(PNG_1PX).decode()
 
@@ -57,10 +62,13 @@ async def main() -> int:
             browser = await pw.chromium.launch(headless=True, channel="chrome")
         page = await browser.new_page()
         await page.set_content(PAGE_HTML, wait_until="load")
-        await page.wait_for_function("document.getElementById('gen-img').complete")
 
-        # 1. Capture before submission marks the old turn as previous.
+        # 1. Capture before submission marks the existing turn as previous.
         await page.evaluate(CAPTURE_RESPONSES)
+
+        # 2. The response arrives (new turn + blob image load).
+        await page.evaluate("window.addResponse()")
+        await page.wait_for_function("document.getElementById('gen-img')?.complete")
 
         # 2. Readiness: gallery exists and image loaded -> ready.
         ready = await page.evaluate(RESPONSE_READY)

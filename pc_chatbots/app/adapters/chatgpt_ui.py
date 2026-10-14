@@ -75,7 +75,6 @@ class ChatGPTUIAdapter(BrowserProviderAdapter):
                         model_id=parsed.get("model_id"),
                         thinking_level_id=parsed.get("thinking_level_id"),
                         mode_id=parsed.get("mode_id"),
-                        tool_id=parsed.get("tool_id"),
                     )
                     strategy = ChatGPTCapabilitiesStrategy()
                     await strategy.apply_selection(page, config)
@@ -130,86 +129,235 @@ class ChatGPTUIAdapter(BrowserProviderAdapter):
     async def _extract_sources(self, page: Any) -> list[Any]:
         """Extract sources for ChatGPT via 'More actions' -> 'View sources' -> 'Sources' modal,
 
-        with automatic fallback to base locator and inline citation extraction.
+        for the selected response just asked, with fallback to inline citations.
         """
         from app.adapters.browser_base import Source, normalize_sources
 
-        pairs: list[tuple[str, str | None]] = []
+        pairs: list[tuple[str, str | None, str | None]] = []
 
         try:
-            # 1. Look for 'More actions' button on the assistant response turn
-            more_btn = page.locator(
-                "article [data-message-author-role='assistant'] button[aria-label*='More action' i], "
-                "[data-message-author-role='assistant'] button[aria-label*='More action' i], "
-                "button[aria-label='More actions'], "
-                "button[aria-label*='Thao tác khác' i]"
-            ).last
+            # 1. Target the conversation turn for the selected response we've just asked for
+            selected_turn = None
+            try:
+                asst_turns = page.locator(
+                    "article:has([data-message-author-role='assistant']), "
+                    "article[data-testid*='conversation-turn'], "
+                    "[data-message-author-role='assistant']"
+                )
+                count = await asst_turns.count()
+                if count > 0:
+                    selected_turn = asst_turns.last
+                    await selected_turn.scroll_into_view_if_needed(timeout=2000)
+                    await selected_turn.hover(timeout=2000)
+                    await page.wait_for_timeout(300)
+            except Exception:
+                pass
 
-            if await more_btn.count() > 0 and await more_btn.is_visible(timeout=1000):
-                await more_btn.click(timeout=1500)
-                await page.wait_for_timeout(300)
+            # 2. Check if the modal with aria-label="Sources" is already open
+            modal = page.locator(
+                "[aria-label='Sources'], "
+                "[aria-label*='Sources' i], "
+                "[aria-label*='Nguồn' i]"
+            ).first
+            modal_open = False
+            try:
+                if await modal.count() > 0 and await modal.is_visible(timeout=500):
+                    modal_open = True
+            except Exception:
+                modal_open = False
 
-                # 2. Look for 'View sources' menu item
-                view_sources_item = page.locator(
-                    "[role='menuitem']:has-text('View sources'), "
-                    "[role='menuitem']:has-text('Xem nguồn'), "
-                    "button:has-text('View sources'), "
-                    "button:has-text('Xem nguồn'), "
-                    ":has-text('View sources')"
-                ).first
+            # 3. If modal not already open, click 'More actions' -> 'View sources'
+            if not modal_open:
+                more_btn = None
+                if selected_turn is not None:
+                    turn_more = selected_turn.locator(
+                        "[aria-label='More actions'], "
+                        "[aria-label*='More action' i], "
+                        "[aria-label*='Thao tác khác' i]"
+                    ).last
+                    if await turn_more.count() > 0:
+                        more_btn = turn_more
 
-                if await view_sources_item.count() > 0 and await view_sources_item.is_visible(timeout=1500):
-                    await view_sources_item.click(timeout=1500)
-                    await page.wait_for_timeout(400)
+                if more_btn is None or await more_btn.count() == 0:
+                    global_more = page.locator(
+                        "[aria-label='More actions'], "
+                        "[aria-label*='More action' i], "
+                        "[aria-label*='Thao tác khác' i]"
+                    ).last
+                    if await global_more.count() > 0:
+                        more_btn = global_more
 
-                    # 3. Look for modal with aria-label="Sources" (or aria-label="Nguồn" / role="dialog")
-                    modal = page.locator(
-                        "[aria-label='Sources'], "
-                        "[aria-label='Nguồn'], "
-                        "[role='dialog'][aria-label*='Sources' i], "
-                        "[role='dialog'][aria-label*='Nguồn' i], "
-                        "[role='dialog']:has-text('Sources')"
-                    ).first
-
-                    if await modal.count() > 0 and await modal.is_visible(timeout=2000):
-                        # Extract all links inside the sources modal
-                        links = modal.locator("a[href^='http']")
-                        link_count = await links.count()
-                        for i in range(link_count):
-                            link = links.nth(i)
-                            href = await link.get_attribute("href")
-                            if href:
-                                title = ""
-                                try:
-                                    title = (await link.inner_text(timeout=500)).strip()
-                                except Exception:
-                                    pass
-                                pairs.append((href, title or None))
-
-                        # Close the modal
+                if more_btn is not None and await more_btn.count() > 0:
+                    try:
+                        await more_btn.scroll_into_view_if_needed(timeout=2000)
+                    except Exception:
+                        pass
+                    clicked_more = False
+                    try:
+                        await more_btn.click(timeout=2500)
+                        clicked_more = True
+                    except Exception:
                         try:
-                            close_btn = modal.locator(
-                                "button[aria-label*='Close' i], "
-                                "button[aria-label*='Đóng' i], "
-                                "button[aria-label*='dismiss' i]"
-                            ).first
-                            if await close_btn.count() > 0 and await close_btn.is_visible(timeout=500):
-                                await close_btn.click(timeout=1000)
-                            else:
-                                await page.keyboard.press("Escape")
-                            await page.wait_for_timeout(200)
+                            await more_btn.click(force=True, timeout=2000)
+                            clicked_more = True
                         except Exception:
-                            pass
-                else:
-                    await page.keyboard.press("Escape")
+                            try:
+                                await more_btn.dispatch_event("click")
+                                clicked_more = True
+                            except Exception:
+                                pass
+
+                    if clicked_more:
+                        await page.wait_for_timeout(400)
+
+                        # Click 'View sources' in dropdown menu
+                        view_sources_selectors = [
+                            "[role='menu'] [role='menuitem']:has-text('View sources')",
+                            "[role='menuitem']:has-text('View sources')",
+                            "button:has-text('View sources')",
+                            "[role='menu'] button:has-text('View sources')",
+                            "[role='menu'] div:has-text('View sources'):not(:has(div:has-text('View sources')))",
+                            "[role='menu'] [role='menuitem']:has-text('Xem nguồn')",
+                            "[role='menuitem']:has-text('Xem nguồn')",
+                            "button:has-text('Xem nguồn')",
+                            "[data-testid*='source']",
+                            ":text-is('View sources')",
+                            ":text-is('Xem nguồn')",
+                        ]
+                        clicked_view_sources = False
+                        for sel in view_sources_selectors:
+                            cand = page.locator(sel).first
+                            try:
+                                if await cand.count() > 0 and await cand.is_visible(timeout=800):
+                                    await cand.click(timeout=2000)
+                                    clicked_view_sources = True
+                                    break
+                            except Exception:
+                                continue
+
+                        if not clicked_view_sources:
+                            for sel in view_sources_selectors:
+                                cand = page.locator(sel).first
+                                try:
+                                    if await cand.count() > 0:
+                                        await cand.click(force=True, timeout=1500)
+                                        clicked_view_sources = True
+                                        break
+                                except Exception:
+                                    continue
+
+                        if clicked_view_sources:
+                            await page.wait_for_timeout(500)
+                        else:
+                            await page.keyboard.press("Escape")
+
+            # 4. Extract sources from modal with attribute aria-label="Sources"
+            modal = page.locator(
+                "[aria-label='Sources'], "
+                "[aria-label*='Sources' i], "
+                "[aria-label*='Nguồn' i]"
+            ).first
+
+            try:
+                await modal.wait_for(state="visible", timeout=3000)
+            except Exception:
+                pass
+
+            if await modal.count() > 0 and await modal.is_visible(timeout=1000):
+                try:
+                    modal_sources = await modal.evaluate("""(modalEl) => {
+                        const results = [];
+                        const seen = new Set();
+                        const links = modalEl.querySelectorAll("a[href^='http']");
+                        for (const a of links) {
+                            const href = a.href || a.getAttribute("href") || "";
+                            if (!href || href.includes("chatgpt.com") || href.includes("openai.com")) continue;
+                            if (seen.has(href)) continue;
+                            seen.add(href);
+
+                            let title = (a.getAttribute("title") || a.getAttribute("aria-label") || "").trim();
+                            let snippet = "";
+
+                            const titleEl = a.querySelector("h3, h4, h5, [class*='title'], strong, div[class*='font-semibold'], div[class*='font-medium'], div[class*='text-sm']");
+                            if (titleEl) {
+                                title = (titleEl.innerText || titleEl.textContent || "").trim();
+                            }
+
+                            const snipEl = a.querySelector("p, [class*='snippet'], [class*='desc'], [class*='content'], [class*='line-clamp'], [class*='text-xs']");
+                            if (snipEl && snipEl !== titleEl) {
+                                snippet = (snipEl.innerText || snipEl.textContent || "").trim();
+                            }
+
+                            if (!title) {
+                                const raw = (a.innerText || a.textContent || "").trim();
+                                if (raw) {
+                                    const lines = raw.split("\\n").map(l => l.trim()).filter(Boolean);
+                                    title = lines[0] || "";
+                                    if (!snippet && lines.length > 1) {
+                                        snippet = lines.slice(1).join(" ");
+                                    }
+                                }
+                            }
+
+                            if (!title) {
+                                try {
+                                    title = new URL(href).hostname.replace(/^www\\./, "");
+                                } catch (e) {
+                                    title = href;
+                                }
+                            }
+
+                            results.push({ url: href, title: title, snippet: snippet });
+                        }
+                        return results;
+                    }""")
+                    if isinstance(modal_sources, list):
+                        for s in modal_sources:
+                            u = s.get("url")
+                            if u:
+                                pairs.append((u, s.get("title") or None, s.get("snippet") or None))
+                except Exception as exc:
+                    logger.debug("chatgpt_modal_eval_failed", error=str(exc))
+
+                # Fallback to locator-based extraction if evaluate returned empty
+                if not pairs:
+                    links = modal.locator("a[href^='http']")
+                    link_count = await links.count()
+                    for i in range(link_count):
+                        link = links.nth(i)
+                        href = await link.get_attribute("href")
+                        if href and not ("chatgpt.com" in href or "openai.com" in href):
+                            title = ""
+                            try:
+                                title = (await link.inner_text(timeout=500)).strip()
+                            except Exception:
+                                pass
+                            pairs.append((href, title or None, None))
+
+                # Close the modal cleanly so it does not obstruct the page
+                try:
+                    close_btn = modal.locator(
+                        "button[aria-label*='Close' i], "
+                        "button[aria-label*='Đóng' i], "
+                        "button[aria-label*='dismiss' i], "
+                        "button:has-text('✕'), "
+                        "button:has-text('×')"
+                    ).first
+                    if await close_btn.count() > 0 and await close_btn.is_visible(timeout=500):
+                        await close_btn.click(timeout=1000)
+                    else:
+                        await page.keyboard.press("Escape")
+                    await page.wait_for_timeout(200)
+                except Exception:
+                    pass
         except Exception as exc:
             logger.debug("chatgpt_modal_sources_extract_failed", error=str(exc))
 
-        # 4. Fallback and merge with base extraction
+        # 5. Fallback and merge with base extraction
         try:
             base_sources = await super()._extract_sources(page)
             for s in base_sources:
-                pairs.append((str(s.url), s.title))
+                pairs.append((str(s.url), s.title, s.snippet))
         except Exception:
             pass
 

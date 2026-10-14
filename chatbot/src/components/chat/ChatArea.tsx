@@ -131,6 +131,34 @@ function buildChronologicalTimeline(
       for (const item of raw) {
         if (!item || !item.title) continue;
         const normKey = item.title.trim().toLowerCase();
+
+        // If transitioning from "thinking" to "worked for..." or "thought for...", update the existing thinking step in place
+        if (/^(worked|thought)\s+for\b/i.test(normKey) && stepMap.has("thinking")) {
+          const prev = stepMap.get("thinking")!;
+          stepMap.delete("thinking");
+          stepMap.set(normKey, {
+            ...prev,
+            title: item.title,
+            status: item.status || "completed",
+            description: (item.description && item.description.trim()) ? item.description : prev.description,
+          });
+          continue;
+        }
+
+        // If consecutive polls update the duration (e.g. "worked for 12s" -> "worked for 13s"), update the existing worked-for entry
+        const existingWorkedKey = Array.from(stepMap.keys()).find(k => /^(worked|thought)\s+for\b/i.test(k));
+        if (/^(worked|thought)\s+for\b/i.test(normKey) && existingWorkedKey) {
+          const prev = stepMap.get(existingWorkedKey)!;
+          stepMap.delete(existingWorkedKey);
+          stepMap.set(normKey, {
+            ...prev,
+            title: item.title,
+            status: item.status || "completed",
+            description: (item.description && item.description.trim()) ? item.description : prev.description,
+          });
+          continue;
+        }
+
         const existing = stepMap.get(normKey);
         if (!existing) {
           stepMap.set(normKey, { ...item });
@@ -675,6 +703,10 @@ export function ChatArea({
   };
 
   const handleSend = () => {
+    if (selectedCount === 0) {
+      onOpenProvidersModal();
+      return;
+    }
     if ((!inputText.trim() && attachedFiles.length === 0) || isGenerating) return;
     let finalPrompt = inputText.trim();
     if (attachedFiles.length > 0) {
@@ -720,10 +752,16 @@ export function ChatArea({
                   </span>
                   <span>{selectedCount} Models Selected</span>
                 </>
+              ) : selectedCount === 1 ? (
+                <>
+                  <ModelBadgeLogo type={(selectedProviders[0] || selectedProvider).iconType} size={16} />
+                  <span>{(selectedProviders[0] || selectedProvider).name.split(" ")[0]}</span>
+                </>
               ) : (
                 <>
-                  <ModelBadgeLogo type={selectedProvider.iconType} size={16} />
-                  <span>{selectedProvider.name.split(" ")[0]}</span>
+                  <span style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 500 }}>
+                    Chưa chọn nhà cung cấp
+                  </span>
                 </>
               )}
               <span style={{ fontSize: 10, color: "var(--text-muted)" }}>▼</span>
@@ -891,7 +929,13 @@ export function ChatArea({
               {SUGGESTED_PROMPTS.map((prompt, idx) => (
                 <button
                   key={idx}
-                  onClick={() => onSendMessage(prompt)}
+                  onClick={() => {
+                    if (selectedCount === 0) {
+                      onOpenProvidersModal();
+                    } else {
+                      onSendMessage(prompt);
+                    }
+                  }}
                   style={{
                     padding: "12px 14px",
                     borderRadius: "var(--radius-md)",
@@ -1419,6 +1463,8 @@ export function ChatArea({
             placeholder={
               isRecording
                 ? "Đang lắng nghe giọng nói từ micro của bạn..."
+                : selectedCount === 0
+                ? "Vui lòng chọn nhà cung cấp AI để bắt đầu..."
                 : `Đặt câu hỏi nghiên cứu tới ${selectedCount} mô hình AI (${selectedProviders.map((p) => p.name.split(" ")[0]).join(", ")})...`
             }
             rows={1}

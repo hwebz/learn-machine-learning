@@ -33,8 +33,6 @@ export interface ProviderLiveCapabilities {
   selected_thinking_level_id?: string;
   modes: OptionItem[];
   selected_mode_id?: string;
-  tools?: OptionItem[];
-  selected_tool_id?: string;
   account_type?: string;
   supported_data_types: SupportedDataTypes;
   voice_chat: VoiceChatSupport;
@@ -45,5 +43,4 @@ export interface ProviderSelectionConfig {
   model_id?: string;
   thinking_level_id?: string;
   mode_id?: string;
-  tool_id?: string;
 }

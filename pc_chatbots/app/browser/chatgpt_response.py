@@ -39,7 +39,7 @@ if (!root) return false;
 const galleries = root.querySelectorAll('[data-testid="generated-image-gallery"], [data-testid="generated-image-preview"]');
 if (!galleries.length) return null;
 return images.length > 0 && images.every(img => img.complete && img.naturalWidth > 0 &&
-    img.naturalHeight > 0 && /^(blob:https:\/\/chatgpt\.com\/|https:\/\/|data:image\/(png|jpeg|webp|gif);base64,)/i.test(img.currentSrc || img.src));
+    img.naturalHeight > 0 && /^(blob:|https:\/\/|data:image\/(png|jpeg|webp|gif);base64,)/i.test(img.currentSrc || img.src));
 }"""
 
 EXTRACT_RESPONSE = "async ({maxBytes, maxImages}) => {" + RESPONSE_ROOT + r"""
@@ -53,7 +53,9 @@ for (const img of images) {
     try {
         const src = img.currentSrc || img.src;
         if (!img.complete || !img.naturalWidth || !img.naturalHeight) throw new Error('Generated image is not loaded');
-        if (!/^(blob:https:\/\/chatgpt\.com\/|https:\/\/|data:image\/(png|jpeg|webp|gif);base64,)/i.test(src))
+        // blob: URLs are same-origin only — the page can fetch its own blobs,
+        // never another origin's — so any blob: the DOM exposes is retrievable.
+        if (!/^(blob:|https:\/\/|data:image\/(png|jpeg|webp|gif);base64,)/i.test(src))
             throw new Error('Unsupported generated image source');
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 15000);

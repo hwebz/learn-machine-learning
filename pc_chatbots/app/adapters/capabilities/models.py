@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class OptionItem(BaseModel):
-    """Generic selectable option (model, thinking level, mode, tool)."""
+    """Generic selectable option (model, thinking level, mode)."""
     id: str
     label: str
     description: str | None = None
@@ -35,6 +35,8 @@ class VoiceChatSupport(BaseModel):
 
 class ProviderLiveCapabilities(BaseModel):
     """Full snapshot of live or default options for an AI provider."""
+    model_config = {"extra": "ignore"}
+
     provider: str
     synced_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     is_live_dom: bool = False
@@ -44,8 +46,6 @@ class ProviderLiveCapabilities(BaseModel):
     selected_thinking_level_id: str | None = None
     modes: list[OptionItem] = Field(default_factory=list)
     selected_mode_id: str | None = None
-    tools: list[OptionItem] = Field(default_factory=list)
-    selected_tool_id: str | None = None
     account_type: str | None = None
     supported_data_types: SupportedDataTypes = Field(default_factory=SupportedDataTypes)
     voice_chat: VoiceChatSupport = Field(default_factory=VoiceChatSupport)
@@ -54,8 +54,9 @@ class ProviderLiveCapabilities(BaseModel):
 
 class ProviderSelectionRequest(BaseModel):
     """Options chosen by user to apply during prompt execution."""
+    model_config = {"extra": "ignore"}
+
     model_id: str | None = None
     thinking_level_id: str | None = None
     mode_id: str | None = None
-    tool_id: str | None = None
     custom_params: dict[str, Any] = Field(default_factory=dict)

@@ -46,7 +46,6 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
     if (cachedSelections["chatgpt"] && cachedCaps["chatgpt"]?.account_type === "free") {
       cachedSelections["chatgpt"].model_id = "none";
       cachedSelections["chatgpt"].thinking_level_id = "auto";
-      cachedSelections["chatgpt"].tool_id = "none";
     }
     setCapabilitiesMap(cachedCaps);
     setSelectionsMap(cachedSelections);
@@ -81,7 +80,6 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
                 caps.thinking_levels[0]?.id ||
                 "auto",
               mode_id: existing.mode_id || caps.selected_mode_id || caps.modes[0]?.id || "standard",
-              tool_id: isFree ? "none" : (existing.tool_id || caps.selected_tool_id || caps.tools?.[0]?.id || "none"),
             },
           };
           saveStorage(SELECTIONS_STORAGE_KEY, updated);
@@ -145,7 +143,7 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
         const existing = prev[p] || {};
         const caps = capabilitiesMap[p];
         const isFree = p === "chatgpt" && caps?.account_type === "free";
-        const safeUpdates = isFree ? { ...updates, model_id: "none", tool_id: "none" } : updates;
+        const safeUpdates = isFree ? { ...updates, model_id: "none" } : updates;
         const updated = {
           ...prev,
           [p]: { ...existing, ...safeUpdates },

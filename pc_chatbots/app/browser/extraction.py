@@ -75,16 +75,30 @@ class _LinkExtractor(HTMLParser):
             self._text.append(data)
 
 
-def normalize_sources(pairs: Iterable[tuple[str, str | None]]) -> list[Source]:
-    """Dedupe by URL, keep first title seen, drop non-http(s) URLs."""
+def normalize_sources(pairs: Iterable[tuple[str, str | None] | tuple[str, str | None, str | None] | Any]) -> list[Source]:
+    """Dedupe by URL, keep first title and snippet seen, drop non-http(s) URLs."""
     seen: set[str] = set()
     sources: list[Source] = []
-    for url, title in pairs:
+    for item in pairs:
+        if isinstance(item, (tuple, list)):
+            if len(item) < 1:
+                continue
+            url = item[0]
+            title = item[1] if len(item) > 1 else None
+            snippet = item[2] if len(item) > 2 else None
+        else:
+            continue
         if not isinstance(url, str):
             continue
         url = url.strip()
         if not url.startswith(("https://", "http://")) or url in seen:
             continue
         seen.add(url)
-        sources.append(Source(url=url, title=(title.strip() if title else None) or None))
+        sources.append(
+            Source(
+                url=url,
+                title=(title.strip() if isinstance(title, str) and title else None) or None,
+                snippet=(snippet.strip() if isinstance(snippet, str) and snippet else None) or None,
+            )
+        )
     return sources

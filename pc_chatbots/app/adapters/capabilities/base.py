@@ -85,3 +85,12 @@ class BaseProviderCapabilitiesStrategy(ABC):
             return (val or "").strip()
         except Exception:
             return ""
+
+    async def is_disabled(self, locator: Any, timeout: int = 1000) -> bool:
+        try:
+            aria = await self.safe_attr(locator, "aria-disabled", timeout=timeout)
+            if aria.lower() == "true":
+                return True
+            return bool(await locator.is_disabled(timeout=timeout))
+        except Exception:
+            return False

@@ -466,6 +466,7 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
             const thoughtToggles = document.querySelectorAll(
                 "button[aria-label*='Thought' i], " +
                 "button[aria-label*='Thinking' i], " +
+                "button[aria-label*='Worked' i], " +
                 "button[data-testid*='thought'], " +
                 "[class*='thought'] button"
             );
@@ -476,6 +477,22 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
                     if (attempts < 5) {
                         toggle.dataset.expandAttempts = (attempts + 1).toString();
                         triggerClick(toggle);
+                    }
+                }
+            }
+
+            // Also check buttons matching "Worked for ..." or "Thought for ..."
+            const candidateButtons = document.querySelectorAll("button, [role='button'], summary");
+            for (const btn of candidateButtons) {
+                const txt = clean(btn.innerText || btn.textContent || "");
+                if (/(?:worked|thought)\\s+for\\s+\\d+/i.test(txt)) {
+                    const isExpanded = btn.getAttribute("aria-expanded");
+                    if (isExpanded === "false") {
+                        const attempts = parseInt(btn.dataset.expandAttempts || "0", 10);
+                        if (attempts < 5) {
+                            btn.dataset.expandAttempts = (attempts + 1).toString();
+                            triggerClick(btn);
+                        }
                     }
                 }
             }
@@ -829,37 +846,285 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
         } catch (e) {}
     }
 
-    // 3. Fallback: query general thinking containers across other providers
-    const thinkingSelectors = [
-        ".ds-markdown--thought",
-        "div[class*='thinking-status-card-content']",
-        "div[class*='thinking-content']",
-        "div[class*='thought-content']",
-        "div[data-testid*='thought']",
-        "div[class*='reasoning']",
-        "div[class*='thinking_content']",
-        "div[class*='thinking-container']",
-        "div[class*='thinking-process']",
-        "div[class*='model-thought']",
-        "details[class*='thought']",
-        "details[class*='thinking']",
-        "div[aria-label*='Thought' i]",
-        "div[aria-label*='Thinking' i]"
-    ];
-
-    for (const sel of thinkingSelectors) {
+    // 2.4. ChatGPT-specific: Extract thinking steps and status
+    if (provider === "chatgpt" || !provider) {
         try {
-            const els = document.querySelectorAll(sel);
-            if (els && els.length > 0) {
-                const target = els[els.length - 1];
-                const txt = (target.innerText || target.textContent || "").trim();
-                if (txt) {
-                    thinkingText = txt;
-                    isThinking = true;
+            const WORKED_FOR_REGEX = /(?:worked|thought)\\s+for\\s+(?:(?:\\d+\\s*m(?:in(?:ute)?s?)?\\s*)?\\d+\\s*s(?:ec(?:ond)?s?)?|\\d+\\s*m(?:in(?:ute)?s?)?)|(?:đã\\s+)?suy\\s+nghĩ\\s+trong\\s+\\d+/i;
+
+            const asstMessages = document.querySelectorAll(
+                "div[data-message-author-role='assistant'], article[data-testid*='conversation-turn'], main"
+            );
+            const asstRoot = asstMessages.length > 0 ? asstMessages[asstMessages.length - 1] : document.body;
+
+            // Strategy 1: Look for active Skip button
+            // In ChatGPT, during reasoning: Header has "Thinking" label with "Skip" button on the right hand side
+            let skipButton = null;
+            const buttons = asstRoot.querySelectorAll("button");
+            for (const btn of buttons) {
+                const txt = clean(btn.innerText || btn.textContent || "").toLowerCase();
+                const aria = (btn.getAttribute("aria-label") || "").toLowerCase();
+                if (txt === "skip" || aria === "skip" || aria.includes("skip thinking")) {
+                    skipButton = btn;
                     break;
                 }
             }
+            if (!skipButton) {
+                const allButtons = document.querySelectorAll("button");
+                for (let i = allButtons.length - 1; i >= 0; i--) {
+                    const btn = allButtons[i];
+                    const txt = clean(btn.innerText || btn.textContent || "").toLowerCase();
+                    const aria = (btn.getAttribute("aria-label") || "").toLowerCase();
+                    if (txt === "skip" || aria === "skip" || aria.includes("skip thinking")) {
+                        skipButton = btn;
+                        break;
+                    }
+                }
+            }
+
+            if (skipButton) {
+                isThinking = true;
+                let headerRow = skipButton.parentElement;
+                while (
+                    headerRow &&
+                    headerRow !== asstRoot &&
+                    headerRow !== document.body &&
+                    !/thinking|suy nghĩ/i.test(headerRow.innerText || "") &&
+                    headerRow.parentElement
+                ) {
+                    headerRow = headerRow.parentElement;
+                }
+
+                let title = "Thinking";
+                if (headerRow) {
+                    const clone = headerRow.cloneNode(true);
+                    clone.querySelectorAll("button, svg, [class*='icon']").forEach(i => i.remove());
+                    const t = clean(clone.innerText || clone.textContent || "");
+                    if (t) title = t;
+                }
+
+                // Extract thinking content below headerRow
+                let description = "";
+                if (headerRow && headerRow.parentElement) {
+                    const container = headerRow.parentElement;
+                    const contentEl = container.querySelector(
+                        "[data-markdown-text-tone='tertiary'], [class*='thought'], [class*='reasoning'], .prose, .markdown"
+                    );
+                    if (contentEl && !headerRow.contains(contentEl)) {
+                        const pTags = contentEl.querySelectorAll("p, li, div[class*='paragraph']");
+                        if (pTags && pTags.length > 0) {
+                            const lines = [];
+                            for (const p of pTags) {
+                                const pt = clean(p.innerText || p.textContent || "");
+                                if (pt && !lines.includes(pt)) lines.push(pt);
+                            }
+                            if (lines.length > 0) description = lines.join("\n\n");
+                        }
+                        if (!description) {
+                            description = clean(contentEl.innerText || contentEl.textContent || "");
+                        }
+                    } else {
+                        const siblings = [];
+                        let sib = headerRow.nextElementSibling;
+                        while (sib) {
+                            const isFinalAnswer = sib.getAttribute("data-message-author-role") === "assistant" ||
+                                (sib.getAttribute("data-markdown-text-style") === "assistant-message" &&
+                                 sib.getAttribute("data-markdown-text-tone") !== "tertiary");
+                            if (isFinalAnswer) break;
+
+                            const sTxt = clean(sib.innerText || sib.textContent || "");
+                            if (sTxt) siblings.push(sTxt);
+                            sib = sib.nextElementSibling;
+                        }
+                        if (siblings.length > 0) {
+                            description = siblings.join("\n\n");
+                        } else {
+                            const cloneCont = container.cloneNode(true);
+                            const cloneH = cloneCont.querySelector("button")?.closest(headerRow.tagName.toLowerCase());
+                            if (cloneH) cloneH.remove();
+                            description = clean(cloneCont.innerText || cloneCont.textContent || "");
+                        }
+                    }
+                }
+
+                if (description.toLowerCase().startsWith(title.toLowerCase())) {
+                    description = description.slice(title.length).trim();
+                }
+
+                const dedupeKey = title + "::" + description;
+                if (!seenStepKeys.has(dedupeKey)) {
+                    seenStepKeys.add(dedupeKey);
+                    thinkingSteps.push({
+                        title: title,
+                        description: description,
+                        status: "running"
+                    });
+                }
+                if (description) {
+                    thinkingText = description;
+                }
+            } else {
+                // Strategy 2: Look for completed reasoning header "Worked for {x}m {xx}s" / "Thought for {x}s"
+                const candidateEls = asstRoot.querySelectorAll(
+                    "button, summary, div[role='button'], [data-testid*='thought'], div[class*='thought'], div[class*='reasoning'], span, h4, h5, div"
+                );
+                let completedEl = null;
+                let completedTitle = "";
+
+                for (let i = candidateEls.length - 1; i >= 0; i--) {
+                    const el = candidateEls[i];
+                    if ((el.innerText || "").length > 200) continue;
+                    const txt = clean(el.innerText || el.textContent || "");
+                    const m = txt.match(WORKED_FOR_REGEX);
+                    if (m) {
+                        completedEl = el;
+                        completedTitle = m[0];
+                        break;
+                    }
+                }
+
+                if (completedEl) {
+                    isThinking = true;
+                    if (completedEl.getAttribute("aria-expanded") === "false") {
+                        const attempts = parseInt(completedEl.dataset.expandAttempts || "0", 10);
+                        if (attempts < 5) {
+                            completedEl.dataset.expandAttempts = (attempts + 1).toString();
+                            triggerClick(completedEl);
+                        }
+                    }
+
+                    let description = "";
+                    const container = completedEl.closest("div[class*='thought'], div[class*='reasoning'], [data-testid*='thought']") || completedEl.parentElement;
+
+                    if (container) {
+                        const contentEl = container.querySelector(
+                            "[data-markdown-text-tone='tertiary'], [class*='thought'], [class*='reasoning'], .prose, .markdown"
+                        );
+                        if (contentEl && !completedEl.contains(contentEl)) {
+                            const pTags = contentEl.querySelectorAll("p, li, div[class*='paragraph']");
+                            if (pTags && pTags.length > 0) {
+                                const lines = [];
+                                for (const p of pTags) {
+                                    const pt = clean(p.innerText || p.textContent || "");
+                                    if (pt && !lines.includes(pt)) lines.push(pt);
+                                }
+                                if (lines.length > 0) description = lines.join("\n\n");
+                            }
+                            if (!description) {
+                                description = clean(contentEl.innerText || contentEl.textContent || "");
+                            }
+                        } else {
+                            const siblings = [];
+                            let sib = completedEl.nextElementSibling;
+                            while (sib) {
+                                const isFinalAnswer = sib.getAttribute("data-message-author-role") === "assistant" ||
+                                    (sib.getAttribute("data-markdown-text-style") === "assistant-message" &&
+                                     sib.getAttribute("data-markdown-text-tone") !== "tertiary");
+                                if (isFinalAnswer) break;
+
+                                const sTxt = clean(sib.innerText || sib.textContent || "");
+                                if (sTxt) siblings.push(sTxt);
+                                sib = sib.nextElementSibling;
+                            }
+                            if (siblings.length > 0) {
+                                description = siblings.join("\n\n");
+                            } else {
+                                const cloneCont = container.cloneNode(true);
+                                cloneCont.querySelectorAll("button, summary, svg, [class*='icon']").forEach(i => i.remove());
+                                description = clean(cloneCont.innerText || cloneCont.textContent || "");
+                            }
+                        }
+                    }
+
+                    if (description.startsWith(completedTitle)) {
+                        description = description.slice(completedTitle.length).trim();
+                    }
+
+                    const dedupeKey = completedTitle + "::" + description;
+                    if (!seenStepKeys.has(dedupeKey)) {
+                        seenStepKeys.add(dedupeKey);
+                        thinkingSteps.push({
+                            title: completedTitle,
+                            description: description,
+                            status: "completed"
+                        });
+                    }
+                    if (description) {
+                        thinkingText = description;
+                    }
+                } else {
+                    // Strategy 3: Check for "Thinking" label (without Skip button yet, e.g. early streaming)
+                    const thinkingEls = asstRoot.querySelectorAll(
+                        "button, summary, div[role='button'], [data-testid*='thought'], div[class*='thought'], div[class*='reasoning'], span, div"
+                    );
+                    for (let i = thinkingEls.length - 1; i >= 0; i--) {
+                        const el = thinkingEls[i];
+                        if ((el.innerText || "").length > 100) continue;
+                        const txt = clean(el.innerText || el.textContent || "");
+                        if (/^thinking(?:\\.\\.\\.)?$/i.test(txt) || /^đang suy nghĩ(?:\\.\\.\\.)?$/i.test(txt)) {
+                            isThinking = true;
+                            let description = "";
+                            const container = el.parentElement;
+                            if (container) {
+                                const clone = container.cloneNode(true);
+                                clone.querySelectorAll("svg, button").forEach(i => i.remove());
+                                description = clean(clone.innerText || clone.textContent || "");
+                                if (description.toLowerCase().startsWith("thinking")) {
+                                    description = description.slice(8).trim();
+                                }
+                            }
+                            const dedupeKey = "Thinking::" + description;
+                            if (!seenStepKeys.has(dedupeKey)) {
+                                seenStepKeys.add(dedupeKey);
+                                thinkingSteps.push({
+                                    title: "Thinking",
+                                    description: description,
+                                    status: "running"
+                                });
+                            }
+                            if (description) {
+                                thinkingText = description;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
         } catch (e) {}
+    }
+
+    // 3. Fallback: query general thinking containers across other providers
+    if (!thinkingText && thinkingSteps.length === 0) {
+        const thinkingSelectors = [
+            ".ds-markdown--thought",
+            "div[class*='thinking-status-card-content']",
+            "div[class*='thinking-content']",
+            "div[class*='thought-content']",
+            "div[data-testid*='thought']",
+            "div[class*='reasoning']",
+            "div[class*='thinking_content']",
+            "div[class*='thinking-container']",
+            "div[class*='thinking-process']",
+            "div[class*='model-thought']",
+            "details[class*='thought']",
+            "details[class*='thinking']",
+            "div[aria-label*='Thought' i]",
+            "div[aria-label*='Thinking' i]"
+        ];
+
+        for (const sel of thinkingSelectors) {
+            try {
+                const els = document.querySelectorAll(sel);
+                if (els && els.length > 0) {
+                    const target = els[els.length - 1];
+                    const txt = (target.innerText || target.textContent || "").trim();
+                    if (txt) {
+                        thinkingText = txt;
+                        isThinking = true;
+                        break;
+                    }
+                }
+            } catch (e) {}
+        }
     }
 
     if (!thinkingText && thinkingSteps.length > 0) {
@@ -1056,7 +1321,9 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
         "ol[class*='source'] a[href^='http']",
         "div[class*='references'] a[href^='http']",
         "sup a[href^='http']",
-        "div[class*='status-card'] a[href^='http']"
+        "div[class*='status-card'] a[href^='http']",
+        "[aria-label='Sources'] a[href^='http']",
+        "[aria-label*='Sources' i] a[href^='http']"
     ];
 
     for (const sel of linkSelectors) {

@@ -42,13 +42,6 @@ def test_chatgpt_default_capabilities() -> None:
     assert "standard" in mode_ids
     assert "thinking" in mode_ids
 
-    # Check tools (none, web_search, create_image, deep_research)
-    tool_ids = [t.id for t in caps.tools]
-    assert "none" in tool_ids
-    assert "web_search" in tool_ids
-    assert "create_image" in tool_ids
-    assert "deep_research" in tool_ids
-
     # Check data types and voice
     assert caps.supported_data_types.text is True
     assert caps.supported_data_types.image is True
@@ -62,7 +55,7 @@ async def test_capabilities_registry_lookup_and_defaults() -> None:
     registry = CapabilitiesRegistry.instance()
     caps = await registry.get_capabilities("chatgpt", force_sync=False)
     assert caps.provider == "chatgpt"
-    assert caps.selected_model_id in ["auto", "gpt-6", "default"]
+    assert caps.selected_model_id in ["auto", "gpt-6", "default", "none"]
 
     # Test unknown provider gets generic fallback
     fallback_caps = await registry.get_capabilities("unknown_prov", force_sync=False)

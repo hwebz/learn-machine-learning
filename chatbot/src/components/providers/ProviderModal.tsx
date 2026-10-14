@@ -75,9 +75,7 @@ export function ProviderModal({
 
   const handleToggle = (id: string) => {
     if (tempSelected.includes(id)) {
-      if (tempSelected.length > 1) {
-        setTempSelected(tempSelected.filter((p) => p !== id));
-      }
+      setTempSelected(tempSelected.filter((p) => p !== id));
     } else {
       setTempSelected([...tempSelected, id]);
     }
@@ -96,6 +94,7 @@ export function ProviderModal({
   };
 
   const handleApply = () => {
+    if (tempSelected.length === 0) return;
     onSelectMultipleProviders(tempSelected);
     onClose();
   };
@@ -186,6 +185,14 @@ export function ProviderModal({
                 style={{ padding: "4px 10px", fontSize: 12 }}
               >
                 <span>Chọn tất cả ({providers.length})</span>
+              </button>
+              <button
+                type="button"
+                className="btn-composer-pill"
+                onClick={() => setTempSelected([])}
+                style={{ padding: "4px 10px", fontSize: 12 }}
+              >
+                <span>Bỏ chọn tất cả</span>
               </button>
               {onSyncAll && (
                 <button
@@ -289,42 +296,8 @@ export function ProviderModal({
                     ]
                   : caps?.modes || [];
 
-              // 4. Tools: For ChatGPT, web_search, create_image, deep_research
-              const tools =
-                p.id === "chatgpt"
-                  ? [
-                      {
-                        id: "none",
-                        label: "Không sử dụng (Mặc định)",
-                        description: "Trò chuyện tiêu chuẩn không kèm công cụ bổ trợ",
-                        selected: true,
-                      },
-                      {
-                        id: "web_search",
-                        label: "Web search (Tìm kiếm web)",
-                        description: "Duyệt web trực tiếp cập nhật tin tức thời gian thực",
-                        badge: "Search",
-                      },
-                      {
-                        id: "create_image",
-                        label: "Create image (Tạo ảnh)",
-                        description: "Trực quan hóa và tạo ảnh từ mô tả",
-                        badge: "DALL-E",
-                      },
-                      {
-                        id: "deep_research",
-                        label: "Deep research (Nghiên cứu sâu)",
-                        description: "Nghiên cứu chuyên sâu tự động đa nguồn với báo cáo chi tiết",
-                        badge: "Research",
-                      },
-                    ]
-                  : caps?.tools || [];
-
               const dataTypes = caps?.supported_data_types;
               const voice = caps?.voice_chat;
-
-              const currentToolId = isFreeChatGPT ? "none" : (sel.tool_id || caps?.selected_tool_id || "none");
-              const isThinkingDisabled = currentToolId === "web_search" || currentToolId === "create_image";
 
               const currentModelId = isFreeChatGPT
                 ? "none"
@@ -337,11 +310,8 @@ export function ProviderModal({
               const currentThinking =
                 thinkingLevels.find((t) => t.id === currentThinkingId) || thinkingLevels[0];
 
-              const rawModeId = sel.mode_id || caps?.selected_mode_id || modes[0]?.id || "standard";
-              const currentModeId = isThinkingDisabled ? "standard" : rawModeId;
+              const currentModeId = sel.mode_id || caps?.selected_mode_id || modes[0]?.id || "standard";
               const currentMode = modes.find((m) => m.id === currentModeId) || modes[0];
-
-              const currentTool = tools.find((t) => t.id === currentToolId) || tools[0];
 
               return (
                 <div
@@ -482,11 +452,11 @@ export function ProviderModal({
                       gap: 8,
                     }}
                   >
-                    {/* Grid of Options: Row 1 = Model & Reasoning, Row 2 = Mode & Tools */}
+                    {/* Grid of Options: Row 1 = Model & Reasoning, Row 2 = Mode */}
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: tools.length > 0 ? "1fr 1fr" : (thinkingLevels.length > 0 && modes.length > 0 ? "1fr 1fr" : "1fr"),
+                        gridTemplateColumns: thinkingLevels.length > 0 ? "1fr 1fr" : "1fr",
                         gap: 10,
                       }}
                     >
@@ -612,7 +582,7 @@ export function ProviderModal({
 
                       {/* 3. Mode Picker */}
                       {modes.length > 0 && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3, gridColumn: thinkingLevels.length > 0 ? "1 / -1" : undefined }}>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                             <label
                               style={{
@@ -643,9 +613,7 @@ export function ProviderModal({
                           <select
                             value={currentModeId}
                             onChange={(e) => {
-                              const nextMode = e.target.value;
-                              if (isThinkingDisabled && nextMode === "thinking") return;
-                              onUpdateSelection?.(p.id, { mode_id: nextMode });
+                              onUpdateSelection?.(p.id, { mode_id: e.target.value });
                             }}
                             style={{
                               width: "100%",
@@ -664,97 +632,13 @@ export function ProviderModal({
                               <option
                                 key={m.id}
                                 value={m.id}
-                                disabled={m.id === "thinking" && isThinkingDisabled}
                               >
-                                {m.label} {m.id === "thinking" && isThinkingDisabled ? "(Không hỗ trợ với công cụ này)" : ""}
+                                {m.label}
                               </option>
                             ))}
                           </select>
-                          <span style={{ fontSize: 10.5, color: isThinkingDisabled ? "#d97706" : "var(--text-muted)", lineHeight: 1.25 }}>
-                            {isThinkingDisabled
-                              ? "* Suy luận chỉ áp dụng khi dùng Deep Research hoặc chat thông thường"
-                              : (currentMode?.description || "Mặc định Tiêu chuẩn (Standard)")}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* 4. Tools Picker */}
-                      {tools.length > 0 && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <label
-                              style={{
-                                fontSize: 11,
-                                fontWeight: 700,
-                                color: "var(--text-secondary)",
-                                textTransform: "uppercase",
-                                letterSpacing: "0.4px",
-                              }}
-                            >
-                              Công cụ hỗ trợ (Tools)
-                            </label>
-                            {isFreeChatGPT ? (
-                              <span
-                                style={{
-                                  fontSize: 9.5,
-                                  padding: "1px 5px",
-                                  borderRadius: 3,
-                                  backgroundColor: "#f1f5f9",
-                                  color: "#64748b",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                Tắt
-                              </span>
-                            ) : currentTool?.badge && (
-                              <span
-                                style={{
-                                  fontSize: 9.5,
-                                  padding: "1px 5px",
-                                  borderRadius: 3,
-                                  backgroundColor: "#fef3c7",
-                                  color: "#92400e",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                {currentTool.badge}
-                              </span>
-                            )}
-                          </div>
-                          <select
-                            disabled={isFreeChatGPT}
-                            value={currentToolId}
-                            onChange={(e) => {
-                              if (isFreeChatGPT) return;
-                              const nextTool = e.target.value;
-                              if (nextTool === "web_search" || nextTool === "create_image") {
-                                onUpdateSelection?.(p.id, { tool_id: nextTool, mode_id: "standard" });
-                              } else {
-                                onUpdateSelection?.(p.id, { tool_id: nextTool });
-                              }
-                            }}
-                            style={{
-                              width: "100%",
-                              padding: "6px 8px",
-                              borderRadius: 6,
-                              border: "1px solid var(--border-default, #cbd5e1)",
-                              backgroundColor: isFreeChatGPT ? "#f8fafc" : "#ffffff",
-                              fontSize: 12,
-                              fontWeight: 600,
-                              color: isFreeChatGPT ? "#64748b" : "var(--text-primary, #0f172a)",
-                              cursor: isFreeChatGPT ? "not-allowed" : "pointer",
-                              outline: "none",
-                            }}
-                            title={isFreeChatGPT ? "Tài khoản Free: Mặc định không sử dụng công cụ" : "Chọn công cụ hỗ trợ"}
-                          >
-                            {tools.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.label}
-                              </option>
-                            ))}
-                          </select>
-                          <span style={{ fontSize: 10.5, color: isFreeChatGPT ? "#64748b" : "var(--text-muted)", lineHeight: 1.25 }}>
-                            {isFreeChatGPT ? "Tài khoản Free: Mặc định không sử dụng công cụ" : (currentTool?.description || "Chọn công cụ hỗ trợ")}
+                          <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
+                            {currentMode?.description || "Mặc định Tiêu chuẩn (Standard)"}
                           </span>
                         </div>
                       )}
@@ -923,9 +807,15 @@ export function ProviderModal({
               type="button"
               className="btn-composer-send"
               onClick={handleApply}
-              style={{ padding: "8px 20px" }}
+              disabled={tempSelected.length === 0}
+              style={{
+                padding: "8px 20px",
+                opacity: tempSelected.length === 0 ? 0.45 : 1,
+                cursor: tempSelected.length === 0 ? "not-allowed" : "pointer",
+              }}
+              title={tempSelected.length === 0 ? "Vui lòng chọn ít nhất 1 nhà cung cấp" : undefined}
             >
-              <span>Áp dụng ({tempSelected.length} Models)</span>
+              <span>Áp dụng{tempSelected.length > 0 ? ` (${tempSelected.length} Models)` : ""}</span>
             </button>
           </div>
         </div>

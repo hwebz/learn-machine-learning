@@ -46,6 +46,9 @@ def test_dom_scan_script_syntax() -> None:
     assert "data-grouped-citations" in DOM_SCAN_THINKING_AND_CITATIONS
     assert ".ds-markdown--thought" in DOM_SCAN_THINKING_AND_CITATIONS
     assert "data-testid='citation'" in DOM_SCAN_THINKING_AND_CITATIONS
+    assert "WORKED_FOR_REGEX" in DOM_SCAN_THINKING_AND_CITATIONS
+    assert "skipButton" in DOM_SCAN_THINKING_AND_CITATIONS
+    assert "Worked for" in DOM_SCAN_THINKING_AND_CITATIONS
 
 
 @pytest.mark.asyncio
@@ -389,6 +392,217 @@ async def test_gemini_select_mode_already_in_target_mode() -> None:
     # Deep mode requested, already "Pro Cao", should not click to switch
     await adapter._select_mode(mock_page, "deep", timeout_s=1.0)
     assert mock_btn.click.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_wait_for_completion_chatgpt_thinking_running() -> None:
+    poll_events: list[dict] = []
+
+    async def mock_on_poll(**kwargs) -> None:
+        poll_events.append(kwargs)
+
+    mock_page = MagicMock()
+    mock_page.url = "https://chatgpt.com"
+    mock_page.locator.return_value.inner_text = AsyncMock(return_value="ChatGPT streaming response")
+    mock_page.evaluate = AsyncMock(return_value={
+        "is_thinking": True,
+        "thinking_text": "Thinking about the query...\nAnalyzing dependencies",
+        "thinking_steps": [
+            {"title": "Thinking", "description": "Thinking about the query...\nAnalyzing dependencies", "status": "running"},
+        ],
+        "citations": [],
+    })
+
+    clock_val = 1000.0
+
+    def fake_clock() -> float:
+        nonlocal clock_val
+        clock_val += 0.5
+        return clock_val
+
+    async def fake_sleep(dur: float) -> None:
+        pass
+
+    provider_cfg = {
+        "question_input": [],
+        "answer_container": [],
+        "generating_indicator": None,
+        "done_indicator": None,
+    }
+
+    result = await wait_for_completion(
+        mock_page,
+        provider="chatgpt",
+        provider_cfg=provider_cfg,
+        blocking={},
+        completion_cfg={"stable_seconds": 0.5, "poll_interval_s": 1.0},
+        timeout_s=2.0,
+        on_poll=mock_on_poll,
+        clock=fake_clock,
+        sleep=fake_sleep,
+    )
+
+    assert len(poll_events) > 0
+    first_poll = poll_events[0]
+    assert first_poll["is_thinking"] is True
+    assert len(first_poll["thinking_steps"]) == 1
+    assert first_poll["thinking_steps"][0]["title"] == "Thinking"
+    assert first_poll["thinking_steps"][0]["status"] == "running"
+    assert "Analyzing dependencies" in first_poll["thinking_steps"][0]["description"]
+
+
+@pytest.mark.asyncio
+async def test_wait_for_completion_chatgpt_thinking_completed() -> None:
+    poll_events: list[dict] = []
+
+    async def mock_on_poll(**kwargs) -> None:
+        poll_events.append(kwargs)
+
+    mock_page = MagicMock()
+    mock_page.url = "https://chatgpt.com"
+    mock_page.locator.return_value.inner_text = AsyncMock(return_value="ChatGPT final response")
+    mock_page.evaluate = AsyncMock(return_value={
+        "is_thinking": True,
+        "thinking_text": "Finalized reasoning.\nAll edge cases validated.",
+        "thinking_steps": [
+            {"title": "Worked for 1m 24s", "description": "Finalized reasoning.\nAll edge cases validated.", "status": "completed"},
+        ],
+        "citations": [{"url": "https://openai.com/research", "title": "OpenAI Research"}],
+    })
+
+    clock_val = 1000.0
+
+    def fake_clock() -> float:
+        nonlocal clock_val
+        clock_val += 0.5
+        return clock_val
+
+    async def fake_sleep(dur: float) -> None:
+        pass
+
+    provider_cfg = {
+        "question_input": [],
+        "answer_container": [],
+        "generating_indicator": None,
+        "done_indicator": None,
+    }
+
+    result = await wait_for_completion(
+        mock_page,
+        provider="chatgpt",
+        provider_cfg=provider_cfg,
+        blocking={},
+        completion_cfg={"stable_seconds": 0.5, "poll_interval_s": 1.0},
+        timeout_s=2.0,
+        on_poll=mock_on_poll,
+        clock=fake_clock,
+        sleep=fake_sleep,
+    )
+
+    assert len(poll_events) > 0
+    first_poll = poll_events[0]
+    assert first_poll["is_thinking"] is True
+    assert len(first_poll["thinking_steps"]) == 1
+    assert first_poll["thinking_steps"][0]["title"] == "Worked for 1m 24s"
+    assert first_poll["thinking_steps"][0]["status"] == "completed"
+    assert "edge cases" in first_poll["thinking_steps"][0]["description"]
+
+
+@pytest.mark.asyncio
+async def test_chatgpt_extract_sources_via_more_actions_and_modal() -> None:
+    from app.adapters.chatgpt_ui import ChatGPTUIAdapter
+
+    adapter = ChatGPTUIAdapter()
+
+    # Mock page and elements
+    mock_page = MagicMock()
+    mock_page.keyboard = MagicMock()
+    mock_page.keyboard.press = AsyncMock()
+    mock_page.wait_for_timeout = AsyncMock()
+
+    # Mock locators
+    mock_turn = MagicMock()
+    mock_turn.count = AsyncMock(return_value=1)
+    mock_turn.scroll_into_view_if_needed = AsyncMock()
+    mock_turn.hover = AsyncMock()
+
+    mock_more_btn = MagicMock()
+    mock_more_btn.count = AsyncMock(return_value=1)
+    mock_more_btn.scroll_into_view_if_needed = AsyncMock()
+    mock_more_btn.click = AsyncMock()
+
+    mock_view_sources = MagicMock()
+    mock_view_sources.count = AsyncMock(return_value=1)
+    mock_view_sources.is_visible = AsyncMock(return_value=True)
+    mock_view_sources.click = AsyncMock()
+
+    mock_modal = MagicMock()
+    mock_modal.count = AsyncMock(return_value=1)
+    mock_modal.is_visible = AsyncMock(return_value=True)
+    mock_modal.wait_for = AsyncMock()
+    mock_modal.evaluate = AsyncMock(return_value=[
+        {
+            "url": "https://en.wikipedia.org/wiki/Artificial_intelligence",
+            "title": "Artificial Intelligence - Wikipedia",
+            "snippet": "Overview of AI and machine learning techniques.",
+        },
+        {
+            "url": "https://arxiv.org/abs/2301.00001",
+            "title": "Reasoning Models in LLMs",
+            "snippet": "Research on chain of thought.",
+        },
+    ])
+
+    mock_close_btn = MagicMock()
+    mock_close_btn.count = AsyncMock(return_value=1)
+    mock_close_btn.is_visible = AsyncMock(return_value=True)
+    mock_close_btn.click = AsyncMock()
+    mock_modal.locator = MagicMock(return_value=mock_close_btn)
+
+    mock_turn.locator = MagicMock(return_value=mock_more_btn)
+
+    def mock_locator_router(selector: str) -> Any:
+        if "article" in selector or "assistant" in selector:
+            turn_collection = MagicMock()
+            turn_collection.count = AsyncMock(return_value=1)
+            turn_collection.last = mock_turn
+            return turn_collection
+        if "More actions" in selector or "More action" in selector:
+            btn_collection = MagicMock()
+            btn_collection.count = AsyncMock(return_value=1)
+            btn_collection.last = mock_more_btn
+            return btn_collection
+        if "View sources" in selector:
+            cand = MagicMock()
+            cand.count = AsyncMock(return_value=1)
+            cand.is_visible = AsyncMock(return_value=True)
+            cand.click = AsyncMock()
+            first_mock = MagicMock()
+            first_mock.first = cand
+            return first_mock
+        if "Sources" in selector or "Nguồn" in selector:
+            modal_coll = MagicMock()
+            modal_coll.first = mock_modal
+            return modal_coll
+        empty = MagicMock()
+        empty.count = AsyncMock(return_value=0)
+        empty.first = empty
+        empty.last = empty
+        return empty
+
+    mock_page.locator = MagicMock(side_effect=mock_locator_router)
+
+    sources = await adapter._extract_sources(mock_page)
+
+    assert len(sources) == 2
+    assert str(sources[0].url) == "https://en.wikipedia.org/wiki/Artificial_intelligence"
+    assert sources[0].title == "Artificial Intelligence - Wikipedia"
+    assert sources[0].snippet == "Overview of AI and machine learning techniques."
+    assert str(sources[1].url) == "https://arxiv.org/abs/2301.00001"
+    assert sources[1].title == "Reasoning Models in LLMs"
+    assert sources[1].snippet == "Research on chain of thought."
+
+
 
 
 

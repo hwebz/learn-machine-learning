@@ -277,6 +277,11 @@ class ChatGPTMarkdownConverter(BaseMarkdownConverter):
     def is_skip_tag(self, tag: str, attr_map: dict[str, str], cls: str) -> bool:
         if super().is_skip_tag(tag, attr_map, cls):
             return True
+        # Skip reasoning / thinking containers so they don't leak into final answer text
+        if attr_map.get("data-markdown-text-tone") == "tertiary":
+            return True
+        if "thought" in (attr_map.get("data-testid") or "").lower():
+            return True
         if tag == "button" and not self._raw_html_stack:
             # Preserve checkbox buttons used for checklists and task lists
             if (
@@ -298,6 +303,11 @@ class ChatGPTMarkdownConverter(BaseMarkdownConverter):
                 or "read aloud" in aria_lbl
                 or "regenerate" in aria_lbl
                 or "more actions" in aria_lbl
+                or "skip" in aria_lbl
+                or "skip" in tid
+                or "thought" in aria_lbl
+                or "thinking" in aria_lbl
+                or "worked for" in aria_lbl
             ):
                 return True
         return False

@@ -53,8 +53,8 @@ const FALLBACK_SESSION: ChatSession = {
   pinned: false,
   createdAt: "Vừa xong",
   createdTimestamp: 0,
-  selectedProviders: DEFAULT_SELECTED_PROVIDERS,
-  selectedProvider: "copilot",
+  selectedProviders: [],
+  selectedProvider: "",
   messages: [],
 };
 
@@ -253,8 +253,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             pinned: false,
             createdAt: "Vừa xong",
             createdTimestamp: Date.now(),
-            selectedProviders: DEFAULT_SELECTED_PROVIDERS,
-            selectedProvider: DEFAULT_SELECTED_PROVIDERS[0],
+            selectedProviders: [],
+            selectedProvider: "",
             messages: [],
           },
         ];
@@ -308,9 +308,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     FALLBACK_SESSION;
 
   // Convert selected provider ids to ProviderInfo objects
-  const activeProviderIds = activeSession.selectedProviders && activeSession.selectedProviders.length > 0
+  const activeProviderIds = Array.isArray(activeSession.selectedProviders)
     ? activeSession.selectedProviders
-    : [activeSession.selectedProvider || "copilot"];
+    : (activeSession.selectedProvider ? [activeSession.selectedProvider] : []);
 
   const selectedProviders: ProviderInfo[] = activeProviderIds
     .map((id) => PROVIDERS_LIST.find((p) => p.id === id))
@@ -436,8 +436,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       pinned: false,
       createdAt: "Vừa xong",
       createdTimestamp: Date.now(),
-      selectedProviders: DEFAULT_SELECTED_PROVIDERS,
-      selectedProvider: DEFAULT_SELECTED_PROVIDERS[0],
+      selectedProviders: [],
+      selectedProvider: "",
       messages: [],
     };
     setSessions([newSession, ...sessions]);
@@ -506,21 +506,19 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     setSessions((prev) =>
       prev.map((s) => {
         if (s.id !== activeSessionId && s.jobId !== activeSessionId) return s;
-        const currentIds = s.selectedProviders || [s.selectedProvider || "copilot"];
+        const currentIds = Array.isArray(s.selectedProviders)
+          ? s.selectedProviders
+          : (s.selectedProvider ? [s.selectedProvider] : []);
         let updatedIds: string[];
         if (currentIds.includes(providerId)) {
-          if (currentIds.length > 1) {
-            updatedIds = currentIds.filter((id) => id !== providerId);
-          } else {
-            updatedIds = currentIds; // Keep at least one
-          }
+          updatedIds = currentIds.filter((id) => id !== providerId);
         } else {
           updatedIds = [...currentIds, providerId];
         }
         return {
           ...s,
           selectedProviders: updatedIds,
-          selectedProvider: updatedIds[0],
+          selectedProvider: updatedIds[0] || "",
         };
       })
     );
@@ -614,6 +612,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
   const handleSendMessage = async (content: string) => {
     if (isGenerating) return;
 
+    if (activeProviderIds.length === 0) {
+      setIsProvidersModalOpen(true);
+      return;
+    }
+
     isCancelledRef.current = false;
     activeJobIdRef.current = null;
     if (activeUnsubscribeRef.current) {
@@ -651,9 +654,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     setActiveSteps([]);
     setInspectedMessage(undefined);
 
-    const currentProviderIds = activeSession.selectedProviders && activeSession.selectedProviders.length > 0
-      ? activeSession.selectedProviders
-      : [primarySelectedProvider.id];
+    const currentProviderIds = activeProviderIds;
 
     try {
       // 1. Dispatch research job to backend with all selected providers
@@ -664,7 +665,6 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         sanitizedOptions[pId] = {
           ...opts,
           model_id: isFree ? "none" : opts.model_id,
-          tool_id: isFree ? "none" : (opts.tool_id || "none"),
         };
       }
 

@@ -44,12 +44,10 @@ export interface FormattedProviderOptions {
   model: string;
   reasoning: string;
   mode: string;
-  tool: string;
   raw: {
     model_id?: string;
     thinking_level_id?: string;
     mode_id?: string;
-    tool_id?: string;
   };
 }
 
@@ -94,19 +92,16 @@ export function resolveProviderOptions(
     model_id?: string;
     thinking_level_id?: string;
     mode_id?: string;
-    tool_id?: string;
   } = {
     model_id: userSelection?.model_id || msgOpts?.model_id || runOpts?.model_id || stepOpts?.model_id || "auto",
     thinking_level_id: userSelection?.thinking_level_id || msgOpts?.thinking_level_id || runOpts?.thinking_level_id || stepOpts?.thinking_level_id || "auto",
     mode_id: userSelection?.mode_id || msgOpts?.mode_id || runOpts?.mode_id || stepOpts?.mode_id || "standard",
-    tool_id: userSelection?.tool_id || msgOpts?.tool_id || runOpts?.tool_id || stepOpts?.tool_id || "none",
   };
 
   // For Free account tier on ChatGPT: lock Model to none and Reasoning to Auto
   if (norm === "chatgpt" && isFreeAccount) {
     raw.model_id = "none";
     raw.thinking_level_id = "auto";
-    raw.tool_id = "none";
   }
 
   // 2. Model Label
@@ -175,34 +170,14 @@ export function resolveProviderOptions(
     }
   }
 
-  // 5. Tools Label
-  let toolLabel = "Không sử dụng (Mặc định)";
-  const toolId = raw.tool_id;
-  if (toolId && toolId !== "none" && toolId !== "default") {
-    const matched = activeCaps?.tools?.find((t) => t.id === toolId);
-    if (matched) {
-      toolLabel = matched.label || (matched as any).name || toolId;
-    } else if (toolId === "web_search") {
-      toolLabel = "Web search (Tìm kiếm web)";
-    } else if (toolId === "create_image") {
-      toolLabel = "Create image (Tạo ảnh)";
-    } else if (toolId === "deep_research") {
-      toolLabel = "Deep research (Nghiên cứu sâu)";
-    } else {
-      toolLabel = toolId;
-    }
-  }
-
   return {
     model: modelLabel,
     reasoning: reasoningLabel,
     mode: modeLabel,
-    tool: toolLabel,
     raw: {
       model_id: raw.model_id || "auto",
       thinking_level_id: raw.thinking_level_id || "auto",
       mode_id: raw.mode_id || "standard",
-      tool_id: raw.tool_id || "none",
     },
   };
 }
@@ -389,6 +364,36 @@ export function RightSidebar({
       for (const item of raw) {
         if (!item || !item.title) continue;
         const key = item.title.trim().toLowerCase();
+
+        // If transitioning from "thinking" to "worked for..." or "thought for...", update the existing thinking step in place
+        if (/^(worked|thought)\s+for\b/i.test(key) && stepMap.has("thinking")) {
+          const prev = stepMap.get("thinking")!;
+          stepMap.delete("thinking");
+          stepMap.set(key, {
+            ...prev,
+            title: item.title,
+            status: item.status || "completed",
+            description: (item.description && item.description.trim()) ? item.description : prev.description,
+            timestamp: st.timestamp || prev.timestamp,
+          });
+          continue;
+        }
+
+        // If consecutive polls update the duration (e.g. "worked for 12s" -> "worked for 13s"), update the existing worked-for entry
+        const existingWorkedKey = Array.from(stepMap.keys()).find((k) => /^(worked|thought)\s+for\b/i.test(k));
+        if (/^(worked|thought)\s+for\b/i.test(key) && existingWorkedKey) {
+          const prev = stepMap.get(existingWorkedKey)!;
+          stepMap.delete(existingWorkedKey);
+          stepMap.set(key, {
+            ...prev,
+            title: item.title,
+            status: item.status || "completed",
+            description: (item.description && item.description.trim()) ? item.description : prev.description,
+            timestamp: st.timestamp || prev.timestamp,
+          });
+          continue;
+        }
+
         const existing = stepMap.get(key);
         if (!existing) {
           stepMap.set(key, { ...item, timestamp: st.timestamp });
@@ -866,19 +871,6 @@ export function RightSidebar({
                                     }}
                                   >
                                     Chế độ: {currentProviderOpts.mode}
-                                  </span>
-                                  <span
-                                    style={{
-                                      fontSize: 10,
-                                      padding: "1px 6px",
-                                      borderRadius: 3,
-                                      backgroundColor: currentProviderOpts.raw.tool_id && currentProviderOpts.raw.tool_id !== "none" ? "#dcfce7" : "#ffffff",
-                                      border: `1px solid ${currentProviderOpts.raw.tool_id && currentProviderOpts.raw.tool_id !== "none" ? "#86efac" : "#dcfce7"}`,
-                                      color: "#15803d",
-                                      fontWeight: 700,
-                                    }}
-                                  >
-                                    Công cụ: {currentProviderOpts.tool}
                                   </span>
                                 </div>
                               </div>

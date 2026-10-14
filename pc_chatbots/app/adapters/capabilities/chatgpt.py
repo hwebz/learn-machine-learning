@@ -20,8 +20,7 @@ logger = structlog.get_logger(__name__)
 class ChatGPTCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
     """Strategy for ChatGPT (chatgpt.com) DOM option discovery, configuration, and defaults.
     
-    Optimized for Free account tier with Auto model & reasoning, Standard/Thinking modes,
-    and Web Search / Create Image / Deep Research tools.
+    Optimized for Free account tier with Auto model & reasoning, and Standard/Thinking modes.
     """
 
     @property
@@ -69,37 +68,6 @@ class ChatGPTCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             ),
         ]
 
-        # Tools: Web Search, Create Image, Deep Research (plus menu)
-        tools = [
-            OptionItem(
-                id="none",
-                label="Không sử dụng (Mặc định)",
-                description="Trò chuyện tiêu chuẩn không kèm công cụ bổ trợ",
-                selected=True,
-            ),
-            OptionItem(
-                id="web_search",
-                label="Web search (Tìm kiếm web)",
-                description="Duyệt web trực tiếp để cập nhật tin tức và thông tin thời gian thực",
-                selected=False,
-                badge="Search",
-            ),
-            OptionItem(
-                id="create_image",
-                label="Create image (Tạo ảnh)",
-                description="Trực quan hóa và tạo ảnh từ mô tả",
-                selected=False,
-                badge="DALL-E",
-            ),
-            OptionItem(
-                id="deep_research",
-                label="Deep research (Nghiên cứu sâu)",
-                description="Nghiên cứu chuyên sâu tự động đa nguồn với báo cáo chi tiết",
-                selected=False,
-                badge="Research",
-            ),
-        ]
-
         data_types = SupportedDataTypes(
             text=True,
             image=True,
@@ -136,15 +104,13 @@ class ChatGPTCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             selected_thinking_level_id="auto",
             modes=modes,
             selected_mode_id="standard",
-            tools=tools,
-            selected_tool_id="none",
             account_type="free",
             supported_data_types=data_types,
             voice_chat=voice,
         )
 
     async def inspect_dom(self, page: Any) -> ProviderLiveCapabilities:
-        """Asynchronously query the live ChatGPT DOM to collect models, thinking, modes, and tools."""
+        """Asynchronously query the live ChatGPT DOM to collect models, thinking, and modes."""
         caps = self.get_default_capabilities()
         caps.synced_at = datetime.now(timezone.utc)
 
@@ -278,7 +244,64 @@ class ChatGPTCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
                 ]
                 caps.selected_thinking_level_id = "auto"
 
-            # 5. Mode: Check if Think pill is currently active in the composer
+            # 5. Plus Menu Discovery: Click '+' button to discover all options ChatGPT provides
+            plus_btn = page.locator(
+                "button[aria-label*='Add files and more' i], "
+                "button[aria-label*='Add files' i], "
+                "button[data-testid='attach-button'], "
+                "button[data-testid='composer-attach-button'], "
+                "button[aria-label*='Attach' i], "
+                "button[aria-label*='Đính kèm' i], "
+                "button[aria-label*='Upload' i], "
+                "button[aria-haspopup='menu']"
+            ).first
+
+            discovered_plus_items: list[dict[str, Any]] = []
+            has_attach = False
+
+            if await plus_btn.count() > 0 and await plus_btn.is_visible(timeout=1500):
+                has_attach = True
+                is_disabled = await self.is_disabled(plus_btn)
+                if not is_disabled:
+                    try:
+                        await plus_btn.click(timeout=2500)
+                        await asyncio.sleep(0.5)
+
+                        menu = page.locator(
+                            "div[class*='composer-home-top-menu'], div[class*='ComposerTopMenuShell'], div[class*='suggestionMenu'], [role='menu']"
+                        ).first
+                        if await menu.count() > 0 and await menu.is_visible(timeout=1500):
+                            buttons = menu.locator("button, [role='menuitem']")
+                            b_count = await buttons.count()
+                            for i in range(b_count):
+                                b = buttons.nth(i)
+                                raw_text = await self.safe_inner_text(b, timeout=800)
+                                if not raw_text or len(raw_text) > 120:
+                                    continue
+                                lines = [s.strip() for s in raw_text.split("\n") if s.strip()]
+                                title = lines[0] if lines else ""
+                                desc = " - ".join(lines[1:]) if len(lines) > 1 else ""
+                                is_sel = "selected" in raw_text.lower() or (await self.safe_attr(b, "aria-checked")) == "true"
+                                discovered_plus_items.append({
+                                    "title": title,
+                                    "description": desc,
+                                    "selected": is_sel,
+                                })
+
+                        await page.keyboard.press("Escape")
+                        await asyncio.sleep(0.2)
+                        logger.info("chatgpt_plus_menu_discovered", items=[it["title"] for it in discovered_plus_items])
+                    except Exception as exc:
+                        logger.warning("chatgpt_plus_menu_scan_failed", error=str(exc))
+                        try:
+                            await page.keyboard.press("Escape")
+                        except Exception:
+                            pass
+            else:
+                file_input = page.locator("input[type='file']").first
+                has_attach = (await file_input.count() > 0) or (caps.account_type in {"plus", "free"})
+
+            # 6. Mode Detection (Standard, Thinking, Deep research, etc.)
             think_loc = page.locator(
                 "button:has-text('Think'), "
                 "[role='button']:has-text('Think'), "
@@ -289,45 +312,80 @@ class ChatGPTCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             except Exception:
                 pass
 
+            is_think_pressed = False
             if await think_loc.count() > 0:
-                is_pressed = (await self.safe_attr(think_loc, "aria-pressed")) == "true"
-                caps.selected_mode_id = "thinking" if is_pressed else "standard"
-                for m in caps.modes:
-                    m.selected = (m.id == caps.selected_mode_id)
+                is_think_pressed = (await self.safe_attr(think_loc, "aria-pressed")) == "true"
+            else:
+                for it in discovered_plus_items:
+                    if "think" in it["title"].lower() and it["selected"]:
+                        is_think_pressed = True
+                        break
 
-            # 6. Tools Detection (Plus menu)
-            plus_btn = page.locator(
-                "button[aria-label*='Add files' i], "
-                "button[data-testid='attach-button'], "
-                "button[aria-label*='Attach' i], "
-                "button[aria-haspopup='menu']"
-            )
-            has_plus = await plus_btn.count() > 0
-            if has_plus:
-                for t in caps.tools:
-                    if t.id != "none":
-                        t.badge = "Live"
+            # Build enriched modes based on discovered plus menu items
+            modes_dict: dict[str, OptionItem] = {
+                "standard": OptionItem(
+                    id="standard",
+                    label="Tiêu chuẩn (Standard)",
+                    description="Chế độ trò chuyện tiêu chuẩn nhanh chóng",
+                    selected=not is_think_pressed,
+                ),
+                "thinking": OptionItem(
+                    id="thinking",
+                    label="Suy luận (Thinking)",
+                    description="Kích hoạt phân tích và suy luận chi tiết",
+                    badge="Think",
+                    selected=is_think_pressed,
+                ),
+            }
+
+            for it in discovered_plus_items:
+                t_lower = it["title"].lower()
+                if "deep research" in t_lower:
+                    modes_dict["deep_research"] = OptionItem(
+                        id="deep_research",
+                        label="Deep research (Nghiên cứu sâu)",
+                        description=it["description"] or "Nghiên cứu chuyên sâu tự động đa nguồn với báo cáo chi tiết",
+                        badge="Research",
+                        selected=it["selected"],
+                    )
+                elif "web search" in t_lower:
+                    modes_dict["web_search"] = OptionItem(
+                        id="web_search",
+                        label="Web search (Tìm kiếm web)",
+                        description=it["description"] or "Tìm kiếm thông tin thời gian thực trên web",
+                        badge="Search",
+                        selected=it["selected"],
+                    )
+                elif "create image" in t_lower:
+                    modes_dict["create_image"] = OptionItem(
+                        id="create_image",
+                        label="Create image (Tạo ảnh)",
+                        description=it["description"] or "Tạo hình ảnh trực tiếp từ mô tả",
+                        badge="DALL-E",
+                        selected=it["selected"],
+                    )
+                elif "sketch" in t_lower:
+                    modes_dict["sketch"] = OptionItem(
+                        id="sketch",
+                        label="Sketch (Vẽ & phác thảo)",
+                        description=it["description"] or "Vẽ và đính kèm hình ảnh phác thảo",
+                        badge="Sketch",
+                        selected=it["selected"],
+                    )
+
+            caps.modes = list(modes_dict.values())
+            selected_m = next((m.id for m in caps.modes if m.selected and m.id != "standard"), None)
+            caps.selected_mode_id = selected_m or ("thinking" if is_think_pressed else "standard")
 
             # 7. File / Image Upload Capabilities
-            attach_loc = page.locator(
-                "button[aria-label*='Add files' i], "
-                "button[data-testid='attach-button'], "
-                "button[aria-label*='Attach' i], "
-                "button[aria-label*='Đính kèm' i], "
-                "button[aria-label*='files' i], "
-                "input[type='file']"
-            ).first
-            has_attach = await attach_loc.count() > 0
-            is_disabled = False
-            if has_attach:
-                dis = await self.safe_attr(attach_loc, "disabled")
-                aria_dis = await self.safe_attr(attach_loc, "aria-disabled")
-                is_disabled = (dis is not None) or (aria_dis == "true")
+            has_photos_or_files = any(
+                any(kw in it["title"].lower() or kw in it["description"].lower() for kw in ["photo", "file", "tệp", "ảnh", "computer", "máy tính", "library", "upload", "tải lên", "drive"])
+                for it in discovered_plus_items
+            ) or has_attach
 
-            can_upload = (has_attach and not is_disabled) or (caps.account_type == "plus")
             caps.supported_data_types.text = True
-            caps.supported_data_types.image = can_upload
-            caps.supported_data_types.file = can_upload
+            caps.supported_data_types.image = has_photos_or_files
+            caps.supported_data_types.file = has_photos_or_files
             caps.supported_data_types.max_file_size_mb = 512 if caps.account_type == "plus" else 50
             caps.supported_data_types.supported_mime_types = [
                 "image/*",
@@ -357,6 +415,7 @@ class ChatGPTCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
                 "chatgpt_dom_inspection_success",
                 account_type=caps.account_type,
                 mode=caps.selected_mode_id,
+                modes_count=len(caps.modes),
                 can_upload=caps.supported_data_types.image,
                 models_count=len(caps.available_models),
             )
@@ -368,7 +427,7 @@ class ChatGPTCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
         return caps
 
     async def apply_selection(self, page: Any, config: ProviderSelectionRequest) -> None:
-        """Actuate DOM selectors to apply chosen model, tool, mode, and options."""
+        """Actuate DOM selectors to apply chosen model, mode, and options."""
         # 0. Model Selection (For Plus accounts with model switcher)
         if config.model_id and config.model_id not in {"none", "auto", "default"}:
             try:
@@ -407,91 +466,84 @@ class ChatGPTCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
                 except Exception:
                     pass
 
-        # 1. Tools Selection via Plus Menu
-        # Supported tools: web_search, create_image, deep_research
-        if config.tool_id and config.tool_id != "none":
-            tool_label_map = {
-                "web_search": "Web search",
-                "create_image": "Create image",
-                "deep_research": "Deep research",
-            }
-            target_label = tool_label_map.get(config.tool_id)
-            if target_label:
-                try:
-                    plus_loc = page.locator(
-                        "button[aria-label*='Add files' i], button[data-testid='attach-button'], button[aria-label*='Attach' i], button[aria-haspopup='menu']"
-                    ).first
-                    if await plus_loc.count() > 0:
-                        await plus_loc.click(timeout=2500)
-                        await asyncio.sleep(0.35)
-                        item_loc = page.locator(
-                            f"[role='menuitem']:has-text('{target_label}'), "
-                            f"button:has-text('{target_label}'), "
-                            f"div:has-text('{target_label}')"
-                        ).first
-                        if await item_loc.count() > 0 and await item_loc.is_visible(timeout=1000):
-                            try:
-                                await item_loc.click(force=True, timeout=2500)
-                            except Exception:
-                                await item_loc.dispatch_event("click")
-                            logger.info("chatgpt_tool_applied", tool=config.tool_id, label=target_label)
-                        else:
-                            await page.keyboard.press("Escape")
-                except Exception as exc:
-                    logger.warning("chatgpt_apply_tool_failed", tool=config.tool_id, error=str(exc))
-                    try:
-                        await page.keyboard.press("Escape")
-                    except Exception:
-                        pass
+        # 1. Mode application
+        mode_id = config.mode_id or "standard"
+        want_thinking = mode_id == "thinking"
 
-        # 2. Mode application (Standard vs Thinking)
-        is_restricted_tool = config.tool_id in {"web_search", "create_image"}
-        want_thinking = (config.mode_id == "thinking") and not is_restricted_tool
+        plus_mode_map = {
+            "deep_research": "Deep research",
+            "web_search": "Web search",
+            "create_image": "Create image",
+            "sketch": "Sketch",
+        }
 
-        try:
-            think_loc = page.locator(
-                "button:has-text('Think'), "
-                "[role='button']:has-text('Think'), "
-                "button[aria-label*='Think' i]"
-            ).first
+        if mode_id in plus_mode_map:
+            target_name = plus_mode_map[mode_id]
             try:
-                await think_loc.wait_for(state="visible", timeout=3000)
-            except Exception:
-                pass
-
-            if await think_loc.count() > 0:
-                is_pressed = (await self.safe_attr(think_loc, "aria-pressed")) == "true"
-                if want_thinking and not is_pressed:
-                    await think_loc.click(timeout=3000)
-                    await asyncio.sleep(0.35)
-                    logger.info("chatgpt_think_mode_enabled")
-                elif not want_thinking and is_pressed:
-                    await think_loc.click(timeout=3000)
-                    await asyncio.sleep(0.35)
-                    logger.info("chatgpt_think_mode_disabled")
-            elif want_thinking:
-                try:
-                    plus_loc = page.locator(
-                        "button[aria-label*='Add files' i], button[data-testid='attach-button'], button[aria-label*='Attach' i], button[aria-haspopup='menu']"
+                plus_btn = page.locator(
+                    "button[aria-label*='Add files and more' i], "
+                    "button[aria-label*='Add files' i], "
+                    "button[data-testid='attach-button'], "
+                    "button[data-testid='composer-attach-button'], "
+                    "button[aria-label*='Attach' i], "
+                    "button[aria-haspopup='menu']"
+                ).first
+                if await plus_btn.count() > 0:
+                    await plus_btn.click(timeout=2500)
+                    await asyncio.sleep(0.4)
+                    menu = page.locator(
+                        "div[class*='composer-home-top-menu'], div[class*='ComposerTopMenuShell'], div[class*='suggestionMenu'], [role='menu']"
                     ).first
-                    if await plus_loc.count() > 0:
-                        await plus_loc.click(timeout=2000)
+                    target_btn = menu.locator(f"button:has-text('{target_name}'), [role='menuitem']:has-text('{target_name}')").first
+                    if await target_btn.count() > 0 and await target_btn.is_visible(timeout=1500):
+                        try:
+                            await target_btn.click(force=True, timeout=2000)
+                        except Exception:
+                            await target_btn.dispatch_event("click")
+                        logger.info("chatgpt_mode_applied_via_plus_menu", mode=mode_id, target=target_name)
+                    else:
+                        await page.keyboard.press("Escape")
+            except Exception as exc:
+                logger.warning("chatgpt_apply_plus_mode_failed", mode=mode_id, error=str(exc))
+                try:
+                    await page.keyboard.press("Escape")
+                except Exception:
+                    pass
+        else:
+            try:
+                think_loc = page.locator(
+                    "button:has-text('Think'), "
+                    "[role='button']:has-text('Think'), "
+                    "button[aria-label*='Think' i]"
+                ).first
+                try:
+                    await think_loc.wait_for(state="visible", timeout=2000)
+                except Exception:
+                    pass
+
+                if await think_loc.count() > 0:
+                    is_pressed = (await self.safe_attr(think_loc, "aria-pressed")) == "true"
+                    if want_thinking and not is_pressed:
+                        await think_loc.click(timeout=2500)
+                        logger.info("chatgpt_think_mode_enabled")
+                    elif not want_thinking and is_pressed:
+                        await think_loc.click(timeout=2500)
+                        logger.info("chatgpt_think_mode_disabled")
+                elif want_thinking:
+                    plus_btn = page.locator(
+                        "button[aria-label*='Add files and more' i], button[aria-label*='Add files' i], button[data-testid='attach-button'], button[aria-haspopup='menu']"
+                    ).first
+                    if await plus_btn.count() > 0:
+                        await plus_btn.click(timeout=2000)
                         await asyncio.sleep(0.35)
-                        item_loc = page.locator(
-                            "[role='menuitem']:has-text('Thinking'), button:has-text('Thinking')"
+                        menu = page.locator(
+                            "div[class*='composer-home-top-menu'], div[class*='ComposerTopMenuShell'], [role='menu']"
                         ).first
+                        item_loc = menu.locator("button:has-text('Thinking'), [role='menuitem']:has-text('Thinking')").first
                         if await item_loc.count() > 0 and await item_loc.is_visible(timeout=1500):
-                            try:
-                                await item_loc.click(force=True, timeout=2000)
-                            except Exception:
-                                await item_loc.dispatch_event("click")
+                            await item_loc.click(force=True, timeout=2000)
                             logger.info("chatgpt_think_mode_enabled_via_menu")
                         else:
                             await page.keyboard.press("Escape")
-                except Exception:
-                    try:
-                        await page.keyboard.press("Escape")
-                    except Exception:
-                        pass
-        except Exception as exc:
-            logger.warning("chatgpt_apply_think_failed", error=str(exc))
+            except Exception as exc:
+                logger.warning("chatgpt_apply_think_failed", error=str(exc))

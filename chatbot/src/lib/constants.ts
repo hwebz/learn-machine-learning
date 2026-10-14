@@ -225,7 +225,7 @@ export const PROVIDERS_LIST: ProviderInfo[] = [
   },
 ];
 
-export const DEFAULT_SELECTED_PROVIDERS = ["copilot", "gemini", "qwen"];
+export const DEFAULT_SELECTED_PROVIDERS: string[] = [];
 
 export const SUGGESTED_PROMPTS = [
   "So sánh cơ chế Thinking Mode giữa Qwen 3.8-Max, Gemini 3.1 Pro và Copilot",
