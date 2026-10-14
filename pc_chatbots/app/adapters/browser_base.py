@@ -546,7 +546,9 @@ class BrowserProviderAdapter(ABC):
                             elif self.name == "copilot":
                                 try:
                                     cot_btn = page.locator(
-                                        "[class*='scc-ChainOfThought']:not([class*='scc-ChainOfThought__card'])"
+                                        "button.scc-ChainOfThought__expandButton[aria-expanded='false'], "
+                                        "button[class*='scc-ChainOfThought__expandButton'][aria-expanded='false'], "
+                                        "button[id*='expand-button'][aria-expanded='false']"
                                     ).first
                                     if await cot_btn.count() > 0 and await cot_btn.is_visible(timeout=1000):
                                         await cot_btn.click(timeout=1500)

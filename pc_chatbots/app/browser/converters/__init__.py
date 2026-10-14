@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.browser.converters.base import BaseMarkdownConverter
 from app.browser.converters.chatgpt import ChatGPTMarkdownConverter
+from app.browser.converters.copilot import CopilotMarkdownConverter
 from app.browser.converters.registry import get_converter, register_converter
 
 
@@ -27,6 +28,7 @@ def clean_markdown_text(text: str) -> str:
 __all__ = [
     "BaseMarkdownConverter",
     "ChatGPTMarkdownConverter",
+    "CopilotMarkdownConverter",
     "clean_markdown_text",
     "get_converter",
     "html_to_markdown",

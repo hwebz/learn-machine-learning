@@ -3,10 +3,14 @@ from __future__ import annotations
 from typing import Type
 from app.browser.converters.base import BaseMarkdownConverter
 from app.browser.converters.chatgpt import ChatGPTMarkdownConverter
+from app.browser.converters.copilot import CopilotMarkdownConverter
 
 _REGISTRY: dict[str, Type[BaseMarkdownConverter]] = {
     "chatgpt": ChatGPTMarkdownConverter,
     "openai": ChatGPTMarkdownConverter,
+    "copilot": CopilotMarkdownConverter,
+    "microsoft": CopilotMarkdownConverter,
+    "m365": CopilotMarkdownConverter,
 }
 
 

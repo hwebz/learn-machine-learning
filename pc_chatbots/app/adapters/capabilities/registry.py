@@ -9,6 +9,7 @@ import structlog
 
 from app.adapters.capabilities.base import BaseProviderCapabilitiesStrategy
 from app.adapters.capabilities.chatgpt import ChatGPTCapabilitiesStrategy
+from app.adapters.capabilities.copilot import CopilotCapabilitiesStrategy
 from app.adapters.capabilities.models import (
     OptionItem,
     ProviderLiveCapabilities,
@@ -102,6 +103,8 @@ class CapabilitiesRegistry:
         """Register provider strategies."""
         chatgpt_strat = ChatGPTCapabilitiesStrategy()
         self.register(chatgpt_strat)
+        copilot_strat = CopilotCapabilitiesStrategy()
+        self.register(copilot_strat)
 
     def register(self, strategy: BaseProviderCapabilitiesStrategy) -> None:
         self._strategies[strategy.provider_name.lower()] = strategy

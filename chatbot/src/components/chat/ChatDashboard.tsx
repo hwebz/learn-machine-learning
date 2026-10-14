@@ -228,9 +228,26 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         const keptPrev = prev.filter((s) => !existingJobIds.has(s.id) && !existingJobIds.has(s.jobId || ""));
         const combined = [...newSessions, ...keptPrev];
 
+        if (!targetId) {
+          const emptySession = combined.find((session) =>
+            session.id.startsWith("session-") && session.messages.length === 0
+          );
+          const selectedSession = emptySession || {
+            ...FALLBACK_SESSION,
+            id: `session-${Date.now()}`,
+            createdTimestamp: Date.now(),
+          };
+          setActiveSessionId(selectedSession.id);
+          setActiveSteps([]);
+          setInspectedMessage(undefined);
+          setInspectedProvider(undefined);
+          setIsRightSidebarOpen(false);
+          return emptySession ? combined : [selectedSession, ...combined];
+        }
+
         if (combined.length > 0) {
           setActiveSessionId((curr) => {
-            if (targetId && combined.some((s) => s.id === targetId || s.jobId === targetId)) {
+            if (combined.some((s) => s.id === targetId || s.jobId === targetId)) {
               return targetId;
             }
             if (curr && combined.some((s) => s.id === curr || s.jobId === curr)) {
@@ -243,19 +260,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
         const freshId = `session-${Date.now()}`;
         setActiveSessionId(freshId);
-        if (!targetId) {
-          setIsProvidersModalOpen(true);
-        }
         return [
           {
+            ...FALLBACK_SESSION,
             id: freshId,
-            title: "Phiên nghiên cứu mới",
-            pinned: false,
-            createdAt: "Vừa xong",
             createdTimestamp: Date.now(),
-            selectedProviders: [],
-            selectedProvider: "",
-            messages: [],
           },
         ];
       });
@@ -283,11 +292,23 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         handleSelectSession(match[1], false);
       } else if (window.location.pathname === "/") {
         setSessions((prev) => {
-          if (prev.length > 0) {
-            setActiveSessionId(prev[0].id);
-          }
-          return prev;
+          const emptySession = prev.find((session) =>
+            session.id.startsWith("session-") && session.messages.length === 0
+          );
+          const selectedSession = emptySession || {
+            ...FALLBACK_SESSION,
+            id: `session-${Date.now()}`,
+            createdTimestamp: Date.now(),
+          };
+          setActiveSessionId(selectedSession.id);
+          setActiveSteps([]);
+          setInspectedMessage(undefined);
+          setInspectedProvider(undefined);
+          setIsRightSidebarOpen(false);
+          return emptySession ? prev : [selectedSession, ...prev];
         });
+        setIsProvidersModalOpen(false);
+        setIsGenerating(false);
       }
     };
 
@@ -304,7 +325,6 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
   const activeSession: ChatSession =
     sessions.find((s) => s.id === activeSessionId || s.jobId === activeSessionId) ||
-    sessions[0] ||
     FALLBACK_SESSION;
 
   // Convert selected provider ids to ProviderInfo objects

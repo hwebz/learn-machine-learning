@@ -47,6 +47,13 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
       cachedSelections["chatgpt"].model_id = "none";
       cachedSelections["chatgpt"].thinking_level_id = "auto";
     }
+    if (cachedSelections["copilot"]) {
+      cachedSelections["copilot"].model_id = "auto";
+      cachedSelections["copilot"].thinking_level_id = "auto";
+      if (!cachedSelections["copilot"].mode_id) {
+        cachedSelections["copilot"].mode_id = "auto";
+      }
+    }
     setCapabilitiesMap(cachedCaps);
     setSelectionsMap(cachedSelections);
   }, []);
@@ -69,17 +76,25 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
         // Initialize selections if not set yet
         setSelectionsMap((prev) => {
           const existing = prev[p] || {};
+          const isCopilot = p === "copilot";
           const isFree = p === "chatgpt" && caps.account_type === "free";
           const updated = {
             ...prev,
             [p]: {
-              model_id: isFree ? "none" : (existing.model_id || caps.selected_model_id || caps.available_models[0]?.id || "none"),
-              thinking_level_id:
-                existing.thinking_level_id ||
-                caps.selected_thinking_level_id ||
-                caps.thinking_levels[0]?.id ||
-                "auto",
-              mode_id: existing.mode_id || caps.selected_mode_id || caps.modes[0]?.id || "standard",
+              model_id: isCopilot
+                ? "auto"
+                : isFree
+                ? "none"
+                : (existing.model_id || caps.selected_model_id || caps.available_models[0]?.id || "none"),
+              thinking_level_id: isCopilot
+                ? "auto"
+                : (
+                    existing.thinking_level_id ||
+                    caps.selected_thinking_level_id ||
+                    caps.thinking_levels[0]?.id ||
+                    "auto"
+                  ),
+              mode_id: existing.mode_id || caps.selected_mode_id || caps.modes[0]?.id || (isCopilot ? "auto" : "standard"),
             },
           };
           saveStorage(SELECTIONS_STORAGE_KEY, updated);

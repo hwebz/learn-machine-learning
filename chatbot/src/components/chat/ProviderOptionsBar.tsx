@@ -52,9 +52,53 @@ export function ProviderOptionsBar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const isCopilot = providerId === "copilot";
   const models = capabilities?.available_models || [];
   const thinkingLevels = capabilities?.thinking_levels || [];
-  const modes = capabilities?.modes || [];
+
+  const fallbackCopilotModes: OptionItem[] = [
+    {
+      id: "auto",
+      label: "Auto",
+      description: "Tự động cân bằng giữa tốc độ và độ chính xác (Mặc định)",
+      selected: true,
+      badge: "Auto",
+    },
+    {
+      id: "quick",
+      label: "Quick Response",
+      description: "Ưu tiên tốc độ phản hồi nhanh cho các câu hỏi ngắn gọn",
+      selected: false,
+      badge: "Fast",
+    },
+    {
+      id: "think_deeper",
+      label: "Think Deeper",
+      description: "Kích hoạt mô hình suy luận đa bước chuyên sâu cho bài toán phức tạp",
+      selected: false,
+      badge: "Think",
+    },
+    {
+      id: "gpt_5_6_quick",
+      label: "GPT > GPT-5.6 Sol Quick Response",
+      description: "Mô hình GPT-5.6 Sol tối ưu tốc độ phản hồi",
+      selected: false,
+      badge: "GPT-5.6",
+    },
+    {
+      id: "gpt_5_6_think",
+      label: "GPT > GPT-5.6 Sol Think Deeper",
+      description: "Mô hình GPT-5.6 Sol với khả năng suy luận chuyên sâu",
+      selected: false,
+      badge: "GPT-5.6",
+    },
+  ];
+
+  const modes = capabilities?.modes && capabilities.modes.length > 0
+    ? capabilities.modes
+    : isCopilot
+    ? fallbackCopilotModes
+    : [];
   const dataTypes = capabilities?.supported_data_types;
   const voice = capabilities?.voice_chat;
 
@@ -143,7 +187,8 @@ export function ProviderOptionsBar({
           <div ref={modelRef} style={{ position: "relative" }}>
             <button
               type="button"
-              onClick={() => setIsModelOpen(!isModelOpen)}
+              disabled={isCopilot}
+              onClick={() => !isCopilot && setIsModelOpen(!isModelOpen)}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -151,34 +196,32 @@ export function ProviderOptionsBar({
                 padding: "4px 9px",
                 borderRadius: "var(--radius-sm, 6px)",
                 border: "1px solid var(--border-subtle, #cbd5e1)",
-                backgroundColor: isModelOpen ? "var(--brand-blue-light, #eff6ff)" : "transparent",
+                backgroundColor: isCopilot ? "#f8fafc" : (isModelOpen ? "var(--brand-blue-light, #eff6ff)" : "transparent"),
                 fontSize: 12,
                 fontWeight: 600,
-                color: "var(--text-primary, #0f172a)",
-                cursor: "pointer",
+                color: isCopilot ? "#64748b" : "var(--text-primary, #0f172a)",
+                cursor: isCopilot ? "not-allowed" : "pointer",
                 transition: "all 0.15s ease",
               }}
-              title="Chọn mô hình AI (Model Selector)"
+              title={isCopilot ? "Copilot: Mô hình được quản lý qua menu Chế độ (Mode)" : "Chọn mô hình AI (Model Selector)"}
             >
-              <span>{currentModel?.label || "Chọn Model"}</span>
-              {currentModel?.badge && (
-                <span
-                  style={{
-                    fontSize: 9.5,
-                    padding: "1px 4px",
-                    borderRadius: 3,
-                    backgroundColor: "var(--brand-blue, #2563eb)",
-                    color: "#ffffff",
-                    fontWeight: 700,
-                  }}
-                >
-                  {currentModel.badge}
-                </span>
-              )}
-              <span style={{ fontSize: 10, color: "var(--text-muted, #94a3b8)" }}>▼</span>
+              <span>{isCopilot ? "Auto (Mặc định)" : (currentModel?.label || "Chọn Model")}</span>
+              <span
+                style={{
+                  fontSize: 9.5,
+                  padding: "1px 4px",
+                  borderRadius: 3,
+                  backgroundColor: isCopilot ? "#e2e8f0" : "var(--brand-blue, #2563eb)",
+                  color: isCopilot ? "#475569" : "#ffffff",
+                  fontWeight: 700,
+                }}
+              >
+                Auto
+              </span>
+              {!isCopilot && <span style={{ fontSize: 10, color: "var(--text-muted, #94a3b8)" }}>▼</span>}
             </button>
 
-            {isModelOpen && (
+            {!isCopilot && isModelOpen && (
               <div
                 style={{
                   position: "absolute",
@@ -248,7 +291,8 @@ export function ProviderOptionsBar({
           <div ref={thinkingRef} style={{ position: "relative" }}>
             <button
               type="button"
-              onClick={() => setIsThinkingOpen(!isThinkingOpen)}
+              disabled={isCopilot}
+              onClick={() => !isCopilot && setIsThinkingOpen(!isThinkingOpen)}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -256,20 +300,20 @@ export function ProviderOptionsBar({
                 padding: "4px 8px",
                 borderRadius: "var(--radius-sm, 6px)",
                 border: "1px solid var(--border-subtle, #cbd5e1)",
-                backgroundColor: isThinkingOpen ? "var(--brand-blue-light, #eff6ff)" : "transparent",
+                backgroundColor: isCopilot ? "#f8fafc" : (isThinkingOpen ? "var(--brand-blue-light, #eff6ff)" : "transparent"),
                 fontSize: 12,
                 fontWeight: 600,
-                color: "var(--text-primary, #0f172a)",
-                cursor: "pointer",
+                color: isCopilot ? "#64748b" : "var(--text-primary, #0f172a)",
+                cursor: isCopilot ? "not-allowed" : "pointer",
               }}
-              title="Mức độ suy luận (Thinking Level)"
+              title={isCopilot ? "Copilot: Mức suy luận được quản lý qua menu Chế độ (Mode)" : "Mức độ suy luận (Thinking Level)"}
             >
-              <BrainIcon size={13} color="var(--brand-blue, #2563eb)" />
-              <span>{currentThinking?.label || "Suy luận"}</span>
-              <span style={{ fontSize: 10, color: "var(--text-muted, #94a3b8)" }}>▼</span>
+              <BrainIcon size={13} color={isCopilot ? "#94a3b8" : "var(--brand-blue, #2563eb)"} />
+              <span>{isCopilot ? "Auto (Tự động)" : (currentThinking?.label || "Suy luận")}</span>
+              {!isCopilot && <span style={{ fontSize: 10, color: "var(--text-muted, #94a3b8)" }}>▼</span>}
             </button>
 
-            {isThinkingOpen && (
+            {!isCopilot && isThinkingOpen && (
               <div
                 style={{
                   position: "absolute",
@@ -338,14 +382,14 @@ export function ProviderOptionsBar({
                 gap: 5,
                 padding: "4px 8px",
                 borderRadius: "var(--radius-sm, 6px)",
-                border: "1px solid var(--border-subtle, #cbd5e1)",
-                backgroundColor: isModeOpen ? "var(--brand-blue-light, #eff6ff)" : "transparent",
+                border: `1px solid ${isCopilot ? "var(--brand-blue, #2563eb)" : "var(--border-subtle, #cbd5e1)"}`,
+                backgroundColor: isModeOpen ? "var(--brand-blue-light, #eff6ff)" : (isCopilot ? "rgba(37, 99, 235, 0.05)" : "transparent"),
                 fontSize: 12,
                 fontWeight: 600,
-                color: "var(--text-primary, #0f172a)",
+                color: isCopilot ? "var(--brand-blue, #2563eb)" : "var(--text-primary, #0f172a)",
                 cursor: "pointer",
               }}
-              title="Chế độ nghiên cứu / Công cụ hỗ trợ"
+              title={isCopilot ? "Chọn mô hình Copilot (Auto, Quick, Think Deeper, GPT-5.6 Sol)" : "Chế độ nghiên cứu / Công cụ hỗ trợ"}
             >
               <span>{currentMode?.label || "Chế độ"}</span>
               {currentMode?.badge && (
@@ -354,15 +398,15 @@ export function ProviderOptionsBar({
                     fontSize: 9,
                     padding: "1px 4px",
                     borderRadius: 3,
-                    backgroundColor: "#fef3c7",
-                    color: "#92400e",
+                    backgroundColor: isCopilot ? "#dbeafe" : "#fef3c7",
+                    color: isCopilot ? "#1d4ed8" : "#92400e",
                     fontWeight: 700,
                   }}
                 >
                   {currentMode.badge}
                 </span>
               )}
-              <span style={{ fontSize: 10, color: "var(--text-muted, #94a3b8)" }}>▼</span>
+              <span style={{ fontSize: 10, color: isCopilot ? "var(--brand-blue, #2563eb)" : "var(--text-muted, #94a3b8)" }}>▼</span>
             </button>
 
             {isModeOpen && (
@@ -372,7 +416,7 @@ export function ProviderOptionsBar({
                   top: "100%",
                   left: 0,
                   marginTop: 4,
-                  width: 240,
+                  width: isCopilot ? 280 : 240,
                   backgroundColor: "#ffffff",
                   border: "1px solid var(--border-default, #e2e8f0)",
                   borderRadius: "var(--radius-md, 8px)",
@@ -385,7 +429,7 @@ export function ProviderOptionsBar({
                 }}
               >
                 <div style={{ padding: "4px 8px", fontSize: 11, fontWeight: 700, color: "var(--text-muted, #64748b)", borderBottom: "1px solid #f1f5f9" }}>
-                  CHẾ ĐỘ & CÔNG CỤ ({modes.length})
+                  {isCopilot ? `MÔ HÌNH COPILOT (${modes.length})` : `CHẾ ĐỘ & CÔNG CỤ (${modes.length})`}
                 </div>
                 {modes.map((m) => {
                   const isSelected = m.id === currentMode?.id;
@@ -411,13 +455,22 @@ export function ProviderOptionsBar({
                           {m.label}
                         </span>
                         {m.badge && (
-                          <span style={{ fontSize: 9.5, padding: "1px 5px", borderRadius: 3, backgroundColor: "#fef3c7", color: "#92400e", fontWeight: 600 }}>
+                          <span
+                            style={{
+                              fontSize: 9,
+                              padding: "1px 4px",
+                              borderRadius: 3,
+                              backgroundColor: isCopilot ? "#dbeafe" : "#fef3c7",
+                              color: isCopilot ? "#1d4ed8" : "#92400e",
+                              fontWeight: 700,
+                            }}
+                          >
                             {m.badge}
                           </span>
                         )}
                       </div>
                       {m.description && (
-                        <span style={{ fontSize: 10.5, color: "var(--text-muted, #64748b)" }}>
+                        <span style={{ fontSize: 10.5, color: "var(--text-muted, #64748b)", lineHeight: 1.25 }}>
                           {m.description}
                         </span>
                       )}

@@ -104,9 +104,15 @@ export function resolveProviderOptions(
     raw.thinking_level_id = "auto";
   }
 
+  // For Copilot: lock Model to auto and Reasoning to auto
+  if (norm === "copilot") {
+    raw.model_id = "auto";
+    raw.thinking_level_id = "auto";
+  }
+
   // 2. Model Label
-  let modelLabel = (norm === "chatgpt" && isFreeAccount) ? "Auto (Mặc định)" : "Auto (Tự động)";
-  if (!isFreeAccount) {
+  let modelLabel = (norm === "copilot" || (norm === "chatgpt" && isFreeAccount)) ? "Auto (Mặc định)" : "Auto (Tự động)";
+  if (!isFreeAccount && norm !== "copilot") {
     const modelId = raw.model_id;
     if (modelId) {
       const matched = activeCaps?.available_models?.find((m) => m.id === modelId);
@@ -136,7 +142,7 @@ export function resolveProviderOptions(
 
   // 3. Reasoning Label
   let reasoningLabel = "Auto (Tự động)";
-  if (!isFreeAccount) {
+  if (!isFreeAccount && norm !== "copilot") {
     const reasoningId = raw.thinking_level_id;
     if (reasoningId) {
       const matched = activeCaps?.thinking_levels?.find((t) => t.id === reasoningId);
@@ -157,7 +163,7 @@ export function resolveProviderOptions(
   }
 
   // 4. Mode Label
-  let modeLabel = "Tiêu chuẩn (Standard)";
+  let modeLabel = norm === "copilot" ? "Auto" : "Tiêu chuẩn (Standard)";
   const modeId = raw.mode_id;
   if (modeId) {
     const matched = activeCaps?.modes?.find((m) => m.id === modeId);
@@ -165,8 +171,18 @@ export function resolveProviderOptions(
       modeLabel = matched.label || (matched as any).name || modeId;
     } else if (modeId === "thinking") {
       modeLabel = "Suy luận (Thinking)";
+    } else if (modeId === "auto") {
+      modeLabel = "Auto";
+    } else if (modeId === "quick") {
+      modeLabel = "Quick Response";
+    } else if (modeId === "think_deeper") {
+      modeLabel = "Think Deeper";
+    } else if (modeId === "gpt_5_6_quick") {
+      modeLabel = "GPT > GPT-5.6 Sol Quick Response";
+    } else if (modeId === "gpt_5_6_think") {
+      modeLabel = "GPT > GPT-5.6 Sol Think Deeper";
     } else {
-      modeLabel = "Tiêu chuẩn (Standard)";
+      modeLabel = norm === "copilot" ? "Auto" : "Tiêu chuẩn (Standard)";
     }
   }
 

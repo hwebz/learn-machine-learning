@@ -652,74 +652,118 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
         }
     } catch (e) {}
 
-    // 2.2. Copilot-specific: Extract from scc-ChainOfThought__card and scc-ChainOfThought*
+    // 2.2. Copilot-specific: Extract from scc-ChainOfThought* and scc-BebopChainOfThought*
     if (provider === "copilot" || !provider) {
         try {
-            const cotCards = document.querySelectorAll(
-                "[class*='scc-ChainOfThought__card'], " +
-                "[class*='ChainOfThought__card'], " +
-                "div[class*='scc-ChainOfThought'][class*='card']"
+            // Find all ChainOfThought root containers
+            const cotContainers = document.querySelectorAll(
+                "[class*='scc-ChainOfThought'], " +
+                "[class*='scc-BebopChainOfThought'], " +
+                "[class*='ChainOfThought']"
             );
 
-            if (cotCards && cotCards.length > 0) {
-                for (const card of cotCards) {
-                    const subSteps = card.querySelectorAll(
-                        "[class*='scc-ChainOfThought__step'], " +
-                        "[class*='scc-ChainOfThought__item'], " +
-                        "li"
-                    );
-                    const stepItems = (subSteps && subSteps.length > 1) ? Array.from(subSteps) : [card];
+            for (const cotRoot of cotContainers) {
+                // If this is a nested element inside another ChainOfThought container, avoid duplicate root processing
+                if (cotRoot.parentElement && cotRoot.parentElement.closest("[class*='scc-ChainOfThought'], [class*='scc-BebopChainOfThought']")) {
+                    continue;
+                }
 
-                    for (const item of stepItems) {
+                // Check overall expand button / header text (e.g. "Reasoning completed in 7 steps" or "Thinking...")
+                const mainHeaderEl = cotRoot.querySelector(
+                    "[class*='ChainOfThought__headerText'], [class*='ChainOfThought__expandButton'], button[id*='expand-button'], button[title*='Reasoning']"
+                );
+                const overallHeader = clean(mainHeaderEl ? (mainHeaderEl.innerText || mainHeaderEl.textContent || mainHeaderEl.getAttribute("title") || "") : "");
+
+                // Query all item elements within the ChainOfThought container
+                const stepItems = cotRoot.querySelectorAll(
+                    "div[role='listitem'][class*='ChainOfThoughtItem'], " +
+                    "div[role='listitem'][class*='scc-'], " +
+                    "div[role='listitem'], " +
+                    "[class*='scc-BebopChainOfThoughtItem']:not([class*='__']), " +
+                    "[class*='scc-ChainOfThoughtItem']:not([class*='__']), " +
+                    "[class*='ChainOfThoughtItem']:not([class*='__']), " +
+                    "[class*='scc-ChainOfThought__step'], " +
+                    "[class*='scc-ChainOfThought__item']"
+                );
+
+                // Filter out sub-elements that are inside already selected listitems
+                const validItems = [];
+                for (const it of stepItems) {
+                    const isSubHeaderOrContent = it.className.includes("__header") ||
+                                                 it.className.includes("__content") ||
+                                                 it.className.includes("__statusIndicator") ||
+                                                 it.className.includes("__contentText");
+                    if (isSubHeaderOrContent) {
+                        continue;
+                    }
+                    // Avoid nested duplicate listitems
+                    if (it.parentElement && it.parentElement.closest("div[role='listitem']")) {
+                        continue;
+                    }
+                    validItems.push(it);
+                }
+
+                if (validItems.length > 0) {
+                    for (let idx = 0; idx < validItems.length; idx++) {
+                        const item = validItems[idx];
+
+                        // Extract title from header or h3/h4/h5
                         let title = "";
                         const titleEl = item.querySelector(
-                            "[class*='scc-ChainOfThought__title'], " +
-                            "[class*='scc-ChainOfThought__header'], " +
-                            "[class*='ChainOfThought__title'], " +
-                            "[class*='title'], " +
-                            "[class*='header'], " +
-                            "h3, h4, h5, [role='heading'], strong"
-                        );
+                            "[class*='headerText'], [class*='header'], h3, h4, h5, [role='heading'], strong"
+                        ) || item;
                         if (titleEl) {
-                            const clone = titleEl.cloneNode(true);
-                            clone.querySelectorAll("svg, button, [class*='icon'], [class*='badge']").forEach(i => i.remove());
-                            title = clean(clone.innerText || clone.textContent);
+                            const cloneH = titleEl.cloneNode(true);
+                            cloneH.querySelectorAll("svg, button, [class*='icon'], [class*='statusIndicator']").forEach(i => i.remove());
+                            title = clean(cloneH.innerText || cloneH.textContent);
                         }
 
+                        // Extract description
                         let description = "";
-                        const descEl = item.querySelector(
-                            "[class*='scc-ChainOfThought__description'], " +
-                            "[class*='scc-ChainOfThought__detail'], " +
-                            "[class*='scc-ChainOfThought__body'], " +
-                            "[class*='scc-ChainOfThought__content'], " +
-                            "[class*='ChainOfThought__description'], " +
-                            "[class*='description'], " +
-                            "[class*='detail'], " +
-                            "[class*='body'], " +
-                            "[class*='content'], " +
-                            "p, .markdown"
+                        const contentEl = item.querySelector(
+                            "[class*='contentText'], [class*='content'], [class*='description'], [class*='pills'], [class*='interstitialPillsContainer']"
                         );
-                        if (descEl && descEl !== titleEl) {
-                            const clone = descEl.cloneNode(true);
-                            clone.querySelectorAll("svg, button, [class*='icon']").forEach(i => i.remove());
-                            description = clean(clone.innerText || clone.textContent);
-                        } else {
-                            const clone = item.cloneNode(true);
-                            clone.querySelectorAll("svg, button, [class*='icon']").forEach(i => i.remove());
-                            if (titleEl) {
-                                const cloneTitle = clone.querySelector(
-                                    "[class*='scc-ChainOfThought__title'], [class*='title'], [class*='header'], h3, h4, h5, strong"
-                                );
-                                if (cloneTitle) cloneTitle.remove();
+
+                        if (contentEl) {
+                            // Check for search pills (e.g. .r1fgiwrn or interstitial pills)
+                            let pillEls = contentEl.querySelectorAll(".r1fgiwrn");
+                            if (pillEls.length === 0) {
+                                pillEls = contentEl.querySelectorAll("[class*='Pill'], [class*='pill'], [class*='pillsContainer'] > span");
                             }
-                            description = clean(clone.innerText || clone.textContent);
+                            const pillTexts = [];
+                            for (const pEl of pillEls) {
+                                const pt = clean(pEl.innerText || pEl.textContent || pEl.getAttribute("aria-label") || "");
+                                if (pt && !pillTexts.includes(pt) && pt !== "true") pillTexts.push(pt);
+                            }
+
+                            // Check for paragraphs
+                            const pEls = contentEl.querySelectorAll("p, li");
+                            const pTexts = [];
+                            for (const p of pEls) {
+                                const pt = clean(p.innerText || p.textContent || "");
+                                if (pt && !pTexts.includes(pt)) pTexts.push(pt);
+                            }
+
+                            if (pTexts.length > 0) {
+                                description = pTexts.join("\\n\\n");
+                            } else if (pillTexts.length > 0) {
+                                description = pillTexts.join("\\n");
+                            } else {
+                                const cloneC = contentEl.cloneNode(true);
+                                cloneC.querySelectorAll("svg, button").forEach(i => i.remove());
+                                description = clean(cloneC.innerText || cloneC.textContent || "");
+                            }
+                        } else {
+                            const cloneAll = item.cloneNode(true);
+                            cloneAll.querySelectorAll("svg, button, h3, h4, h5, [class*='header']").forEach(i => i.remove());
+                            description = clean(cloneAll.innerText || cloneAll.textContent || "");
                         }
 
                         if (!title && description) {
                             const lines = description.split("\\n").map(l => clean(l)).filter(Boolean);
                             if (lines.length > 1) {
                                 title = lines[0];
-                                description = lines.slice(1).join(" ");
+                                description = lines.slice(1).join("\\n\\n");
                             } else {
                                 title = description;
                                 description = "";
@@ -727,12 +771,13 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
                         }
 
                         if (title) {
-                            const itemClass = (item.className || "") + " " + (card.className || "");
-                            const isCompleted = itemClass.includes("completed") ||
-                                                itemClass.includes("success") ||
-                                                item.querySelector("[class*='Checkmark'], [class*='check'], [class*='success'], [data-icon-name*='Checkmark'], svg[aria-label*='complete' i]") !== null;
-                            const isRunning = itemClass.includes("running") ||
-                                              itemClass.includes("loading") ||
+                            // Determine step status
+                            const statusIndicator = item.querySelector("[class*='statusIndicator']");
+                            const isCompleted = item.className.includes("completed") ||
+                                                (statusIndicator && statusIndicator.querySelector("svg path[d*='M10 2a8']") !== null) ||
+                                                item.querySelector("[class*='Checkmark'], [class*='check'], [class*='success'], [data-icon-name*='Checkmark']") !== null;
+                            const isRunning = item.className.includes("running") ||
+                                              item.className.includes("loading") ||
                                               item.querySelector("[class*='spinner'], [class*='loading'], [class*='ProgressRing'], svg[class*='spin'], [data-icon-name*='Sync']") !== null;
                             const stepStatus = isCompleted ? "completed" : (isRunning ? "running" : (description ? "completed" : "running"));
 
@@ -748,21 +793,15 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
                             }
                         }
                     }
-                }
-            } else {
-                // Fallback: search for elements with scc-ChainOfThought text
-                const cotTexts = document.querySelectorAll(
-                    "[class*='scc-ChainOfThought']:not(button):not(svg)"
-                );
-                for (const el of cotTexts) {
-                    const txt = clean(el.innerText || el.textContent);
-                    if (txt && txt.length > 3 && !seenStepKeys.has(txt)) {
-                        seenStepKeys.add(txt);
-                        isThinking = true;
+                } else if (overallHeader) {
+                    // Fallback to overallHeader if listitems are not yet expanded or rendered
+                    isThinking = true;
+                    if (!seenStepKeys.has(overallHeader)) {
+                        seenStepKeys.add(overallHeader);
                         thinkingSteps.push({
-                            title: txt,
+                            title: overallHeader,
                             description: "",
-                            status: "completed"
+                            status: "running"
                         });
                     }
                 }
@@ -917,7 +956,7 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
                                 const pt = clean(p.innerText || p.textContent || "");
                                 if (pt && !lines.includes(pt)) lines.push(pt);
                             }
-                            if (lines.length > 0) description = lines.join("\n\n");
+                            if (lines.length > 0) description = lines.join("\\n\\n");
                         }
                         if (!description) {
                             description = clean(contentEl.innerText || contentEl.textContent || "");
@@ -936,7 +975,7 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
                             sib = sib.nextElementSibling;
                         }
                         if (siblings.length > 0) {
-                            description = siblings.join("\n\n");
+                            description = siblings.join("\\n\\n");
                         } else {
                             const cloneCont = container.cloneNode(true);
                             const cloneH = cloneCont.querySelector("button")?.closest(headerRow.tagName.toLowerCase());
@@ -1007,7 +1046,7 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
                                     const pt = clean(p.innerText || p.textContent || "");
                                     if (pt && !lines.includes(pt)) lines.push(pt);
                                 }
-                                if (lines.length > 0) description = lines.join("\n\n");
+                                if (lines.length > 0) description = lines.join("\\n\\n");
                             }
                             if (!description) {
                                 description = clean(contentEl.innerText || contentEl.textContent || "");
@@ -1026,7 +1065,7 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
                                 sib = sib.nextElementSibling;
                             }
                             if (siblings.length > 0) {
-                                description = siblings.join("\n\n");
+                                description = siblings.join("\\n\\n");
                             } else {
                                 const cloneCont = container.cloneNode(true);
                                 cloneCont.querySelectorAll("button, summary, svg, [class*='icon']").forEach(i => i.remove());

@@ -79,39 +79,31 @@ class CopilotUIAdapter(BrowserProviderAdapter):
         return sources
 
     async def _select_mode(self, page: Any, mode: str) -> None:
-        """Switch Copilot mode between Auto and Think deeper."""
-        is_deep = mode in {"deep", "deep_research"}
-        cfg_modes = self._cfg.get("mode_selectors") or {}
-        dropdown_chain = cfg_modes.get("mode_dropdown")
-        if not dropdown_chain:
-            return
-        locator, _ = await resolve_locator(page, dropdown_chain)
-        if locator is None:
-            logger.info("copilot_mode_dropdown_not_found")
-            return
-        try:
-            curr_text = (await locator.inner_text()).strip().lower()
-            if is_deep and "think deeper" in curr_text:
-                logger.info("copilot_mode_already_deep")
-                return
-            if not is_deep and "auto" in curr_text:
-                logger.info("copilot_mode_already_auto")
-                return
+        """Switch Copilot mode (Auto, Quick Response, Think Deeper, GPT-5.6 Sol options)."""
+        from app.adapters.capabilities.models import ProviderSelectionRequest
+        from app.adapters.capabilities.copilot import CopilotCapabilitiesStrategy
 
-            target_key = "deep_mode" if is_deep else "standard_mode"
-            await locator.click(timeout=4000)
-            await asyncio.sleep(0.8)
-            target_chain = cfg_modes.get(target_key)
-            if target_chain:
-                item_loc, _ = await resolve_locator(page, target_chain)
-                if item_loc is not None:
-                    await item_loc.click(timeout=4000)
-                    logger.info("copilot_mode_selected", mode=mode, target=target_key)
-                    await asyncio.sleep(1.0)
-                else:
-                    await page.keyboard.press("Escape")
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("copilot_mode_switch_failed", error=str(exc))
+        if mode and mode.startswith("{") and mode.endswith("}"):
+            try:
+                import json
+                parsed = json.loads(mode)
+                if isinstance(parsed, dict):
+                    config = ProviderSelectionRequest(
+                        model_id=parsed.get("model_id"),
+                        thinking_level_id=parsed.get("thinking_level_id"),
+                        mode_id=parsed.get("mode_id"),
+                    )
+                    strategy = CopilotCapabilitiesStrategy()
+                    await strategy.apply_selection(page, config)
+                    return
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("copilot_selection_parse_failed", error=str(exc))
+
+        # Direct string mode fallback (e.g. "think_deeper", "deep", "quick", "auto")
+        target_mode = "think_deeper" if mode in {"deep", "deep_research", "think_deeper", "thinking"} else mode
+        strategy = CopilotCapabilitiesStrategy()
+        config = ProviderSelectionRequest(mode_id=target_mode)
+        await strategy.apply_selection(page, config)
 
     async def attempt_login_recovery(self, page: Any) -> bool:
         """Copilot's OAuth cookie expires after a while and the site bounces to
