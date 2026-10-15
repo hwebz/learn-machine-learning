@@ -1878,6 +1878,93 @@ textarea {
   margin-bottom: 0;
 }
 
+/* GitHub-style Admonition / Callout Cards */
+.markdown-callout {
+  margin: 12px 0;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border-left: 4px solid;
+  background-color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all var(--transition-fast);
+}
+
+.markdown-callout-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13.5px;
+  margin-bottom: 6px;
+}
+
+.markdown-callout-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.markdown-callout-title {
+  letter-spacing: 0.02em;
+}
+
+.markdown-callout-content {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-primary);
+}
+
+.markdown-callout-content p {
+  margin: 4px 0;
+}
+
+.markdown-callout-content p:first-child {
+  margin-top: 0;
+}
+
+.markdown-callout-content p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-callout-note {
+  border-color: #0284c7;
+  background-color: #f0f9ff;
+}
+.markdown-callout-note .markdown-callout-title {
+  color: #0284c7;
+}
+
+.markdown-callout-tip {
+  border-color: #10b981;
+  background-color: #f0fdf4;
+}
+.markdown-callout-tip .markdown-callout-title {
+  color: #059669;
+}
+
+.markdown-callout-important {
+  border-color: #8b5cf6;
+  background-color: #f5f3ff;
+}
+.markdown-callout-important .markdown-callout-title {
+  color: #7c3aed;
+}
+
+.markdown-callout-warning {
+  border-color: #f59e0b;
+  background-color: #fffbeb;
+}
+.markdown-callout-warning .markdown-callout-title {
+  color: #d97706;
+}
+
+.markdown-callout-caution {
+  border-color: #ef4444;
+  background-color: #fef2f2;
+}
+.markdown-callout-caution .markdown-callout-title {
+  color: #dc2626;
+}
+
 .inline-code {
   font-family: var(--font-mono);
   font-size: 12.5px;

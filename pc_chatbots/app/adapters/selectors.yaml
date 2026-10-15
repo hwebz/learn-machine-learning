@@ -98,6 +98,10 @@ providers:
       - { css: "button[aria-label='Send message']" }
     mode_selectors:
       mode_dropdown:
+        - { css: "button:has-text('Flash-Lite')" }
+        - { css: "button:has-text('3.8 Flash')" }
+        - { css: "button:has-text('3.1 Pro')" }
+        - { css: "button:has-text('4 Argon')" }
         - { css: "button[data-test-id='bard-mode-menu-button']" }
         - { css: "bard-mode-switcher button" }
         - { css: "button.input-area-switch" }

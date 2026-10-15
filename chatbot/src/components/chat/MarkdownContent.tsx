@@ -310,7 +310,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       `;
     };
 
-    // Custom blockquote
+    // Custom blockquote with support for GitHub-style alerts: [!NOTE], [!TIP], [!IMPORTANT], [!WARNING], [!CAUTION]
     renderer.blockquote = function (token: any) {
       const body =
         token && token.tokens && this.parser
@@ -318,6 +318,39 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
           : typeof token === "string"
             ? token
             : token?.text || "";
+
+      // Match [!NOTE], [!TIP], [!IMPORTANT], [!WARNING], [!CAUTION]
+      const alertMatch =
+        body.match(/^\s*<p>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(?:<br\s*\/?>)?\s*([\s\S]*?)<\/p>/i) ||
+        body.match(/^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*\n?([\s\S]*)/i);
+
+      if (alertMatch) {
+        const type = alertMatch[1].toUpperCase();
+        const content = alertMatch[2] || "";
+        const restOfBody = body.replace(alertMatch[0], content ? `<p>${content}</p>` : "").trim();
+
+        const config: Record<string, { title: string; icon: string; className: string }> = {
+          NOTE: { title: "Note", icon: "ℹ️", className: "markdown-callout-note" },
+          TIP: { title: "Tip", icon: "💡", className: "markdown-callout-tip" },
+          IMPORTANT: { title: "Important", icon: "📌", className: "markdown-callout-important" },
+          WARNING: { title: "Warning", icon: "⚠️", className: "markdown-callout-warning" },
+          CAUTION: { title: "Caution", icon: "🛑", className: "markdown-callout-caution" },
+        };
+        const c = config[type] || config.NOTE;
+
+        return `
+          <div class="markdown-callout ${c.className}">
+            <div class="markdown-callout-header">
+              <span class="markdown-callout-icon">${c.icon}</span>
+              <span class="markdown-callout-title">${c.title}</span>
+            </div>
+            <div class="markdown-callout-content">
+              ${restOfBody || (content ? `<p>${content}</p>` : "")}
+            </div>
+          </div>
+        `;
+      }
+
       return `<blockquote class="markdown-blockquote">${body}</blockquote>`;
     };
 
@@ -340,6 +373,12 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       .split("\n")
       .filter((line) => !/^\s*(?:>\s*)*(?:[-*+]|\d+\.)\s*$/.test(line))
       .join("\n");
+
+    // 2a. Fix Gemini detached language label pattern where language name sits above bare code block
+    sanitizedContent = sanitizedContent.replace(
+      /(?:^|\n)(Python|TypeScript|JavaScript|SQL|HTML|CSS|Bash|Shell|JSON|YAML|Go|Rust|C\+\+|Java|Kotlin|Swift|PHP)\s*\n+```\s*\n/gi,
+      (match, lang) => `\n\`\`\`${lang.toLowerCase()}\n`
+    );
 
     // 2b. Transform Section 18 "Markdown test results: 0/27 passed" into interactive checklist widget
     sanitizedContent = sanitizedContent.replace(
