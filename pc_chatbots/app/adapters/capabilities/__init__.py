@@ -24,6 +24,7 @@ from app.adapters.capabilities.deepseek import DeepSeekCapabilitiesStrategy
 from app.adapters.capabilities.perplexity import PerplexityCapabilitiesStrategy
 from app.adapters.capabilities.kimi import KimiCapabilitiesStrategy
 from app.adapters.capabilities.grok import GrokCapabilitiesStrategy
+from app.adapters.capabilities.mistral import MistralCapabilitiesStrategy
 
 __all__ = [
     "OptionItem",
@@ -46,5 +47,6 @@ __all__ = [
     "PerplexityCapabilitiesStrategy",
     "KimiCapabilitiesStrategy",
     "GrokCapabilitiesStrategy",
+    "MistralCapabilitiesStrategy",
 ]
 

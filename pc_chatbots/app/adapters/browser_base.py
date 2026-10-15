@@ -123,6 +123,18 @@ class BrowserProviderAdapter(ABC):
     async def _select_mode(self, page: Any, mode: str) -> None:
         """Optionally switch the site's research/pro mode. Must be best-effort."""
 
+    async def _enter_prompt(self, page: Any, input_locator: Any, prompt: str) -> None:
+        """Enter prompt into the chat input. Subclasses can override for custom autocomplete/skills."""
+        try:
+            await input_locator.click(timeout=5000)
+        except Exception:  # noqa: BLE001 — fall back to fill on real <textarea>/<input>
+            pass
+        try:
+            await input_locator.fill(prompt, timeout=10000)
+        except Exception:  # noqa: BLE001 — contenteditable: use type() instead
+            await input_locator.click(timeout=5000)
+            await input_locator.type(prompt, delay=15)
+
     async def _prepare_response(self, page: Any) -> None:
         """Record provider-specific response state before submitting."""
 
@@ -338,22 +350,11 @@ class BrowserProviderAdapter(ABC):
                             await self._select_mode(page, mode)
 
                             await _notify("entering_prompt", f"Đang nhập câu hỏi vào ô chat của {self.name}...")
-                            # Click to focus, then type. fill() does not work reliably on
-                            # contenteditable rich-text editors (Perplexity/Gemini), and the
-                            # submit button often only appears after text is entered.
                             try:
-                                await input_locator.click(timeout=5000)
-                            except Exception:  # noqa: BLE001 — fall back to fill on real <textarea>/<input>
-                                pass
-                            try:
-                                await input_locator.fill(prompt, timeout=10000)
-                            except Exception:  # noqa: BLE001 — contenteditable: use type() instead
-                                try:
-                                    await input_locator.click(timeout=5000)
-                                    await input_locator.type(prompt, delay=15)
-                                except Exception as exc2:  # noqa: BLE001
-                                    status = "error"
-                                    error = f"Could not enter prompt: {type(exc2).__name__}: {exc2}"
+                                await self._enter_prompt(page, input_locator, prompt)
+                            except Exception as exc2:  # noqa: BLE001
+                                status = "error"
+                                error = f"Could not enter prompt: {type(exc2).__name__}: {exc2}"
                             if status != "error":
                                 await asyncio.sleep(0.75)  # let the submit button render
                                 await self._prepare_response(page)

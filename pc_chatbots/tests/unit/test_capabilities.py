@@ -75,3 +75,32 @@ async def test_voice_transcriber_service() -> None:
     text = await service.transcribe(b"dummy audio content", filename="test.webm")
     assert isinstance(text, str)
     assert len(text) > 0
+
+
+@pytest.mark.asyncio
+async def test_mistral_capabilities_strategy() -> None:
+    from app.adapters.capabilities.mistral import MistralCapabilitiesStrategy
+
+    strategy = MistralCapabilitiesStrategy()
+    assert isinstance(strategy, BaseProviderCapabilitiesStrategy)
+    assert strategy.provider_name == "mistral"
+
+    caps = strategy.get_default_capabilities()
+    assert caps.provider == "mistral"
+    # Requirement 1: No model selection available
+    assert caps.available_models == []
+    assert caps.selected_model_id is None
+
+    # Requirement 2: Reasoning mode (Fast vs Think)
+    thinking_ids = [t.id for t in caps.thinking_levels]
+    assert "fast" in thinking_ids
+    assert "think" in thinking_ids
+    assert caps.selected_thinking_level_id == "fast"
+
+    # Requirement 3: Deep Research toggle support
+    assert caps.deep_research is False
+
+    registry = CapabilitiesRegistry.instance()
+    reg_strat = registry.get_strategy("mistral")
+    assert isinstance(reg_strat, MistralCapabilitiesStrategy)
+

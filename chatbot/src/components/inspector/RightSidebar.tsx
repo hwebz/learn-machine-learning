@@ -136,16 +136,20 @@ export function resolveProviderOptions(
     raw.thinking_level_id = "auto";
   }
 
-  // For Grok: lock to empty defaults for Free account
+  // For Grok & Mistral: lock empty model/mode
   if (norm === "grok") {
     raw.model_id = "";
     raw.thinking_level_id = "";
     raw.mode_id = "";
   }
+  if (norm === "mistral") {
+    raw.model_id = "";
+    raw.mode_id = "";
+  }
 
   // 2. Model Label
-  let modelLabel = norm === "grok" ? "Mặc định (Free Account)" : (norm === "copilot" || norm === "perplexity" || (norm === "chatgpt" && isFreeAccount)) ? "Auto (Tự động)" : "Auto (Tự động)";
-  if (!isFreeAccount && norm !== "copilot" && norm !== "perplexity" && norm !== "grok") {
+  let modelLabel = norm === "grok" ? "Mặc định (Free Account)" : norm === "mistral" ? "Mặc định (Le Chat)" : (norm === "copilot" || norm === "perplexity" || (norm === "chatgpt" && isFreeAccount)) ? "Auto (Tự động)" : "Auto (Tự động)";
+  if (!isFreeAccount && norm !== "copilot" && norm !== "perplexity" && norm !== "grok" && norm !== "mistral") {
     const modelId = raw.model_id;
     if (modelId) {
       const matched = activeCaps?.available_models?.find((m) => m.id === modelId);
@@ -179,8 +183,8 @@ export function resolveProviderOptions(
   }
 
   // 3. Reasoning Label
-  let reasoningLabel = norm === "perplexity" ? "Tắt (Khóa)" : norm === "grok" ? "Mặc định (Default)" : "Auto (Tự động)";
-  if (!isFreeAccount && norm !== "copilot" && norm !== "perplexity" && norm !== "grok") {
+  let reasoningLabel = norm === "perplexity" ? "Tắt (Khóa)" : norm === "grok" ? "Mặc định (Default)" : norm === "mistral" ? (raw.thinking_level_id === "think" ? "Think (Suy luận)" : "Fast (Nhanh)") : "Auto (Tự động)";
+  if (!isFreeAccount && norm !== "copilot" && norm !== "perplexity" && norm !== "grok" && norm !== "mistral") {
     const reasoningId = raw.thinking_level_id;
     if (reasoningId) {
       const matched = activeCaps?.thinking_levels?.find((t) => t.id === reasoningId);
@@ -245,9 +249,9 @@ export function resolveProviderOptions(
     researchMode: raw.research_mode,
     webSearch: raw.web_search,
     raw: {
-      model_id: norm === "grok" ? "" : (raw.model_id || "auto"),
-      thinking_level_id: norm === "grok" ? "" : (raw.thinking_level_id || "auto"),
-      mode_id: norm === "grok" ? "" : (raw.mode_id || "standard"),
+      model_id: (norm === "grok" || norm === "mistral") ? "" : (raw.model_id || "auto"),
+      thinking_level_id: norm === "grok" ? "" : norm === "mistral" ? (raw.thinking_level_id || "fast") : (raw.thinking_level_id || "auto"),
+      mode_id: (norm === "grok" || norm === "mistral") ? "" : (raw.mode_id || "standard"),
       deep_research: raw.deep_research,
       research_mode: raw.research_mode,
       web_search: raw.web_search,

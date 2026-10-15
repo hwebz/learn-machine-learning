@@ -249,6 +249,7 @@ export function ProviderModal({
               const isQwen = p.id === "qwen";
               const isGemini = p.id === "gemini";
               const isGrok = p.id === "grok";
+              const isMistral = p.id === "mistral";
 
               const isDeepThinking = sel.deep_thinking !== undefined ? sel.deep_thinking : (caps?.deep_thinking ?? false);
               const isWebSearch = sel.web_search !== undefined ? sel.web_search : (caps?.web_search ?? true);
@@ -290,7 +291,7 @@ export function ProviderModal({
                 { id: "high", label: "High", description: "Suy luận chuyên sâu cao nhất", selected: true, disabled: false, badge: "High" },
               ];
 
-              const models = isChatGPT || isCopilot || isDeepSeek || isGrok
+              const models = isChatGPT || isCopilot || isDeepSeek || isGrok || isMistral
                 ? []
                 : isClaude
                   ? (caps?.available_models && caps.available_models.length > 0 && !caps.available_models.some((m) => m.id === "default")
@@ -377,11 +378,18 @@ export function ProviderModal({
                             { id: "thinking", label: "Thinking (Suy luận sâu đa bước)", description: "Kích hoạt chuỗi tư duy mở rộng", selected: false, badge: "Think" },
                             { id: "fast", label: "Fast (Phản hồi nhanh)", description: "Bỏ qua tư duy đa bước", selected: false, badge: "Fast" },
                           ]
-                          : [];
+                          : p.id === "mistral"
+                            ? (caps?.thinking_levels && caps.thinking_levels.length > 0
+                              ? caps.thinking_levels
+                              : [
+                                { id: "fast", label: "Fast (Nhanh)", description: "Get answers fast — Phản hồi nhanh cho câu hỏi thường ngày", selected: true, badge: "Fast" },
+                                { id: "think", label: "Think (Suy luận)", description: "Handle complex tasks — Suy luận sâu cho tác vụ phức tạp", selected: false, badge: "Think" },
+                              ])
+                            : [];
 
               // 3. Modes: Copilot (All 5 options). Gemini, Qwen, Claude, DeepSeek, ChatGPT, Perplexity, Kimi, and Grok have no modes.
               const modes =
-                p.id === "gemini" || p.id === "qwen" || isClaude || isDeepSeek || isChatGPT || isPerplexity || isKimi || isGrok
+                p.id === "gemini" || p.id === "qwen" || isClaude || isDeepSeek || isChatGPT || isPerplexity || isKimi || isGrok || isMistral
                   ? []
                   : isCopilot && (!caps?.modes || caps.modes.length === 0)
                     ? [
@@ -1748,6 +1756,119 @@ export function ProviderModal({
                         >
                           Mặc định (Default)
                         </span>
+                      </div>
+                    ) : isMistral ? (
+                      /* Mistral Le Chat: Reasoning dropdown (Fast / Think) + Deep Research toggle (@deep-research) */
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 10,
+                          flexGrow: 1,
+                        }}
+                      >
+                        {/* Row 1: Reasoning Mode (Fast vs Think) */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <label
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: "var(--text-secondary)",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                            >
+                              <BrainIcon size={12} color="#ea580c" />
+                              <span>Chế độ suy luận (Reasoning Mode)</span>
+                            </label>
+                            {currentThinking?.badge && (
+                              <span
+                                style={{
+                                  fontSize: 9.5,
+                                  padding: "1px 5px",
+                                  borderRadius: 3,
+                                  backgroundColor: "#fff7ed",
+                                  color: "#ea580c",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {currentThinking.badge}
+                              </span>
+                            )}
+                          </div>
+                          <select
+                            value={currentThinkingId || "fast"}
+                            onChange={(e) => {
+                              onUpdateSelection?.(p.id, { thinking_level_id: e.target.value });
+                            }}
+                            style={{
+                              width: "100%",
+                              padding: "6px 8px",
+                              borderRadius: 6,
+                              border: "1px solid var(--border-default, #cbd5e1)",
+                              backgroundColor: "#ffffff",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: "var(--text-primary, #0f172a)",
+                              cursor: "pointer",
+                              outline: "none",
+                            }}
+                            title="Chọn chế độ suy luận Mistral (Fast / Think)"
+                          >
+                            {thinkingLevels.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.label}
+                              </option>
+                            ))}
+                          </select>
+                          <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
+                            {currentThinking?.description || "Fast (phản hồi nhanh) hoặc Think (suy luận sâu cho tác vụ phức tạp)"}
+                          </span>
+                        </div>
+
+                        {/* Row 2: Deep Research Toggle */}
+                        <div
+                          onClick={() => onUpdateSelection?.(p.id, { deep_research: !isDeepResearch })}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "8px 12px",
+                            borderRadius: 6,
+                            border: `1.5px solid ${isDeepResearch ? "#ea580c" : "var(--border-default, #cbd5e1)"}`,
+                            backgroundColor: isDeepResearch ? "#fff7ed" : "#ffffff",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                          }}
+                          title="Bật/Tắt tính năng Deep Research của Mistral (Tự động kích hoạt skill @deep-research)"
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <SparklesIcon size={16} color={isDeepResearch ? "#ea580c" : "#64748b"} />
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: isDeepResearch ? "#ea580c" : "var(--text-primary, #0f172a)" }}>
+                                Deep Research
+                              </div>
+                              <div style={{ fontSize: 10.5, color: "var(--text-muted, #64748b)" }}>
+                                Tự động kích hoạt kỹ năng @deep-research để tìm kiếm và nghiên cứu chuyên sâu
+                              </div>
+                            </div>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: "2px 8px",
+                              borderRadius: 10,
+                              backgroundColor: isDeepResearch ? "#ea580c" : "#e2e8f0",
+                              color: isDeepResearch ? "#ffffff" : "#64748b",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {isDeepResearch ? "BẬT" : "TẮT"}
+                          </span>
+                        </div>
                       </div>
                     ) : (
                       /* Other AI Providers (Claude): Row 1 = Model & Reasoning, Row 2 = Mode */

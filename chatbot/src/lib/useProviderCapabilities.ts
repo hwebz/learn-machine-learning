@@ -92,6 +92,34 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
       cachedSelections["grok"].thinking_level_id = "";
       cachedSelections["grok"].mode_id = "";
     }
+    if (cachedCaps["mistral"]) {
+      cachedCaps["mistral"].modes = [];
+      cachedCaps["mistral"].selected_mode_id = undefined;
+      cachedCaps["mistral"].available_models = [];
+      cachedCaps["mistral"].selected_model_id = undefined;
+      const hasBadMistralThinking =
+        !cachedCaps["mistral"].thinking_levels ||
+        cachedCaps["mistral"].thinking_levels.length === 0 ||
+        cachedCaps["mistral"].thinking_levels.some((t) => t.id === "auto");
+      if (hasBadMistralThinking) {
+        cachedCaps["mistral"].thinking_levels = [
+          { id: "fast", label: "Fast (Nhanh)", description: "Get answers fast — Phản hồi nhanh cho câu hỏi thường ngày", selected: true, disabled: false, badge: "Fast" },
+          { id: "think", label: "Think (Suy luận)", description: "Handle complex tasks — Suy luận sâu cho tác vụ phức tạp", selected: false, disabled: false, badge: "Think" },
+        ];
+        cachedCaps["mistral"].selected_thinking_level_id = "fast";
+      }
+      if (cachedCaps["mistral"].deep_research === undefined) cachedCaps["mistral"].deep_research = false;
+      if (cachedCaps["mistral"].web_search === undefined) cachedCaps["mistral"].web_search = true;
+    }
+    if (cachedSelections["mistral"]) {
+      cachedSelections["mistral"].model_id = "";
+      cachedSelections["mistral"].mode_id = "";
+      if (!cachedSelections["mistral"].thinking_level_id || cachedSelections["mistral"].thinking_level_id === "auto") {
+        cachedSelections["mistral"].thinking_level_id = "fast";
+      }
+      if (cachedSelections["mistral"].deep_research === undefined) cachedSelections["mistral"].deep_research = false;
+      if (cachedSelections["mistral"].web_search === undefined) cachedSelections["mistral"].web_search = true;
+    }
     if (cachedCaps["qwen"]) {
       cachedCaps["qwen"].modes = [];
       cachedCaps["qwen"].selected_mode_id = undefined;
@@ -387,6 +415,25 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           caps.selected_thinking_level_id = undefined;
           caps.account_type = "free";
         }
+        if (p === "mistral" && caps) {
+          caps.modes = [];
+          caps.selected_mode_id = undefined;
+          caps.available_models = [];
+          caps.selected_model_id = undefined;
+          const hasBadMistralThinking =
+            !caps.thinking_levels ||
+            caps.thinking_levels.length === 0 ||
+            caps.thinking_levels.some((t) => t.id === "auto");
+          if (hasBadMistralThinking) {
+            caps.thinking_levels = [
+              { id: "fast", label: "Fast (Nhanh)", description: "Get answers fast — Phản hồi nhanh cho câu hỏi thường ngày", selected: true, disabled: false, badge: "Fast" },
+              { id: "think", label: "Think (Suy luận)", description: "Handle complex tasks — Suy luận sâu cho tác vụ phức tạp", selected: false, disabled: false, badge: "Think" },
+            ];
+            caps.selected_thinking_level_id = "fast";
+          }
+          if (caps.deep_research === undefined) caps.deep_research = false;
+          if (caps.web_search === undefined) caps.web_search = true;
+        }
         setCapabilitiesMap((prev) => {
           const updated = { ...prev, [p]: caps };
           saveStorage(CAPS_STORAGE_KEY, updated);
@@ -405,6 +452,7 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           const isQwen = p === "qwen";
           const isGemini = p === "gemini";
           const isGrok = p === "grok";
+          const isMistral = p === "mistral";
 
           // Safe model for Claude & Kimi
           const isKimiDeepResearch = isKimi && (existing.deep_research !== undefined ? existing.deep_research : (caps.deep_research ?? false));
@@ -433,13 +481,15 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
             [p]: {
               model_id: isPerplexity
                 ? "auto"
-                : (isDeepSeek || isCopilot || isChatGPT || isGrok)
+                : (isDeepSeek || isCopilot || isChatGPT || isGrok || isMistral)
                 ? ""
                 : safeModelId,
               thinking_level_id: (isDeepSeek || isCopilot || isChatGPT || isPerplexity || isGrok)
                 ? ""
+                : isMistral
+                ? (existing.thinking_level_id || caps.selected_thinking_level_id || "fast")
                 : safeThinking,
-              mode_id: (isDeepSeek || isChatGPT || isPerplexity || isKimi || isQwen || isGemini || isGrok)
+              mode_id: (isDeepSeek || isChatGPT || isPerplexity || isKimi || isQwen || isGemini || isGrok || isMistral)
                 ? ""
                 : existing.mode_id || caps.selected_mode_id || caps.modes[0]?.id || (isCopilot ? "auto" : ""),
               deep_thinking: isPerplexity
@@ -452,7 +502,7 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
                 : (isDeepSeek || isChatGPT || isQwen)
                 ? (existing.web_search !== undefined ? existing.web_search : (caps.web_search ?? true))
                 : existing.web_search,
-              deep_research: (isChatGPT || isKimi || isQwen || isGemini)
+              deep_research: (isChatGPT || isKimi || isQwen || isGemini || isMistral)
                 ? (existing.deep_research !== undefined ? existing.deep_research : (caps.deep_research ?? false))
                 : existing.deep_research,
               research_mode: isQwen

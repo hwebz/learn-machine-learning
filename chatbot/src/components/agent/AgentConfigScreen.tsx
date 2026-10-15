@@ -232,6 +232,16 @@ export function AgentConfigScreen({
       return;
     }
 
+    if (selectedOrchestrator === "mistral") {
+      setOrchModel("");
+      setOrchMode("");
+      const isDr = orchSel?.deep_research !== undefined ? orchSel.deep_research : (orchCaps?.deep_research ?? false);
+      setOrchDeepResearch(isDr);
+      const chosenThinking = orchSel?.thinking_level_id || orchCaps?.selected_thinking_level_id || "fast";
+      setOrchThinkingLevel(chosenThinking);
+      return;
+    }
+
     if (selectedOrchestrator === "copilot") {
       setOrchModel("");
       setOrchThinkingLevel("");
@@ -403,6 +413,16 @@ export function AgentConfigScreen({
       return;
     }
 
+    if (selectedLead === "mistral") {
+      setLeadModel("");
+      setLeadMode("");
+      const isDr = leadSel?.deep_research !== undefined ? leadSel.deep_research : (leadCaps?.deep_research ?? false);
+      setLeadDeepResearch(isDr);
+      const chosenThinking = leadSel?.thinking_level_id || leadCaps?.selected_thinking_level_id || "fast";
+      setLeadThinkingLevel(chosenThinking);
+      return;
+    }
+
     if (selectedLead === "copilot") {
       setLeadModel("");
       setLeadThinkingLevel("");
@@ -457,7 +477,7 @@ export function AgentConfigScreen({
 
   // Computed models for Orchestrator
   const orchModels = useMemo<AgentOption[]>(() => {
-    if (selectedOrchestrator === "deepseek" || selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt" || selectedOrchestrator === "grok") {
+    if (selectedOrchestrator === "deepseek" || selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt" || selectedOrchestrator === "grok" || selectedOrchestrator === "mistral") {
       return [];
     }
     if (selectedOrchestrator === "perplexity") {
@@ -589,12 +609,22 @@ export function AgentConfigScreen({
       }
       return kimiFallbackThinking;
     }
+    if (selectedOrchestrator === "mistral") {
+      const mistralFallbackThinking: AgentOption[] = [
+        { id: "fast", label: "Fast (Nhanh)", badge: "Fast" },
+        { id: "think", label: "Think (Suy luận)", badge: "Think" },
+      ];
+      if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0) {
+        return orchCaps.thinking_levels;
+      }
+      return mistralFallbackThinking;
+    }
     return [];
   }, [orchCaps, selectedOrchestrator]);
 
   // Computed modes for Orchestrator
   const orchModes = useMemo<AgentOption[]>(() => {
-    if (selectedOrchestrator === "gemini" || selectedOrchestrator === "qwen" || selectedOrchestrator === "claude" || selectedOrchestrator === "deepseek" || selectedOrchestrator === "chatgpt" || selectedOrchestrator === "perplexity" || selectedOrchestrator === "kimi" || selectedOrchestrator === "grok") {
+    if (selectedOrchestrator === "gemini" || selectedOrchestrator === "qwen" || selectedOrchestrator === "claude" || selectedOrchestrator === "deepseek" || selectedOrchestrator === "chatgpt" || selectedOrchestrator === "perplexity" || selectedOrchestrator === "kimi" || selectedOrchestrator === "grok" || selectedOrchestrator === "mistral") {
       return [];
     }
     if (orchCaps?.modes && orchCaps.modes.length > 0) {
@@ -614,7 +644,7 @@ export function AgentConfigScreen({
 
   // Computed models for Lead Provider
   const leadModels = useMemo<AgentOption[]>(() => {
-    if (selectedLead === "deepseek" || selectedLead === "copilot" || selectedLead === "chatgpt" || selectedLead === "grok") {
+    if (selectedLead === "deepseek" || selectedLead === "copilot" || selectedLead === "chatgpt" || selectedLead === "grok" || selectedLead === "mistral") {
       return [];
     }
     if (selectedLead === "perplexity") {
@@ -746,12 +776,22 @@ export function AgentConfigScreen({
       }
       return kimiFallbackThinking;
     }
+    if (selectedLead === "mistral") {
+      const mistralFallbackThinking: AgentOption[] = [
+        { id: "fast", label: "Fast (Nhanh)", badge: "Fast" },
+        { id: "think", label: "Think (Suy luận)", badge: "Think" },
+      ];
+      if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0) {
+        return leadCaps.thinking_levels;
+      }
+      return mistralFallbackThinking;
+    }
     return [];
   }, [leadCaps, selectedLead]);
 
   // Computed modes for Lead Provider
   const leadModes = useMemo<AgentOption[]>(() => {
-    if (selectedLead === "gemini" || selectedLead === "qwen" || selectedLead === "claude" || selectedLead === "deepseek" || selectedLead === "chatgpt" || selectedLead === "perplexity" || selectedLead === "kimi" || selectedLead === "grok") {
+    if (selectedLead === "gemini" || selectedLead === "qwen" || selectedLead === "claude" || selectedLead === "deepseek" || selectedLead === "chatgpt" || selectedLead === "perplexity" || selectedLead === "kimi" || selectedLead === "grok" || selectedLead === "mistral") {
       return [];
     }
     if (leadCaps?.modes && leadCaps.modes.length > 0) {
@@ -1693,6 +1733,48 @@ export function AgentConfigScreen({
                       </button>
                     )}
 
+                    {/* Mistral Deep Research Toggle */}
+                    {selectedOrchestrator === "mistral" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = !orchDeepResearch;
+                          setOrchDeepResearch(nextVal);
+                          onUpdateSelection?.(selectedOrchestrator, { deep_research: nextVal });
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-sm, 6px)",
+                          border: `1.5px solid ${orchDeepResearch ? "#ea580c" : "var(--border-default, #cbd5e1)"}`,
+                          backgroundColor: orchDeepResearch ? "#fff7ed" : "#ffffff",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: orchDeepResearch ? "#ea580c" : "var(--text-secondary, #475569)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Bật/Tắt chế độ Deep Research trên Mistral (tự động gõ @deep-research)"
+                      >
+                        <SparklesIcon size={14} color={orchDeepResearch ? "#ea580c" : "#64748b"} />
+                        <span>Deep Research</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 10,
+                            backgroundColor: orchDeepResearch ? "#ea580c" : "#e2e8f0",
+                            color: orchDeepResearch ? "#ffffff" : "#64748b",
+                          }}
+                        >
+                          {orchDeepResearch ? "BẬT" : "TẮT"}
+                        </span>
+                      </button>
+                    )}
+
                     {/* 3. Mode Selector */}
                     {orchModes.length > 0 && (
                       <label className="agent-option-inline">
@@ -2441,6 +2523,48 @@ export function AgentConfigScreen({
                             padding: "1px 6px",
                             borderRadius: 10,
                             backgroundColor: leadDeepResearch ? "#7c3aed" : "#e2e8f0",
+                            color: leadDeepResearch ? "#ffffff" : "#64748b",
+                          }}
+                        >
+                          {leadDeepResearch ? "BẬT" : "TẮT"}
+                        </span>
+                      </button>
+                    )}
+
+                    {/* Mistral Deep Research Toggle for Lead */}
+                    {selectedLead === "mistral" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = !leadDeepResearch;
+                          setLeadDeepResearch(nextVal);
+                          onUpdateSelection?.(selectedLead, { deep_research: nextVal });
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-sm, 6px)",
+                          border: `1.5px solid ${leadDeepResearch ? "#ea580c" : "var(--border-default, #cbd5e1)"}`,
+                          backgroundColor: leadDeepResearch ? "#fff7ed" : "#ffffff",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: leadDeepResearch ? "#ea580c" : "var(--text-secondary, #475569)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Bật/Tắt chế độ Deep Research trên Mistral (tự động gõ @deep-research)"
+                      >
+                        <SparklesIcon size={14} color={leadDeepResearch ? "#ea580c" : "#64748b"} />
+                        <span>Deep Research</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 10,
+                            backgroundColor: leadDeepResearch ? "#ea580c" : "#e2e8f0",
                             color: leadDeepResearch ? "#ffffff" : "#64748b",
                           }}
                         >

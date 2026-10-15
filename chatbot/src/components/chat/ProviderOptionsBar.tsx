@@ -60,6 +60,7 @@ export function ProviderOptionsBar({
   const isKimi = providerId === "kimi";
   const isGemini = providerId === "gemini";
   const isGrok = providerId === "grok";
+  const isMistral = providerId === "mistral";
 
   const isDeepThinking = selection.deep_thinking ?? capabilities?.deep_thinking ?? false;
   const isWebSearch = selection.web_search ?? capabilities?.web_search ?? true;
@@ -100,7 +101,7 @@ export function ProviderOptionsBar({
     { id: "high", label: "High", description: "Suy luận chuyên sâu cao nhất", selected: true, disabled: false, badge: "High" },
   ];
 
-  const models: OptionItem[] = isDeepSeek || isCopilot || isChatGPT || isGrok
+  const models: OptionItem[] = isDeepSeek || isCopilot || isChatGPT || isGrok || isMistral
     ? []
     : isClaude
       ? (capabilities?.available_models && capabilities.available_models.length > 0 && !capabilities.available_models.some((m) => m.id === "default")
@@ -179,7 +180,14 @@ export function ProviderOptionsBar({
                 { id: "thinking", label: "Thinking (Suy luận sâu đa bước)", description: "Kích hoạt chuỗi tư duy mở rộng", selected: false, badge: "Think" },
                 { id: "fast", label: "Fast (Phản hồi nhanh)", description: "Bỏ qua tư duy đa bước", selected: false, badge: "Fast" },
               ]
-              : [];
+              : providerId === "mistral"
+                ? (capabilities?.thinking_levels && capabilities.thinking_levels.length > 0
+                  ? capabilities.thinking_levels
+                  : [
+                    { id: "fast", label: "Fast (Nhanh)", description: "Get answers fast — Phản hồi nhanh cho câu hỏi thường ngày", selected: true, badge: "Fast" },
+                    { id: "think", label: "Think (Suy luận)", description: "Handle complex tasks — Suy luận sâu cho tác vụ phức tạp", selected: false, badge: "Think" },
+                  ])
+                : [];
 
   const fallbackCopilotModes: OptionItem[] = [
     {
@@ -219,7 +227,7 @@ export function ProviderOptionsBar({
     },
   ];
 
-  const modes = (providerId === "gemini" || providerId === "qwen" || providerId === "claude" || providerId === "deepseek" || providerId === "chatgpt" || providerId === "perplexity" || providerId === "kimi" || providerId === "grok")
+  const modes = (providerId === "gemini" || providerId === "qwen" || providerId === "claude" || providerId === "deepseek" || providerId === "chatgpt" || providerId === "perplexity" || providerId === "kimi" || providerId === "grok" || providerId === "mistral")
     ? []
     : capabilities?.modes && capabilities.modes.length > 0
       ? capabilities.modes
@@ -994,6 +1002,44 @@ export function ProviderOptionsBar({
                 padding: "1px 4px",
                 borderRadius: 3,
                 backgroundColor: isDeepResearch ? "#7c3aed" : "#f1f5f9",
+                color: isDeepResearch ? "#ffffff" : "#64748b",
+                fontWeight: 700,
+              }}
+            >
+              {isDeepResearch ? "ON" : "OFF"}
+            </span>
+          </button>
+        )}
+
+        {/* Mistral Deep Research Toggle Button */}
+        {isMistral && (
+          <button
+            type="button"
+            onClick={() => onUpdateSelection({ deep_research: !isDeepResearch })}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "4px 9px",
+              borderRadius: "var(--radius-sm, 6px)",
+              border: `1px solid ${isDeepResearch ? "#ea580c" : "var(--border-subtle, #cbd5e1)"}`,
+              backgroundColor: isDeepResearch ? "#fff7ed" : "#ffffff",
+              fontSize: 12,
+              fontWeight: 600,
+              color: isDeepResearch ? "#ea580c" : "var(--text-secondary, #475569)",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+            title="Bật/Tắt chế độ Deep Research trên Mistral (tự động kích hoạt skill @deep-research)"
+          >
+            <SparklesIcon size={13} color={isDeepResearch ? "#ea580c" : "#64748b"} />
+            <span>Deep Research</span>
+            <span
+              style={{
+                fontSize: 9.5,
+                padding: "1px 4px",
+                borderRadius: 3,
+                backgroundColor: isDeepResearch ? "#ea580c" : "#f1f5f9",
                 color: isDeepResearch ? "#ffffff" : "#64748b",
                 fontWeight: 700,
               }}

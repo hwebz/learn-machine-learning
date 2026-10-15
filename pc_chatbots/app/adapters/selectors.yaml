@@ -675,6 +675,7 @@ providers:
       model_dropdown:
         - { css: "button[aria-label='Choose model']" }
         - { css: "button:has-text('Fast')" }
+        - { css: "button:has-text('Think')" }
       deep_mode:
         - { css: "[role='menuitem']:has-text('Think')" }
         - { css: "div:has-text('Think')" }
