@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { PROVIDERS_LIST, TONE_PRESETS } from "../../lib/constants";
 import { ProviderInfo } from "../../types/chat";
 import { ProviderLiveCapabilities, ProviderSelectionConfig } from "../../types/capabilities";
-import { BrainIcon, CloseIcon, ModelBadgeLogo, RefreshIcon, SearchIcon } from "../icons/Icons";
+import { BrainIcon, CloseIcon, ModelBadgeLogo, RefreshIcon, SearchIcon, SparklesIcon } from "../icons/Icons";
 
 interface AgentConfigScreenProps {
   onStartAgentResearch: (config: {
@@ -55,6 +55,7 @@ export function AgentConfigScreen({
   const [orchMode, setOrchMode] = useState<string>("high");
   const [orchDeepThinking, setOrchDeepThinking] = useState<boolean>(false);
   const [orchWebSearch, setOrchWebSearch] = useState<boolean>(true);
+  const [orchDeepResearch, setOrchDeepResearch] = useState<boolean>(false);
   const [isSyncingOrch, setIsSyncingOrch] = useState(false);
   const [orchSyncMessage, setOrchSyncMessage] = useState<string | null>(null);
 
@@ -69,6 +70,7 @@ export function AgentConfigScreen({
   const [leadMode, setLeadMode] = useState<string>("standard");
   const [leadDeepThinking, setLeadDeepThinking] = useState<boolean>(false);
   const [leadWebSearch, setLeadWebSearch] = useState<boolean>(true);
+  const [leadDeepResearch, setLeadDeepResearch] = useState<boolean>(false);
   const [isSyncingLead, setIsSyncingLead] = useState(false);
   const [leadSyncMessage, setLeadSyncMessage] = useState<string | null>(null);
 
@@ -126,24 +128,63 @@ export function AgentConfigScreen({
       return;
     }
 
-    if (orchSel?.model_id) {
+    if (selectedOrchestrator === "chatgpt") {
+      setOrchModel("");
+      setOrchThinkingLevel("");
+      setOrchMode("");
+      if (orchSel?.web_search !== undefined) {
+        setOrchWebSearch(orchSel.web_search);
+      } else if (orchCaps?.web_search !== undefined) {
+        setOrchWebSearch(orchCaps.web_search);
+      }
+      if (orchSel?.deep_research !== undefined) {
+        setOrchDeepResearch(orchSel.deep_research);
+      } else if (orchCaps?.deep_research !== undefined) {
+        setOrchDeepResearch(orchCaps.deep_research);
+      }
+      if (orchSel?.deep_thinking !== undefined) {
+        setOrchDeepThinking(orchSel.deep_thinking);
+      } else if (orchCaps?.deep_thinking !== undefined) {
+        setOrchDeepThinking(orchCaps.deep_thinking);
+      }
+      return;
+    }
+
+    if (selectedOrchestrator === "copilot") {
+      setOrchModel("");
+      setOrchThinkingLevel("");
+      if (orchSel?.mode_id) {
+        setOrchMode(orchSel.mode_id);
+      } else if (orchCaps?.selected_mode_id) {
+        setOrchMode(orchCaps.selected_mode_id);
+      } else if (orchCaps?.modes && orchCaps.modes.length > 0) {
+        setOrchMode(orchCaps.modes[0].id);
+      } else {
+        setOrchMode("auto");
+      }
+      return;
+    }
+
+    if (orchSel?.model_id && orchSel.model_id !== "claude-opus-5.5" && orchSel.model_id !== "claude-fable-5.1") {
       setOrchModel(orchSel.model_id);
-    } else if (orchCaps?.selected_model_id) {
+    } else if (orchCaps?.selected_model_id && orchCaps.selected_model_id !== "claude-opus-5.5" && orchCaps.selected_model_id !== "claude-fable-5.1") {
       setOrchModel(orchCaps.selected_model_id);
+    } else if (selectedOrchestrator === "claude") {
+      setOrchModel("claude-sonnet-5.5");
     } else if (orchCaps?.available_models && orchCaps.available_models.length > 0) {
       setOrchModel(orchCaps.available_models[0].id);
     } else if (selectedOrchestrator === "gemini") {
       setOrchModel("pro");
     } else if (selectedOrchestrator === "qwen") {
       setOrchModel("qwen-3.8-max");
-    } else if (selectedOrchestrator === "claude") {
-      setOrchModel("claude-sonnet-5.5");
     }
 
     if (orchSel?.thinking_level_id) {
       setOrchThinkingLevel(orchSel.thinking_level_id);
     } else if (orchCaps?.selected_thinking_level_id) {
       setOrchThinkingLevel(orchCaps.selected_thinking_level_id);
+    } else if (selectedOrchestrator === "claude") {
+      setOrchThinkingLevel("medium");
     } else if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0) {
       setOrchThinkingLevel(orchCaps.thinking_levels[0].id);
     }
@@ -178,24 +219,63 @@ export function AgentConfigScreen({
       return;
     }
 
-    if (leadSel?.model_id) {
+    if (selectedLead === "chatgpt") {
+      setLeadModel("");
+      setLeadThinkingLevel("");
+      setLeadMode("");
+      if (leadSel?.web_search !== undefined) {
+        setLeadWebSearch(leadSel.web_search);
+      } else if (leadCaps?.web_search !== undefined) {
+        setLeadWebSearch(leadCaps.web_search);
+      }
+      if (leadSel?.deep_research !== undefined) {
+        setLeadDeepResearch(leadSel.deep_research);
+      } else if (leadCaps?.deep_research !== undefined) {
+        setLeadDeepResearch(leadCaps.deep_research);
+      }
+      if (leadSel?.deep_thinking !== undefined) {
+        setLeadDeepThinking(leadSel.deep_thinking);
+      } else if (leadCaps?.deep_thinking !== undefined) {
+        setLeadDeepThinking(leadCaps.deep_thinking);
+      }
+      return;
+    }
+
+    if (selectedLead === "copilot") {
+      setLeadModel("");
+      setLeadThinkingLevel("");
+      if (leadSel?.mode_id) {
+        setLeadMode(leadSel.mode_id);
+      } else if (leadCaps?.selected_mode_id) {
+        setLeadMode(leadCaps.selected_mode_id);
+      } else if (leadCaps?.modes && leadCaps.modes.length > 0) {
+        setLeadMode(leadCaps.modes[0].id);
+      } else {
+        setLeadMode("auto");
+      }
+      return;
+    }
+
+    if (leadSel?.model_id && leadSel.model_id !== "claude-opus-5.5" && leadSel.model_id !== "claude-fable-5.1") {
       setLeadModel(leadSel.model_id);
-    } else if (leadCaps?.selected_model_id) {
+    } else if (leadCaps?.selected_model_id && leadCaps.selected_model_id !== "claude-opus-5.5" && leadCaps.selected_model_id !== "claude-fable-5.1") {
       setLeadModel(leadCaps.selected_model_id);
+    } else if (selectedLead === "claude") {
+      setLeadModel("claude-sonnet-5.5");
     } else if (leadCaps?.available_models && leadCaps.available_models.length > 0) {
       setLeadModel(leadCaps.available_models[0].id);
     } else if (selectedLead === "gemini") {
       setLeadModel("gemini-3.1-pro");
     } else if (selectedLead === "qwen") {
       setLeadModel("qwen-3.8-max");
-    } else if (selectedLead === "claude") {
-      setLeadModel("claude-sonnet-5.5");
     }
 
     if (leadSel?.thinking_level_id) {
       setLeadThinkingLevel(leadSel.thinking_level_id);
     } else if (leadCaps?.selected_thinking_level_id) {
       setLeadThinkingLevel(leadCaps.selected_thinking_level_id);
+    } else if (selectedLead === "claude") {
+      setLeadThinkingLevel("medium");
     } else if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0) {
       setLeadThinkingLevel(leadCaps.thinking_levels[0].id);
     }
@@ -211,10 +291,31 @@ export function AgentConfigScreen({
     }
   }, [selectedLead, leadCaps, leadSel]);
 
-  type AgentOption = { id: string; label: string; badge?: string };
+  type AgentOption = { id: string; label: string; badge?: string; disabled?: boolean };
 
   // Computed models for Orchestrator
   const orchModels = useMemo<AgentOption[]>(() => {
+    if (selectedOrchestrator === "deepseek" || selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt") {
+      return [];
+    }
+    if (selectedOrchestrator === "claude") {
+      const base: AgentOption[] = orchCaps?.available_models && orchCaps.available_models.length > 0
+        ? orchCaps.available_models
+        : [
+          { id: "claude-sonnet-5.5", label: "Claude Sonnet 5.5 (Cân bằng & thông minh)", badge: "Sonnet", disabled: false },
+          { id: "claude-haiku-5.5", label: "Claude Haiku 5.5 (Phản hồi nhanh)", badge: "Haiku", disabled: false },
+          { id: "claude-opus-5.5", label: "Claude Opus 5.5 (Pro)", badge: "Upgrade", disabled: true },
+          { id: "claude-fable-5.1", label: "Claude Fable 5.1 (Max)", badge: "Upgrade", disabled: true },
+        ];
+      return base.map((m) => {
+        const isUpgrade = m.id === "claude-opus-5.5" || m.id === "claude-fable-5.1" || m.disabled || m.badge === "Upgrade";
+        return {
+          ...m,
+          disabled: isUpgrade,
+          badge: isUpgrade ? "Upgrade" : m.badge,
+        };
+      });
+    }
     if (orchCaps?.available_models && orchCaps.available_models.length > 0) {
       return orchCaps.available_models;
     }
@@ -225,35 +326,11 @@ export function AgentConfigScreen({
         { id: "argon", label: "Gemini Argon", badge: "Pro" },
       ];
     }
-    if (selectedOrchestrator === "copilot") {
-      return [
-        { id: "auto", label: "Copilot Auto", badge: "Auto" },
-        { id: "gpt_5_6_think", label: "GPT > GPT-5.6 Sol Think Deeper", badge: "Think" },
-        { id: "gpt_5_6_quick", label: "GPT > GPT-5.6 Sol Quick", badge: "Fast" },
-      ];
-    }
-    if (selectedOrchestrator === "chatgpt") {
-      return [
-        { id: "o3-mini", label: "o3-mini (Reasoning)", badge: "Think" },
-        { id: "gpt-4o", label: "GPT-4o (Omni)", badge: "Auto" },
-      ];
-    }
     if (selectedOrchestrator === "qwen") {
       return [
         { id: "qwen-3.8-max", label: "Qwen 3.8 Max (Reasoning)", badge: "Max" },
         { id: "qwen-3.7-plus", label: "Qwen 3.7 Plus", badge: "Plus" },
         { id: "qwen-3.8-omni-flash", label: "Qwen 3.8 Omni-Flash", badge: "Omni" },
-      ];
-    }
-    if (selectedOrchestrator === "deepseek") {
-      return [];
-    }
-    if (selectedOrchestrator === "claude") {
-      return [
-        { id: "claude-sonnet-5.5", label: "Claude Sonnet 5.5 (Cân bằng & thông minh)", badge: "Sonnet" },
-        { id: "claude-haiku-5.5", label: "Claude Haiku 5.5 (Phản hồi nhanh)", badge: "Haiku" },
-        { id: "claude-opus-5.5", label: "Claude Opus 5.5 (Pro)", badge: "Opus" },
-        { id: "claude-fable-5.1", label: "Claude Fable 5.1 (Max)", badge: "Fable" },
       ];
     }
     if (selectedOrchestrator === "zhipu") {
@@ -269,7 +346,7 @@ export function AgentConfigScreen({
 
   // Computed thinking levels for Orchestrator
   const orchThinkingLevels = useMemo<AgentOption[]>(() => {
-    if (selectedOrchestrator === "deepseek") {
+    if (selectedOrchestrator === "deepseek" || selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt") {
       return [];
     }
     if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0) {
@@ -303,7 +380,7 @@ export function AgentConfigScreen({
 
   // Computed modes for Orchestrator
   const orchModes = useMemo<AgentOption[]>(() => {
-    if (selectedOrchestrator === "gemini" || selectedOrchestrator === "qwen" || selectedOrchestrator === "claude" || selectedOrchestrator === "deepseek") {
+    if (selectedOrchestrator === "gemini" || selectedOrchestrator === "qwen" || selectedOrchestrator === "claude" || selectedOrchestrator === "deepseek" || selectedOrchestrator === "chatgpt") {
       return [];
     }
     if (orchCaps?.modes && orchCaps.modes.length > 0) {
@@ -323,6 +400,27 @@ export function AgentConfigScreen({
 
   // Computed models for Lead Provider
   const leadModels = useMemo<AgentOption[]>(() => {
+    if (selectedLead === "deepseek" || selectedLead === "copilot" || selectedLead === "chatgpt") {
+      return [];
+    }
+    if (selectedLead === "claude") {
+      const base: AgentOption[] = leadCaps?.available_models && leadCaps.available_models.length > 0
+        ? leadCaps.available_models
+        : [
+          { id: "claude-sonnet-5.5", label: "Claude Sonnet 5.5 (Cân bằng & thông minh)", badge: "Sonnet", disabled: false },
+          { id: "claude-haiku-5.5", label: "Claude Haiku 5.5 (Phản hồi nhanh)", badge: "Haiku", disabled: false },
+          { id: "claude-opus-5.5", label: "Claude Opus 5.5 (Pro)", badge: "Upgrade", disabled: true },
+          { id: "claude-fable-5.1", label: "Claude Fable 5.1 (Max)", badge: "Upgrade", disabled: true },
+        ];
+      return base.map((m) => {
+        const isUpgrade = m.id === "claude-opus-5.5" || m.id === "claude-fable-5.1" || m.disabled || m.badge === "Upgrade";
+        return {
+          ...m,
+          disabled: isUpgrade,
+          badge: isUpgrade ? "Upgrade" : m.badge,
+        };
+      });
+    }
     if (leadCaps?.available_models && leadCaps.available_models.length > 0) {
       return leadCaps.available_models;
     }
@@ -333,35 +431,11 @@ export function AgentConfigScreen({
         { id: "argon", label: "Gemini Argon", badge: "Pro" },
       ];
     }
-    if (selectedLead === "copilot") {
-      return [
-        { id: "auto", label: "Copilot Auto", badge: "Auto" },
-        { id: "gpt_5_6_think", label: "GPT > GPT-5.6 Sol Think Deeper", badge: "Think" },
-        { id: "gpt_5_6_quick", label: "GPT > GPT-5.6 Sol Quick", badge: "Fast" },
-      ];
-    }
-    if (selectedLead === "chatgpt") {
-      return [
-        { id: "o3-mini", label: "o3-mini (Reasoning)", badge: "Think" },
-        { id: "gpt-4o", label: "GPT-4o (Omni)", badge: "Auto" },
-      ];
-    }
     if (selectedLead === "qwen") {
       return [
         { id: "qwen-3.8-max", label: "Qwen 3.8 Max (Reasoning)", badge: "Max" },
         { id: "qwen-3.7-plus", label: "Qwen 3.7 Plus", badge: "Plus" },
         { id: "qwen-3.8-omni-flash", label: "Qwen 3.8 Omni-Flash", badge: "Omni" },
-      ];
-    }
-    if (selectedLead === "deepseek") {
-      return [];
-    }
-    if (selectedLead === "claude") {
-      return [
-        { id: "claude-sonnet-5.5", label: "Claude Sonnet 5.5 (Cân bằng & thông minh)", badge: "Sonnet" },
-        { id: "claude-haiku-5.5", label: "Claude Haiku 5.5 (Phản hồi nhanh)", badge: "Haiku" },
-        { id: "claude-opus-5.5", label: "Claude Opus 5.5 (Pro)", badge: "Opus" },
-        { id: "claude-fable-5.1", label: "Claude Fable 5.1 (Max)", badge: "Fable" },
       ];
     }
     if (selectedLead === "zhipu") {
@@ -377,7 +451,7 @@ export function AgentConfigScreen({
 
   // Computed thinking levels for Lead Provider
   const leadThinkingLevels = useMemo<AgentOption[]>(() => {
-    if (selectedLead === "deepseek") {
+    if (selectedLead === "deepseek" || selectedLead === "copilot" || selectedLead === "chatgpt") {
       return [];
     }
     if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0) {
@@ -411,7 +485,7 @@ export function AgentConfigScreen({
 
   // Computed modes for Lead Provider
   const leadModes = useMemo<AgentOption[]>(() => {
-    if (selectedLead === "gemini" || selectedLead === "qwen" || selectedLead === "claude" || selectedLead === "deepseek") {
+    if (selectedLead === "gemini" || selectedLead === "qwen" || selectedLead === "claude" || selectedLead === "deepseek" || selectedLead === "chatgpt") {
       return [];
     }
     if (leadCaps?.modes && leadCaps.modes.length > 0) {
@@ -469,6 +543,7 @@ export function AgentConfigScreen({
       if (res?.selected_mode_id) setOrchMode(res.selected_mode_id);
       if (res?.deep_thinking !== undefined) setOrchDeepThinking(res.deep_thinking);
       if (res?.web_search !== undefined) setOrchWebSearch(res.web_search);
+      if (res?.deep_research !== undefined) setOrchDeepResearch(res.deep_research);
     } catch (err: any) {
       setOrchSyncMessage(`Lỗi đồng bộ DOM: ${err?.message || "Không thể kết nối"}`);
     } finally {
@@ -491,6 +566,7 @@ export function AgentConfigScreen({
       if (res?.selected_mode_id) setLeadMode(res.selected_mode_id);
       if (res?.deep_thinking !== undefined) setLeadDeepThinking(res.deep_thinking);
       if (res?.web_search !== undefined) setLeadWebSearch(res.web_search);
+      if (res?.deep_research !== undefined) setLeadDeepResearch(res.deep_research);
     } catch (err: any) {
       setLeadSyncMessage(`Lỗi đồng bộ DOM: ${err?.message || "Không thể kết nối"}`);
     } finally {
@@ -533,6 +609,16 @@ export function AgentConfigScreen({
       orchConfig.thinking_level_id = "";
       orchConfig.mode = "";
       orchConfig.mode_id = "";
+    } else if (selectedOrchestrator === "chatgpt") {
+      orchConfig.web_search = orchWebSearch;
+      orchConfig.deep_research = orchDeepResearch;
+      orchConfig.deep_thinking = orchDeepThinking;
+      orchConfig.model = "";
+      orchConfig.model_id = "";
+      orchConfig.thinking = "";
+      orchConfig.thinking_level_id = "";
+      orchConfig.mode = "";
+      orchConfig.mode_id = "";
     } else if (selectedOrchestrator === "zhipu") {
       orchConfig.model = orchModel || "glm-5.3";
       orchConfig.mode = orchMode || "high";
@@ -561,6 +647,16 @@ export function AgentConfigScreen({
     } else if (selectedLead === "deepseek") {
       leadConfig.deep_thinking = leadDeepThinking;
       leadConfig.web_search = leadWebSearch;
+      leadConfig.model = "";
+      leadConfig.model_id = "";
+      leadConfig.thinking = "";
+      leadConfig.thinking_level_id = "";
+      leadConfig.mode = "";
+      leadConfig.mode_id = "";
+    } else if (selectedLead === "chatgpt") {
+      leadConfig.web_search = leadWebSearch;
+      leadConfig.deep_research = leadDeepResearch;
+      leadConfig.deep_thinking = leadDeepThinking;
       leadConfig.model = "";
       leadConfig.model_id = "";
       leadConfig.thinking = "";
@@ -822,6 +918,128 @@ export function AgentConfigScreen({
                       </span>
                     </button>
                   </div>
+                ) : selectedOrchestrator === "chatgpt" ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", width: "100%" }}>
+                    {/* Web Search Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextVal = !orchWebSearch;
+                        setOrchWebSearch(nextVal);
+                        onUpdateSelection?.(selectedOrchestrator, { web_search: nextVal });
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "6px 12px",
+                        borderRadius: "var(--radius-sm, 6px)",
+                        border: `1.5px solid ${orchWebSearch ? "#059669" : "var(--border-default, #cbd5e1)"}`,
+                        backgroundColor: orchWebSearch ? "#ecfdf5" : "#ffffff",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: orchWebSearch ? "#059669" : "var(--text-secondary, #475569)",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                      title="Bật/Tắt tìm kiếm Web thời gian thực của ChatGPT"
+                    >
+                      <SearchIcon size={14} color={orchWebSearch ? "#059669" : "#64748b"} />
+                      <span>Web Search</span>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: "1px 6px",
+                          borderRadius: 10,
+                          backgroundColor: orchWebSearch ? "#059669" : "#e2e8f0",
+                          color: orchWebSearch ? "#ffffff" : "#64748b",
+                        }}
+                      >
+                        {orchWebSearch ? "BẬT" : "TẮT"}
+                      </span>
+                    </button>
+
+                    {/* Deep Research Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextVal = !orchDeepResearch;
+                        setOrchDeepResearch(nextVal);
+                        onUpdateSelection?.(selectedOrchestrator, { deep_research: nextVal });
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "6px 12px",
+                        borderRadius: "var(--radius-sm, 6px)",
+                        border: `1.5px solid ${orchDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
+                        backgroundColor: orchDeepResearch ? "#f5f3ff" : "#ffffff",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: orchDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                      title="Bật/Tắt chế độ Deep Research của ChatGPT"
+                    >
+                      <SparklesIcon size={14} color={orchDeepResearch ? "#7c3aed" : "#64748b"} />
+                      <span>Deep Research</span>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: "1px 6px",
+                          borderRadius: 10,
+                          backgroundColor: orchDeepResearch ? "#7c3aed" : "#e2e8f0",
+                          color: orchDeepResearch ? "#ffffff" : "#64748b",
+                        }}
+                      >
+                        {orchDeepResearch ? "BẬT" : "TẮT"}
+                      </span>
+                    </button>
+
+                    {/* Thinking Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextVal = !orchDeepThinking;
+                        setOrchDeepThinking(nextVal);
+                        onUpdateSelection?.(selectedOrchestrator, { deep_thinking: nextVal });
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "6px 12px",
+                        borderRadius: "var(--radius-sm, 6px)",
+                        border: `1.5px solid ${orchDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--border-default, #cbd5e1)"}`,
+                        backgroundColor: orchDeepThinking ? "var(--brand-blue-light, #eff6ff)" : "#ffffff",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: orchDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--text-secondary, #475569)",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                      title="Bật/Tắt chế độ Thinking của ChatGPT"
+                    >
+                      <BrainIcon size={14} color={orchDeepThinking ? "var(--brand-blue, #2563eb)" : "#64748b"} />
+                      <span>Thinking</span>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: "1px 6px",
+                          borderRadius: 10,
+                          backgroundColor: orchDeepThinking ? "var(--brand-blue, #2563eb)" : "#e2e8f0",
+                          color: orchDeepThinking ? "#ffffff" : "#64748b",
+                        }}
+                      >
+                        {orchDeepThinking ? "BẬT" : "TẮT"}
+                      </span>
+                    </button>
+                  </div>
                 ) : (
                   <>
                     {/* 1. Model Selector */}
@@ -831,6 +1049,8 @@ export function AgentConfigScreen({
                         <select
                           value={orchModel}
                           onChange={(e) => {
+                            const targetM = orchModels.find((m) => m.id === e.target.value);
+                            if (targetM?.disabled) return;
                             const val = e.target.value;
                             setOrchModel(val);
                             onUpdateSelection?.(selectedOrchestrator, { model_id: val });
@@ -838,8 +1058,8 @@ export function AgentConfigScreen({
                           className="agent-select"
                         >
                           {orchModels.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.label} {m.badge ? `[${m.badge}]` : ""}
+                            <option key={m.id} value={m.id} disabled={m.disabled}>
+                              {m.label} {m.disabled ? "— [Upgrade]" : m.badge ? `[${m.badge}]` : ""}
                             </option>
                           ))}
                         </select>
@@ -866,7 +1086,7 @@ export function AgentConfigScreen({
                           ))}
                         </select>
                       </label>
-                    ) : (
+                    ) : selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt" ? null : (
                       <label className="agent-checkbox-inline">
                         <input
                           type="checkbox"
@@ -1184,6 +1404,128 @@ export function AgentConfigScreen({
                       </span>
                     </button>
                   </div>
+                ) : selectedLead === "chatgpt" ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", width: "100%" }}>
+                    {/* Web Search Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextVal = !leadWebSearch;
+                        setLeadWebSearch(nextVal);
+                        onUpdateSelection?.(selectedLead, { web_search: nextVal });
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "6px 12px",
+                        borderRadius: "var(--radius-sm, 6px)",
+                        border: `1.5px solid ${leadWebSearch ? "#059669" : "var(--border-default, #cbd5e1)"}`,
+                        backgroundColor: leadWebSearch ? "#ecfdf5" : "#ffffff",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: leadWebSearch ? "#059669" : "var(--text-secondary, #475569)",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                      title="Bật/Tắt tìm kiếm Web thời gian thực của ChatGPT"
+                    >
+                      <SearchIcon size={14} color={leadWebSearch ? "#059669" : "#64748b"} />
+                      <span>Web Search</span>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: "1px 6px",
+                          borderRadius: 10,
+                          backgroundColor: leadWebSearch ? "#059669" : "#e2e8f0",
+                          color: leadWebSearch ? "#ffffff" : "#64748b",
+                        }}
+                      >
+                        {leadWebSearch ? "BẬT" : "TẮT"}
+                      </span>
+                    </button>
+
+                    {/* Deep Research Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextVal = !leadDeepResearch;
+                        setLeadDeepResearch(nextVal);
+                        onUpdateSelection?.(selectedLead, { deep_research: nextVal });
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "6px 12px",
+                        borderRadius: "var(--radius-sm, 6px)",
+                        border: `1.5px solid ${leadDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
+                        backgroundColor: leadDeepResearch ? "#f5f3ff" : "#ffffff",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: leadDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                      title="Bật/Tắt chế độ Deep Research của ChatGPT"
+                    >
+                      <SparklesIcon size={14} color={leadDeepResearch ? "#7c3aed" : "#64748b"} />
+                      <span>Deep Research</span>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: "1px 6px",
+                          borderRadius: 10,
+                          backgroundColor: leadDeepResearch ? "#7c3aed" : "#e2e8f0",
+                          color: leadDeepResearch ? "#ffffff" : "#64748b",
+                        }}
+                      >
+                        {leadDeepResearch ? "BẬT" : "TẮT"}
+                      </span>
+                    </button>
+
+                    {/* Thinking Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextVal = !leadDeepThinking;
+                        setLeadDeepThinking(nextVal);
+                        onUpdateSelection?.(selectedLead, { deep_thinking: nextVal });
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "6px 12px",
+                        borderRadius: "var(--radius-sm, 6px)",
+                        border: `1.5px solid ${leadDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--border-default, #cbd5e1)"}`,
+                        backgroundColor: leadDeepThinking ? "var(--brand-blue-light, #eff6ff)" : "#ffffff",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: leadDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--text-secondary, #475569)",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                      title="Bật/Tắt chế độ Thinking của ChatGPT"
+                    >
+                      <BrainIcon size={14} color={leadDeepThinking ? "var(--brand-blue, #2563eb)" : "#64748b"} />
+                      <span>Thinking</span>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: "1px 6px",
+                          borderRadius: 10,
+                          backgroundColor: leadDeepThinking ? "var(--brand-blue, #2563eb)" : "#e2e8f0",
+                          color: leadDeepThinking ? "#ffffff" : "#64748b",
+                        }}
+                      >
+                        {leadDeepThinking ? "BẬT" : "TẮT"}
+                      </span>
+                    </button>
+                  </div>
                 ) : (
                   <>
                     {/* 1. Model Selector */}
@@ -1193,6 +1535,8 @@ export function AgentConfigScreen({
                         <select
                           value={leadModel}
                           onChange={(e) => {
+                            const targetM = leadModels.find((m) => m.id === e.target.value);
+                            if (targetM?.disabled) return;
                             const val = e.target.value;
                             setLeadModel(val);
                             onUpdateSelection?.(selectedLead, { model_id: val });
@@ -1200,8 +1544,8 @@ export function AgentConfigScreen({
                           className="agent-select"
                         >
                           {leadModels.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.label} {m.badge ? `[${m.badge}]` : ""}
+                            <option key={m.id} value={m.id} disabled={m.disabled}>
+                              {m.label} {m.disabled ? "— [Upgrade]" : m.badge ? `[${m.badge}]` : ""}
                             </option>
                           ))}
                         </select>
@@ -1228,7 +1572,7 @@ export function AgentConfigScreen({
                           ))}
                         </select>
                       </label>
-                    ) : (
+                    ) : selectedLead === "copilot" || selectedLead === "chatgpt" ? null : (
                       <label className="agent-checkbox-inline">
                         <input
                           type="checkbox"

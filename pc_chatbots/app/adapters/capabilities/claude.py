@@ -41,6 +41,7 @@ class ClaudeCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
                 label="Claude Sonnet 5.5 (Cân bằng & thông minh)",
                 description="Mô hình cân bằng hoàn hảo giữa trí tuệ suy luận sâu sắc và tốc độ xử lý.",
                 selected=True,
+                disabled=False,
                 badge="Sonnet",
                 metadata={"reasoning": True, "multimodal": True},
             ),
@@ -49,16 +50,27 @@ class ClaudeCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
                 label="Claude Haiku 5.5 (Phản hồi nhanh)",
                 description="Mô hình tối ưu tốc độ phản hồi nhanh nhất cho các câu hỏi ngắn và tác vụ gọn.",
                 selected=False,
+                disabled=False,
                 badge="Haiku",
                 metadata={"speed": "fast"},
             ),
             OptionItem(
                 id="claude-opus-5.5",
-                label="Claude Opus 5.5 (Pro / Chuyên sâu)",
-                description="Mô hình mạnh mẽ nhất dành cho các bài toán phân tích học thuật và logic phức tạp.",
+                label="Claude Opus 5.5 (Pro)",
+                description="Dành cho tài khoản Pro (Yêu cầu nâng cấp gói)",
                 selected=False,
-                badge="Opus",
-                metadata={"reasoning": True, "pro": True},
+                disabled=True,
+                badge="Upgrade",
+                metadata={"reasoning": True, "pro": True, "upgrade": True},
+            ),
+            OptionItem(
+                id="claude-fable-5.1",
+                label="Claude Fable 5.1 (Max)",
+                description="Dành cho tài khoản Pro hoặc Max (Yêu cầu nâng cấp gói)",
+                selected=False,
+                disabled=True,
+                badge="Upgrade",
+                metadata={"pro": True, "upgrade": True},
             ),
         ]
 
@@ -223,9 +235,10 @@ class ClaudeCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
                         continue
                     seen_m_ids.add(m_id)
 
-                    desc = lines[1] if len(lines) > 1 and "upgrade" not in lines[1].lower() else f"Mô hình {first_line}"
-                    is_sel = badge.lower() in curr_btn_text.lower() or (
-                        await item.locator("svg, [data-icon='check']").count() > 0 and "upgrade" not in txt.lower()
+                    is_upgrade = "upgrade" in txt.lower() or (caps.account_type == "free" and m_id in {"claude-opus-5.5", "claude-fable-5.1"})
+                    desc = lines[1] if len(lines) > 1 and "upgrade" not in lines[1].lower() else f"Mô hình {first_line} (Yêu cầu nâng cấp gói)"
+                    is_sel = not is_upgrade and (
+                        badge.lower() in curr_btn_text.lower() or await item.locator("svg, [data-icon='check']").count() > 0
                     )
 
                     discovered_models.append(
@@ -234,19 +247,21 @@ class ClaudeCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
                             label=first_line,
                             description=desc,
                             selected=is_sel,
-                            badge=badge,
-                            metadata={"pro": "upgrade" in txt.lower()},
+                            disabled=is_upgrade,
+                            badge="Upgrade" if is_upgrade else badge,
+                            metadata={"pro": is_upgrade, "upgrade": is_upgrade},
                         )
                     )
 
                 if discovered_models:
                     caps.available_models = discovered_models
-                    for dm in discovered_models:
+                    selectable = [dm for dm in discovered_models if not dm.disabled]
+                    for dm in selectable:
                         if dm.selected:
                             caps.selected_model_id = dm.id
                             break
                     else:
-                        caps.selected_model_id = discovered_models[0].id
+                        caps.selected_model_id = selectable[0].id if selectable else discovered_models[0].id
 
                 # Now inspect Effort submenu
                 effort_item = page.locator("[role='menuitem']:has-text('Effort')")

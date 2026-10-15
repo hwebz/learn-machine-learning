@@ -3,6 +3,7 @@ export interface OptionItem {
   label: string;
   description?: string;
   selected: boolean;
+  disabled?: boolean;
   badge?: string;
   metadata?: Record<string, any>;
 }
@@ -38,6 +39,7 @@ export interface ProviderLiveCapabilities {
   voice_chat: VoiceChatSupport;
   deep_thinking?: boolean;
   web_search?: boolean;
+  deep_research?: boolean;
   last_error?: string | null;
 }
 
@@ -47,4 +49,5 @@ export interface ProviderSelectionConfig {
   mode_id?: string;
   deep_thinking?: boolean;
   web_search?: boolean;
+  deep_research?: boolean;
 }

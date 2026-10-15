@@ -72,26 +72,8 @@ class CopilotCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             ),
         ]
 
-        models = [
-            OptionItem(
-                id="auto",
-                label="Auto (Mặc định)",
-                description="Copilot tự động chọn mô hình và định tuyến qua Chế độ (Mode)",
-                selected=True,
-                badge="Auto",
-                metadata={"multimodal": True, "reasoning": True},
-            ),
-        ]
-
-        thinking_levels = [
-            OptionItem(
-                id="auto",
-                label="Auto (Tự động)",
-                description="Copilot quản lý mức suy luận qua Chế độ (Mode)",
-                selected=True,
-                badge="Auto",
-            ),
-        ]
+        models: list[OptionItem] = []
+        thinking_levels: list[OptionItem] = []
 
         data_types = SupportedDataTypes(
             text=True,
@@ -125,9 +107,9 @@ class CopilotCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             synced_at=datetime.now(timezone.utc),
             is_live_dom=False,
             available_models=models,
-            selected_model_id="auto",
+            selected_model_id=None,
             thinking_levels=thinking_levels,
-            selected_thinking_level_id="auto",
+            selected_thinking_level_id=None,
             modes=modes,
             selected_mode_id="auto",
             account_type="personal",

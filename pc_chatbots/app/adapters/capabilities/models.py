@@ -11,6 +11,7 @@ class OptionItem(BaseModel):
     label: str
     description: str | None = None
     selected: bool = False
+    disabled: bool = False
     badge: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -51,6 +52,7 @@ class ProviderLiveCapabilities(BaseModel):
     voice_chat: VoiceChatSupport = Field(default_factory=VoiceChatSupport)
     deep_thinking: bool = False
     web_search: bool = True
+    deep_research: bool = False
     last_error: str | None = None
 
 
@@ -63,4 +65,5 @@ class ProviderSelectionRequest(BaseModel):
     mode_id: str | None = None
     deep_thinking: bool | None = None
     web_search: bool | None = None
+    deep_research: bool | None = None
     custom_params: dict[str, Any] = Field(default_factory=dict)
