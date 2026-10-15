@@ -78,6 +78,20 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
       cachedSelections["gemini"].mode_id = "";
       if (cachedSelections["gemini"].deep_research === undefined) cachedSelections["gemini"].deep_research = false;
     }
+    if (cachedCaps["grok"]) {
+      cachedCaps["grok"].modes = [];
+      cachedCaps["grok"].selected_mode_id = undefined;
+      cachedCaps["grok"].available_models = [];
+      cachedCaps["grok"].selected_model_id = undefined;
+      cachedCaps["grok"].thinking_levels = [];
+      cachedCaps["grok"].selected_thinking_level_id = undefined;
+      cachedCaps["grok"].account_type = "free";
+    }
+    if (cachedSelections["grok"]) {
+      cachedSelections["grok"].model_id = "";
+      cachedSelections["grok"].thinking_level_id = "";
+      cachedSelections["grok"].mode_id = "";
+    }
     if (cachedCaps["qwen"]) {
       cachedCaps["qwen"].modes = [];
       cachedCaps["qwen"].selected_mode_id = undefined;
@@ -364,6 +378,15 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
         if (p === "gemini" && caps) {
           if (caps.deep_research === undefined) caps.deep_research = false;
         }
+        if (p === "grok" && caps) {
+          caps.modes = [];
+          caps.selected_mode_id = undefined;
+          caps.available_models = [];
+          caps.selected_model_id = undefined;
+          caps.thinking_levels = [];
+          caps.selected_thinking_level_id = undefined;
+          caps.account_type = "free";
+        }
         setCapabilitiesMap((prev) => {
           const updated = { ...prev, [p]: caps };
           saveStorage(CAPS_STORAGE_KEY, updated);
@@ -381,6 +404,7 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           const isKimi = p === "kimi";
           const isQwen = p === "qwen";
           const isGemini = p === "gemini";
+          const isGrok = p === "grok";
 
           // Safe model for Claude & Kimi
           const isKimiDeepResearch = isKimi && (existing.deep_research !== undefined ? existing.deep_research : (caps.deep_research ?? false));
@@ -409,13 +433,13 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
             [p]: {
               model_id: isPerplexity
                 ? "auto"
-                : (isDeepSeek || isCopilot || isChatGPT)
+                : (isDeepSeek || isCopilot || isChatGPT || isGrok)
                 ? ""
                 : safeModelId,
-              thinking_level_id: (isDeepSeek || isCopilot || isChatGPT || isPerplexity)
+              thinking_level_id: (isDeepSeek || isCopilot || isChatGPT || isPerplexity || isGrok)
                 ? ""
                 : safeThinking,
-              mode_id: (isDeepSeek || isChatGPT || isPerplexity || isKimi || isQwen || isGemini)
+              mode_id: (isDeepSeek || isChatGPT || isPerplexity || isKimi || isQwen || isGemini || isGrok)
                 ? ""
                 : existing.mode_id || caps.selected_mode_id || caps.modes[0]?.id || (isCopilot ? "auto" : ""),
               deep_thinking: isPerplexity
@@ -523,6 +547,8 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           }
         } else if (p === "gemini") {
           safeUpdates = { ...updates, mode_id: "" };
+        } else if (p === "grok") {
+          safeUpdates = { ...updates, model_id: "", thinking_level_id: "", mode_id: "" };
         }
         const updated = {
           ...prev,

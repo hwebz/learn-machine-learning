@@ -248,6 +248,7 @@ export function ProviderModal({
               const isKimi = p.id === "kimi";
               const isQwen = p.id === "qwen";
               const isGemini = p.id === "gemini";
+              const isGrok = p.id === "grok";
 
               const isDeepThinking = sel.deep_thinking !== undefined ? sel.deep_thinking : (caps?.deep_thinking ?? false);
               const isWebSearch = sel.web_search !== undefined ? sel.web_search : (caps?.web_search ?? true);
@@ -289,7 +290,7 @@ export function ProviderModal({
                 { id: "high", label: "High", description: "Suy luận chuyên sâu cao nhất", selected: true, disabled: false, badge: "High" },
               ];
 
-              const models = isChatGPT || isCopilot || isDeepSeek
+              const models = isChatGPT || isCopilot || isDeepSeek || isGrok
                 ? []
                 : isClaude
                   ? (caps?.available_models && caps.available_models.length > 0 && !caps.available_models.some((m) => m.id === "default")
@@ -345,8 +346,8 @@ export function ProviderModal({
                               },
                             ];
 
-              // 2. Reasoning: Empty for ChatGPT, Copilot, DeepSeek, and Perplexity
-              const thinkingLevels = isChatGPT || isCopilot || isDeepSeek || isPerplexity
+              // 2. Reasoning: Empty for ChatGPT, Copilot, DeepSeek, Perplexity, and Grok
+              const thinkingLevels = isChatGPT || isCopilot || isDeepSeek || isPerplexity || isGrok
                 ? []
                 : isClaude
                   ? (caps?.thinking_levels && caps.thinking_levels.length > 0 && !caps.thinking_levels.some((t) => t.id === "auto")
@@ -378,9 +379,9 @@ export function ProviderModal({
                           ]
                           : [];
 
-              // 3. Modes: Copilot (All 5 options). Gemini, Qwen, Claude, DeepSeek, ChatGPT, Perplexity, and Kimi have no modes.
+              // 3. Modes: Copilot (All 5 options). Gemini, Qwen, Claude, DeepSeek, ChatGPT, Perplexity, Kimi, and Grok have no modes.
               const modes =
-                p.id === "gemini" || p.id === "qwen" || isClaude || isDeepSeek || isChatGPT || isPerplexity || isKimi
+                p.id === "gemini" || p.id === "qwen" || isClaude || isDeepSeek || isChatGPT || isPerplexity || isKimi || isGrok
                   ? []
                   : isCopilot && (!caps?.modes || caps.modes.length === 0)
                     ? [
@@ -1704,6 +1705,49 @@ export function ProviderModal({
                             {isDeepResearch ? "BẬT" : "TẮT"}
                           </span>
                         </div>
+                      </div>
+                    ) : isGrok ? (
+                      /* xAI Grok: Free account — no options to configure, uses all defaults */
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: 'column',
+                          alignItems: "flex-start",
+                          justifyContent: "space-between",
+                          padding: "10px 14px",
+                          borderRadius: 8,
+                          backgroundColor: "#f8fafc",
+                          border: "1px dashed var(--border-default, #cbd5e1)",
+                          flexGrow: 1,
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "flex-start", flexDirection: 'column', gap: 8 }}>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: "2px 6px",
+                              borderRadius: 4,
+                              backgroundColor: "#e2e8f0",
+                              color: "#475569",
+                            }}
+                          >
+                            FREE ACCOUNT
+                          </span>
+                          <span style={{ fontSize: 12, color: "var(--text-muted, #64748b)" }}>
+                            Tài khoản miễn phí — không có cấu hình tùy chỉnh, sử dụng toàn bộ mặc định từ xAI Grok.
+                          </span>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: "var(--text-muted, #94a3b8)",
+                            fontStyle: "italic",
+                          }}
+                        >
+                          Mặc định (Default)
+                        </span>
                       </div>
                     ) : (
                       /* Other AI Providers (Claude): Row 1 = Model & Reasoning, Row 2 = Mode */

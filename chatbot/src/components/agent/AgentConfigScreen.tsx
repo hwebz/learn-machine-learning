@@ -223,6 +223,15 @@ export function AgentConfigScreen({
       return;
     }
 
+    if (selectedOrchestrator === "grok") {
+      setOrchModel("");
+      setOrchThinkingLevel("");
+      setOrchMode("");
+      setOrchDeepThinking(false);
+      setOrchDeepResearch(false);
+      return;
+    }
+
     if (selectedOrchestrator === "copilot") {
       setOrchModel("");
       setOrchThinkingLevel("");
@@ -385,6 +394,15 @@ export function AgentConfigScreen({
       return;
     }
 
+    if (selectedLead === "grok") {
+      setLeadModel("");
+      setLeadThinkingLevel("");
+      setLeadMode("");
+      setLeadDeepThinking(false);
+      setLeadDeepResearch(false);
+      return;
+    }
+
     if (selectedLead === "copilot") {
       setLeadModel("");
       setLeadThinkingLevel("");
@@ -439,7 +457,7 @@ export function AgentConfigScreen({
 
   // Computed models for Orchestrator
   const orchModels = useMemo<AgentOption[]>(() => {
-    if (selectedOrchestrator === "deepseek" || selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt") {
+    if (selectedOrchestrator === "deepseek" || selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt" || selectedOrchestrator === "grok") {
       return [];
     }
     if (selectedOrchestrator === "perplexity") {
@@ -532,7 +550,7 @@ export function AgentConfigScreen({
 
   // Computed thinking levels for Orchestrator
   const orchThinkingLevels = useMemo<AgentOption[]>(() => {
-    if (selectedOrchestrator === "deepseek" || selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt" || selectedOrchestrator === "perplexity") {
+    if (selectedOrchestrator === "deepseek" || selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt" || selectedOrchestrator === "perplexity" || selectedOrchestrator === "grok") {
       return [];
     }
     if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0) {
@@ -576,7 +594,7 @@ export function AgentConfigScreen({
 
   // Computed modes for Orchestrator
   const orchModes = useMemo<AgentOption[]>(() => {
-    if (selectedOrchestrator === "gemini" || selectedOrchestrator === "qwen" || selectedOrchestrator === "claude" || selectedOrchestrator === "deepseek" || selectedOrchestrator === "chatgpt" || selectedOrchestrator === "perplexity" || selectedOrchestrator === "kimi") {
+    if (selectedOrchestrator === "gemini" || selectedOrchestrator === "qwen" || selectedOrchestrator === "claude" || selectedOrchestrator === "deepseek" || selectedOrchestrator === "chatgpt" || selectedOrchestrator === "perplexity" || selectedOrchestrator === "kimi" || selectedOrchestrator === "grok") {
       return [];
     }
     if (orchCaps?.modes && orchCaps.modes.length > 0) {
@@ -596,7 +614,7 @@ export function AgentConfigScreen({
 
   // Computed models for Lead Provider
   const leadModels = useMemo<AgentOption[]>(() => {
-    if (selectedLead === "deepseek" || selectedLead === "copilot" || selectedLead === "chatgpt") {
+    if (selectedLead === "deepseek" || selectedLead === "copilot" || selectedLead === "chatgpt" || selectedLead === "grok") {
       return [];
     }
     if (selectedLead === "perplexity") {
@@ -689,7 +707,7 @@ export function AgentConfigScreen({
 
   // Computed thinking levels for Lead Provider
   const leadThinkingLevels = useMemo<AgentOption[]>(() => {
-    if (selectedLead === "deepseek" || selectedLead === "copilot" || selectedLead === "chatgpt" || selectedLead === "perplexity") {
+    if (selectedLead === "deepseek" || selectedLead === "copilot" || selectedLead === "chatgpt" || selectedLead === "perplexity" || selectedLead === "grok") {
       return [];
     }
     if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0) {
@@ -733,7 +751,7 @@ export function AgentConfigScreen({
 
   // Computed modes for Lead Provider
   const leadModes = useMemo<AgentOption[]>(() => {
-    if (selectedLead === "gemini" || selectedLead === "qwen" || selectedLead === "claude" || selectedLead === "deepseek" || selectedLead === "chatgpt" || selectedLead === "perplexity" || selectedLead === "kimi") {
+    if (selectedLead === "gemini" || selectedLead === "qwen" || selectedLead === "claude" || selectedLead === "deepseek" || selectedLead === "chatgpt" || selectedLead === "perplexity" || selectedLead === "kimi" || selectedLead === "grok") {
       return [];
     }
     if (leadCaps?.modes && leadCaps.modes.length > 0) {
@@ -890,6 +908,13 @@ export function AgentConfigScreen({
       orchConfig.deep_research = orchDeepResearch;
       orchConfig.mode = "";
       orchConfig.mode_id = "";
+    } else if (selectedOrchestrator === "grok") {
+      orchConfig.model = "";
+      orchConfig.model_id = "";
+      orchConfig.thinking = "";
+      orchConfig.thinking_level_id = "";
+      orchConfig.mode = "";
+      orchConfig.mode_id = "";
     } else if (selectedOrchestrator === "zhipu") {
       orchConfig.model = orchModel || "glm-5.3";
       orchConfig.mode = orchMode || "high";
@@ -955,6 +980,13 @@ export function AgentConfigScreen({
       leadConfig.thinking_level_id = leadThinkingLevel || "high";
       leadConfig.thinking = leadThinkingLevel || "high";
       leadConfig.deep_research = leadDeepResearch;
+      leadConfig.mode = "";
+      leadConfig.mode_id = "";
+    } else if (selectedLead === "grok") {
+      leadConfig.model = "";
+      leadConfig.model_id = "";
+      leadConfig.thinking = "";
+      leadConfig.thinking_level_id = "";
       leadConfig.mode = "";
       leadConfig.mode_id = "";
     }
@@ -1387,7 +1419,13 @@ export function AgentConfigScreen({
                           )}
                         </select>
                       </label>
-                    ) : selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt" ? null : selectedOrchestrator === "perplexity" ? (
+                    ) : selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt" || selectedOrchestrator === "grok" ? (
+                      selectedOrchestrator === "grok" ? (
+                        <span style={{ fontSize: 12, color: "var(--text-muted, #64748b)", fontStyle: "italic" }}>
+                          Tài khoản miễn phí — sử dụng cấu hình mặc định từ xAI Grok.
+                        </span>
+                      ) : null
+                    ) : selectedOrchestrator === "perplexity" ? (
                       <button
                         type="button"
                         disabled
@@ -2137,7 +2175,13 @@ export function AgentConfigScreen({
                           )}
                         </select>
                       </label>
-                    ) : selectedLead === "copilot" || selectedLead === "chatgpt" ? null : selectedLead === "perplexity" ? (
+                    ) : selectedLead === "copilot" || selectedLead === "chatgpt" || selectedLead === "grok" ? (
+                      selectedLead === "grok" ? (
+                        <span style={{ fontSize: 12, color: "var(--text-muted, #64748b)", fontStyle: "italic" }}>
+                          Tài khoản miễn phí — sử dụng cấu hình mặc định từ xAI Grok.
+                        </span>
+                      ) : null
+                    ) : selectedLead === "perplexity" ? (
                       <button
                         type="button"
                         disabled

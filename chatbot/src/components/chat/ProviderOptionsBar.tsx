@@ -59,6 +59,7 @@ export function ProviderOptionsBar({
   const isPerplexity = providerId === "perplexity";
   const isKimi = providerId === "kimi";
   const isGemini = providerId === "gemini";
+  const isGrok = providerId === "grok";
 
   const isDeepThinking = selection.deep_thinking ?? capabilities?.deep_thinking ?? false;
   const isWebSearch = selection.web_search ?? capabilities?.web_search ?? true;
@@ -99,7 +100,7 @@ export function ProviderOptionsBar({
     { id: "high", label: "High", description: "Suy luận chuyên sâu cao nhất", selected: true, disabled: false, badge: "High" },
   ];
 
-  const models: OptionItem[] = isDeepSeek || isCopilot || isChatGPT
+  const models: OptionItem[] = isDeepSeek || isCopilot || isChatGPT || isGrok
     ? []
     : isClaude
       ? (capabilities?.available_models && capabilities.available_models.length > 0 && !capabilities.available_models.some((m) => m.id === "default")
@@ -148,7 +149,7 @@ export function ProviderOptionsBar({
                 ]
                 : [];
 
-  const thinkingLevels: OptionItem[] = isDeepSeek || isCopilot || isChatGPT || isPerplexity
+  const thinkingLevels: OptionItem[] = isDeepSeek || isCopilot || isChatGPT || isPerplexity || isGrok
     ? []
     : isClaude
       ? (capabilities?.thinking_levels && capabilities.thinking_levels.length > 0 && !capabilities.thinking_levels.some((t) => t.id === "auto")
@@ -218,7 +219,7 @@ export function ProviderOptionsBar({
     },
   ];
 
-  const modes = (providerId === "gemini" || providerId === "qwen" || providerId === "claude" || providerId === "deepseek" || providerId === "chatgpt" || providerId === "perplexity" || providerId === "kimi")
+  const modes = (providerId === "gemini" || providerId === "qwen" || providerId === "claude" || providerId === "deepseek" || providerId === "chatgpt" || providerId === "perplexity" || providerId === "kimi" || providerId === "grok")
     ? []
     : capabilities?.modes && capabilities.modes.length > 0
       ? capabilities.modes
@@ -314,6 +315,38 @@ export function ProviderOptionsBar({
             </span>
           )}
         </div>
+
+        {/* xAI Grok Free Account Note */}
+        {isGrok && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "3px 8px",
+              borderRadius: "var(--radius-sm, 6px)",
+              backgroundColor: "#f8fafc",
+              border: "1px dashed var(--border-subtle, #cbd5e1)",
+              fontSize: 11.5,
+              color: "var(--text-muted, #64748b)",
+            }}
+            title="Tài khoản xAI Grok miễn phí — không có tùy chọn, tự động sử dụng cấu hình mặc định."
+          >
+            <span
+              style={{
+                fontSize: 9.5,
+                fontWeight: 700,
+                padding: "1px 5px",
+                borderRadius: 3,
+                backgroundColor: "#e2e8f0",
+                color: "#475569",
+              }}
+            >
+              FREE
+            </span>
+            <span>Cấu hình mặc định (Không có tùy chọn)</span>
+          </div>
+        )}
 
         {/* DeepSeek 2 Toggles: DeepThink (R1) and Web Search */}
         {isDeepSeek && (

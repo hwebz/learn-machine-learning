@@ -136,9 +136,16 @@ export function resolveProviderOptions(
     raw.thinking_level_id = "auto";
   }
 
+  // For Grok: lock to empty defaults for Free account
+  if (norm === "grok") {
+    raw.model_id = "";
+    raw.thinking_level_id = "";
+    raw.mode_id = "";
+  }
+
   // 2. Model Label
-  let modelLabel = (norm === "copilot" || norm === "perplexity" || (norm === "chatgpt" && isFreeAccount)) ? "Auto (Tự động)" : "Auto (Tự động)";
-  if (!isFreeAccount && norm !== "copilot" && norm !== "perplexity") {
+  let modelLabel = norm === "grok" ? "Mặc định (Free Account)" : (norm === "copilot" || norm === "perplexity" || (norm === "chatgpt" && isFreeAccount)) ? "Auto (Tự động)" : "Auto (Tự động)";
+  if (!isFreeAccount && norm !== "copilot" && norm !== "perplexity" && norm !== "grok") {
     const modelId = raw.model_id;
     if (modelId) {
       const matched = activeCaps?.available_models?.find((m) => m.id === modelId);
@@ -172,8 +179,8 @@ export function resolveProviderOptions(
   }
 
   // 3. Reasoning Label
-  let reasoningLabel = norm === "perplexity" ? "Tắt (Khóa)" : "Auto (Tự động)";
-  if (!isFreeAccount && norm !== "copilot" && norm !== "perplexity") {
+  let reasoningLabel = norm === "perplexity" ? "Tắt (Khóa)" : norm === "grok" ? "Mặc định (Default)" : "Auto (Tự động)";
+  if (!isFreeAccount && norm !== "copilot" && norm !== "perplexity" && norm !== "grok") {
     const reasoningId = raw.thinking_level_id;
     if (reasoningId) {
       const matched = activeCaps?.thinking_levels?.find((t) => t.id === reasoningId);
@@ -238,9 +245,9 @@ export function resolveProviderOptions(
     researchMode: raw.research_mode,
     webSearch: raw.web_search,
     raw: {
-      model_id: raw.model_id || "auto",
-      thinking_level_id: raw.thinking_level_id || "auto",
-      mode_id: raw.mode_id || "standard",
+      model_id: norm === "grok" ? "" : (raw.model_id || "auto"),
+      thinking_level_id: norm === "grok" ? "" : (raw.thinking_level_id || "auto"),
+      mode_id: norm === "grok" ? "" : (raw.mode_id || "standard"),
       deep_research: raw.deep_research,
       research_mode: raw.research_mode,
       web_search: raw.web_search,

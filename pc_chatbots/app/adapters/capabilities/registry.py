@@ -16,6 +16,7 @@ from app.adapters.capabilities.claude import ClaudeCapabilitiesStrategy
 from app.adapters.capabilities.deepseek import DeepSeekCapabilitiesStrategy
 from app.adapters.capabilities.perplexity import PerplexityCapabilitiesStrategy
 from app.adapters.capabilities.kimi import KimiCapabilitiesStrategy
+from app.adapters.capabilities.grok import GrokCapabilitiesStrategy
 from app.adapters.capabilities.models import (
     OptionItem,
     ProviderLiveCapabilities,
@@ -123,6 +124,8 @@ class CapabilitiesRegistry:
         self.register(perplexity_strat)
         kimi_strat = KimiCapabilitiesStrategy()
         self.register(kimi_strat)
+        grok_strat = GrokCapabilitiesStrategy()
+        self.register(grok_strat)
 
     def register(self, strategy: BaseProviderCapabilitiesStrategy) -> None:
         self._strategies[strategy.provider_name.lower()] = strategy

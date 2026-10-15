@@ -17,6 +17,10 @@ class GrokUIAdapter(BrowserProviderAdapter):
 
     async def _select_mode(self, page: Any, mode: str) -> None:
         """Switch Grok mode (Expert / Heavy / DeepSearch vs Fast / Auto)."""
+        if not mode or mode in {"default", "auto", "standard", "none"}:
+            logger.info("grok_mode_default_noop")
+            return
+
         is_deep = mode in {"deep", "deep_research", "research", "pro"}
         cfg_modes = self._cfg.get("mode_selectors") or {}
 
