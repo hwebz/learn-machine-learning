@@ -22,6 +22,7 @@ from app.adapters.capabilities.qwen import QwenCapabilitiesStrategy
 from app.adapters.capabilities.claude import ClaudeCapabilitiesStrategy
 from app.adapters.capabilities.deepseek import DeepSeekCapabilitiesStrategy
 from app.adapters.capabilities.perplexity import PerplexityCapabilitiesStrategy
+from app.adapters.capabilities.kimi import KimiCapabilitiesStrategy
 
 __all__ = [
     "OptionItem",
@@ -42,5 +43,6 @@ __all__ = [
     "ClaudeCapabilitiesStrategy",
     "DeepSeekCapabilitiesStrategy",
     "PerplexityCapabilitiesStrategy",
+    "KimiCapabilitiesStrategy",
 ]
 

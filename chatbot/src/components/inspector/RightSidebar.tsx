@@ -28,6 +28,7 @@ function normalizeProvider(name: string): string {
   if (s.includes("grok")) return "grok";
   if (s.includes("claude")) return "claude";
   if (s.includes("perplexity")) return "perplexity";
+  if (s.includes("kimi") || s.includes("moonshot")) return "kimi";
   if (s.includes("mistral")) return "mistral";
   return s;
 }
@@ -36,7 +37,7 @@ function extractProvider(st: StepLog): string {
   if (st.provider) return normalizeProvider(st.provider);
   if (st.data?.provider) return normalizeProvider(String(st.data.provider));
   const match = st.message.match(
-    /\b(qwen|copilot|gemini|deepseek|chatgpt|openai|grok|perplexity|claude|mistral)\b/i
+    /\b(qwen|copilot|gemini|deepseek|chatgpt|openai|grok|perplexity|claude|kimi|moonshot|mistral)\b/i
   );
   if (match) return normalizeProvider(match[1]);
   return "";
@@ -46,10 +47,12 @@ export interface FormattedProviderOptions {
   model: string;
   reasoning: string;
   mode: string;
+  deepResearch?: boolean;
   raw: {
     model_id?: string;
     thinking_level_id?: string;
     mode_id?: string;
+    deep_research?: boolean;
   };
 }
 
@@ -94,10 +97,12 @@ export function resolveProviderOptions(
     model_id?: string;
     thinking_level_id?: string;
     mode_id?: string;
+    deep_research?: boolean;
   } = {
-    model_id: userSelection?.model_id || msgOpts?.model_id || runOpts?.model_id || stepOpts?.model_id || "auto",
-    thinking_level_id: userSelection?.thinking_level_id || msgOpts?.thinking_level_id || runOpts?.thinking_level_id || stepOpts?.thinking_level_id || "auto",
+    model_id: userSelection?.model_id || msgOpts?.model_id || runOpts?.model_id || stepOpts?.model_id || (norm === "kimi" ? "instant" : "auto"),
+    thinking_level_id: userSelection?.thinking_level_id || msgOpts?.thinking_level_id || runOpts?.thinking_level_id || stepOpts?.thinking_level_id || (norm === "kimi" ? "high" : "auto"),
     mode_id: userSelection?.mode_id || msgOpts?.mode_id || runOpts?.mode_id || stepOpts?.mode_id || "standard",
+    deep_research: userSelection?.deep_research !== undefined ? userSelection.deep_research : msgOpts?.deep_research !== undefined ? msgOpts.deep_research : runOpts?.deep_research !== undefined ? runOpts.deep_research : activeCaps?.deep_research,
   };
 
   // For Free account tier on ChatGPT: lock Model to none and Reasoning to Auto
@@ -142,6 +147,11 @@ export function resolveProviderOptions(
         modelLabel = "o1";
       } else if (modelId === "o3-mini") {
         modelLabel = "o3-mini";
+      } else if (norm === "kimi") {
+        if (modelId === "instant") modelLabel = "Instant (Phản hồi nhanh)";
+        else if (modelId === "k3") modelLabel = "K3 (Chat & Agent)";
+        else if (modelId === "k2.8") modelLabel = "K2.8 (Preview · Well-rounded)";
+        else modelLabel = modelId;
       } else {
         modelLabel = modelId;
       }
@@ -164,6 +174,10 @@ export function resolveProviderOptions(
         reasoningLabel = "Trung bình (Medium)";
       } else if (reasoningId === "high") {
         reasoningLabel = "Cao (High)";
+      } else if (norm === "kimi") {
+        if (reasoningId === "standard") reasoningLabel = "Standard (Tiêu chuẩn)";
+        else if (reasoningId === "high") reasoningLabel = "High (Chuyên sâu)";
+        else reasoningLabel = reasoningId;
       } else {
         reasoningLabel = reasoningId;
       }
@@ -202,10 +216,12 @@ export function resolveProviderOptions(
     model: modelLabel,
     reasoning: reasoningLabel,
     mode: modeLabel,
+    deepResearch: raw.deep_research,
     raw: {
       model_id: raw.model_id || "auto",
       thinking_level_id: raw.thinking_level_id || "auto",
       mode_id: raw.mode_id || "standard",
+      deep_research: raw.deep_research,
     },
   };
 }
@@ -1181,6 +1197,21 @@ export function RightSidebar({
                                       }}
                                     >
                                       Chế độ: {currentProviderOpts.mode}
+                                    </span>
+                                  )}
+                                  {currentProviderOpts.deepResearch && (
+                                    <span
+                                      style={{
+                                        fontSize: 10,
+                                        padding: "1px 6px",
+                                        borderRadius: 3,
+                                        backgroundColor: "#f5f3ff",
+                                        border: "1px solid #ddd6fe",
+                                        color: "#7c3aed",
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      Deep Research: BẬT
                                     </span>
                                   )}
                                 </div>

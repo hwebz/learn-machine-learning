@@ -57,6 +57,11 @@ export function ProviderOptionsBar({
   const isDeepSeek = providerId === "deepseek";
   const isClaude = providerId === "claude";
   const isPerplexity = providerId === "perplexity";
+  const isKimi = providerId === "kimi";
+
+  const isDeepThinking = selection.deep_thinking ?? capabilities?.deep_thinking ?? false;
+  const isWebSearch = selection.web_search ?? capabilities?.web_search ?? true;
+  const isDeepResearch = selection.deep_research ?? capabilities?.deep_research ?? false;
 
   const claudeFallbackModels: OptionItem[] = [
     { id: "claude-sonnet-5.5", label: "Sonnet 5.5", description: "Cân bằng hoàn hảo giữa trí tuệ và tốc độ", selected: true, badge: "Sonnet", disabled: false },
@@ -80,71 +85,97 @@ export function ProviderOptionsBar({
     { id: "nemotron-3-ultra", label: "Nemotron 3 Ultra", description: "Mô hình Nemotron 3 Ultra trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
   ];
 
+  const kimiFallbackModels: OptionItem[] = [
+    { id: "instant", label: "Instant", description: "Fast chat, quick replies (Phản hồi nhanh)", selected: true, disabled: false, badge: "Instant" },
+    { id: "k3", label: "K3", description: "Chat & Agent, flagship all-rounder (Toàn diện, suy luận mạnh)", selected: false, disabled: false, badge: "K3" },
+    { id: "k2.8", label: "K2.8", description: "Preview · Well-rounded and efficient for everyday tasks", selected: false, disabled: false, badge: "Preview" },
+  ];
+
+  const kimiFallbackThinking: OptionItem[] = [
+    { id: "standard", label: "Standard", description: "Suy luận tiêu chuẩn, phản hồi cân bằng", selected: false, disabled: false, badge: "Standard" },
+    { id: "high", label: "High", description: "Suy luận chuyên sâu cao nhất", selected: true, disabled: false, badge: "High" },
+  ];
+
   const models: OptionItem[] = isDeepSeek || isCopilot || isChatGPT
     ? []
     : isClaude
-    ? (capabilities?.available_models && capabilities.available_models.length > 0 && !capabilities.available_models.some((m) => m.id === "default")
-      ? capabilities.available_models.map((m) => {
-        const isUpgrade = m.id === "claude-opus-5.5" || m.id === "claude-fable-5.1" || m.disabled || m.metadata?.upgrade;
-        return {
-          ...m,
-          disabled: isUpgrade,
-          badge: isUpgrade ? "Upgrade" : m.badge,
-        };
-      })
-      : claudeFallbackModels)
-    : isPerplexity
-    ? (capabilities?.available_models && capabilities.available_models.length > 0 && !capabilities.available_models.some((m) => m.id === "default")
-      ? capabilities.available_models.map((m) => ({
-        ...m,
-        disabled: m.id !== "auto",
-        badge: m.id === "auto" ? "Auto" : (m.badge || "Pro"),
-      }))
-      : perplexityFallbackModels)
-    : capabilities?.available_models && capabilities.available_models.length > 0
-    ? capabilities.available_models
-    : providerId === "gemini"
-    ? [
-        { id: "gemini-3.8-flash", label: "3.8 Flash", description: "Trợ giúp toàn diện", selected: true, badge: "Flash" },
-        { id: "gemini-3.5-flash-lite", label: "3.5 Flash-Lite", description: "Câu trả lời nhanh nhất", selected: false, badge: "Lite" },
-        { id: "gemini-3.1-pro", label: "3.1 Pro", description: "Suy luận nâng cao", selected: false, badge: "Pro" },
-        { id: "gemini-4-argon", label: "4 Argon", description: "Nhiệm vụ phức tạp", selected: false, badge: "Argon" },
-      ]
-    : providerId === "qwen"
-    ? [
-        { id: "qwen-3.8-max", label: "Qwen3.8-Max (Flagship)", description: "Mô hình cờ đầu thế hệ mới nhất", selected: true, badge: "Max" },
-        { id: "qwen-3.7-plus", label: "Qwen3.7-Plus (High Performance)", description: "Mô hình hiệu năng cao", selected: false, badge: "Plus" },
-        { id: "qwen-3.8-omni-flash", label: "Qwen3.8-Omni-Flash (Multimodal)", description: "Mô hình đa phương tiện tự nhiên", selected: false, badge: "Omni" },
-      ]
-    : [];
+      ? (capabilities?.available_models && capabilities.available_models.length > 0 && !capabilities.available_models.some((m) => m.id === "default")
+        ? capabilities.available_models.map((m) => {
+          const isUpgrade = m.id === "claude-opus-5.5" || m.id === "claude-fable-5.1" || m.disabled || m.metadata?.upgrade;
+          return {
+            ...m,
+            disabled: isUpgrade,
+            badge: isUpgrade ? "Upgrade" : m.badge,
+          };
+        })
+        : claudeFallbackModels)
+      : isPerplexity
+        ? (capabilities?.available_models && capabilities.available_models.length > 0 && !capabilities.available_models.some((m) => m.id === "default")
+          ? capabilities.available_models.map((m) => ({
+            ...m,
+            disabled: m.id !== "auto",
+            badge: m.id === "auto" ? "Auto" : (m.badge || "Pro"),
+          }))
+          : perplexityFallbackModels)
+        : isKimi
+          ? (capabilities?.available_models && capabilities.available_models.length > 0 && !capabilities.available_models.some((m) => m.id === "default")
+            ? capabilities.available_models
+            : kimiFallbackModels).map((m) => {
+              const isInstantDisabled = isDeepResearch && m.id === "instant";
+              return {
+                ...m,
+                disabled: isInstantDisabled || m.disabled,
+                badge: isInstantDisabled ? "Không hỗ trợ DR" : m.badge,
+              };
+            })
+          : capabilities?.available_models && capabilities.available_models.length > 0
+            ? capabilities.available_models
+            : providerId === "gemini"
+              ? [
+                { id: "gemini-3.8-flash", label: "3.8 Flash", description: "Trợ giúp toàn diện", selected: true, badge: "Flash" },
+                { id: "gemini-3.5-flash-lite", label: "3.5 Flash-Lite", description: "Câu trả lời nhanh nhất", selected: false, badge: "Lite" },
+                { id: "gemini-3.1-pro", label: "3.1 Pro", description: "Suy luận nâng cao", selected: false, badge: "Pro" },
+                { id: "gemini-4-argon", label: "4 Argon", description: "Nhiệm vụ phức tạp", selected: false, badge: "Argon" },
+              ]
+              : providerId === "qwen"
+                ? [
+                  { id: "qwen-3.8-max", label: "Qwen3.8-Max (Flagship)", description: "Mô hình cờ đầu thế hệ mới nhất", selected: true, badge: "Max" },
+                  { id: "qwen-3.7-plus", label: "Qwen3.7-Plus (High Performance)", description: "Mô hình hiệu năng cao", selected: false, badge: "Plus" },
+                  { id: "qwen-3.8-omni-flash", label: "Qwen3.8-Omni-Flash (Multimodal)", description: "Mô hình đa phương tiện tự nhiên", selected: false, badge: "Omni" },
+                ]
+                : [];
 
   const thinkingLevels: OptionItem[] = isDeepSeek || isCopilot || isChatGPT || isPerplexity
     ? []
     : isClaude
-    ? (capabilities?.thinking_levels && capabilities.thinking_levels.length > 0 && !capabilities.thinking_levels.some((t) => t.id === "auto")
-      ? capabilities.thinking_levels
-      : [
+      ? (capabilities?.thinking_levels && capabilities.thinking_levels.length > 0 && !capabilities.thinking_levels.some((t) => t.id === "auto")
+        ? capabilities.thinking_levels
+        : [
           { id: "medium", label: "Medium (Recommended)", description: "Khuyên dùng - Cân bằng độ sâu và giới hạn sử dụng", selected: true, badge: "Med" },
           { id: "low", label: "Low", description: "Thấp - Phản hồi nhanh và tiết kiệm giới hạn", selected: false, badge: "Low" },
           { id: "high", label: "High", description: "Cao - Phân tích đa bước kỹ lưỡng cho bài toán hóc búa", selected: false, badge: "High" },
           { id: "extra", label: "Extra", description: "Rất cao - Suy luận chuyên sâu cho nghiên cứu phức tạp", selected: false, badge: "Extra" },
           { id: "max", label: "Max", description: "Tối đa - 8x hoặc nhiều hơn mức sử dụng giới hạn", selected: false, badge: "Max" },
         ])
-    : capabilities?.thinking_levels && capabilities.thinking_levels.length > 0
-    ? capabilities.thinking_levels
-    : providerId === "gemini"
-    ? [
-        { id: "low", label: "Thấp (Nhanh chóng & hiệu quả)", description: "Nhanh chóng và hiệu quả", selected: true, badge: "Low" },
-        { id: "medium", label: "Trung bình (Độ sâu cân bằng)", description: "Độ sâu cân bằng", selected: false, badge: "Med" },
-        { id: "high", label: "Cao (Cực kỳ kỹ lưỡng)", description: "Cực kỳ kỹ lưỡng", selected: false, badge: "High" },
-      ]
-    : providerId === "qwen"
-    ? [
-        { id: "auto", label: "Auto (Tự động cân bằng)", description: "Tự động điều chỉnh mức độ suy luận", selected: true, badge: "Auto" },
-        { id: "thinking", label: "Thinking (Suy luận sâu đa bước)", description: "Kích hoạt chuỗi tư duy mở rộng", selected: false, badge: "Think" },
-        { id: "fast", label: "Fast (Phản hồi nhanh)", description: "Bỏ qua tư duy đa bước", selected: false, badge: "Fast" },
-      ]
-    : [];
+      : isKimi
+        ? (capabilities?.thinking_levels && capabilities.thinking_levels.length > 0 && !capabilities.thinking_levels.some((t) => t.id === "auto")
+          ? capabilities.thinking_levels
+          : kimiFallbackThinking)
+        : capabilities?.thinking_levels && capabilities.thinking_levels.length > 0
+          ? capabilities.thinking_levels
+          : providerId === "gemini"
+            ? [
+              { id: "low", label: "Thấp (Nhanh chóng & hiệu quả)", description: "Nhanh chóng và hiệu quả", selected: true, badge: "Low" },
+              { id: "medium", label: "Trung bình (Độ sâu cân bằng)", description: "Độ sâu cân bằng", selected: false, badge: "Med" },
+              { id: "high", label: "Cao (Cực kỳ kỹ lưỡng)", description: "Cực kỳ kỹ lưỡng", selected: false, badge: "High" },
+            ]
+            : providerId === "qwen"
+              ? [
+                { id: "auto", label: "Auto (Tự động cân bằng)", description: "Tự động điều chỉnh mức độ suy luận", selected: true, badge: "Auto" },
+                { id: "thinking", label: "Thinking (Suy luận sâu đa bước)", description: "Kích hoạt chuỗi tư duy mở rộng", selected: false, badge: "Think" },
+                { id: "fast", label: "Fast (Phản hồi nhanh)", description: "Bỏ qua tư duy đa bước", selected: false, badge: "Fast" },
+              ]
+              : [];
 
   const fallbackCopilotModes: OptionItem[] = [
     {
@@ -184,13 +215,13 @@ export function ProviderOptionsBar({
     },
   ];
 
-  const modes = (providerId === "gemini" || providerId === "qwen" || providerId === "claude" || providerId === "deepseek" || providerId === "chatgpt" || providerId === "perplexity")
+  const modes = (providerId === "gemini" || providerId === "qwen" || providerId === "claude" || providerId === "deepseek" || providerId === "chatgpt" || providerId === "perplexity" || providerId === "kimi")
     ? []
     : capabilities?.modes && capabilities.modes.length > 0
-    ? capabilities.modes
-    : isCopilot
-    ? fallbackCopilotModes
-    : [];
+      ? capabilities.modes
+      : isCopilot
+        ? fallbackCopilotModes
+        : [];
   const dataTypes = capabilities?.supported_data_types;
   const voice = capabilities?.voice_chat;
 
@@ -202,10 +233,6 @@ export function ProviderOptionsBar({
     ? (thinkingLevels.find((t) => t.id === selection.thinking_level_id && t.id !== "auto") || thinkingLevels.find((t) => t.id === "medium") || thinkingLevels[0])
     : (thinkingLevels.find((t) => t.id === selection.thinking_level_id) || thinkingLevels[0]);
   const currentMode = modes.find((m) => m.id === selection.mode_id) || modes[0];
-
-  const isDeepThinking = selection.deep_thinking ?? capabilities?.deep_thinking ?? false;
-  const isWebSearch = selection.web_search ?? capabilities?.web_search ?? true;
-  const isDeepResearch = selection.deep_research ?? capabilities?.deep_research ?? false;
 
   const formatSyncTime = (ts?: string) => {
     if (!ts) return "Chưa đồng bộ";
@@ -241,7 +268,6 @@ export function ProviderOptionsBar({
             style={{
               fontSize: 11,
               fontWeight: 700,
-              textTransform: "uppercase",
               letterSpacing: "0.5px",
               color: "var(--text-muted, #64748b)",
               display: "flex",
@@ -725,6 +751,51 @@ export function ProviderOptionsBar({
               </div>
             )}
           </div>
+        )}
+
+        {/* Kimi Deep Research Toggle Button */}
+        {isKimi && (
+          <button
+            type="button"
+            onClick={() => {
+              const nextDr = !isDeepResearch;
+              const updates: Partial<ProviderSelectionConfig> = { deep_research: nextDr };
+              if (nextDr && (currentModel?.id === "instant" || !currentModel?.id || currentModel?.id === "default")) {
+                updates.model_id = "k3";
+              }
+              onUpdateSelection(updates);
+            }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "4px 9px",
+              borderRadius: "var(--radius-sm, 6px)",
+              border: `1px solid ${isDeepResearch ? "#7c3aed" : "var(--border-subtle, #cbd5e1)"}`,
+              backgroundColor: isDeepResearch ? "#f5f3ff" : "#ffffff",
+              fontSize: 12,
+              fontWeight: 600,
+              color: isDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+            title="Bật/Tắt chế độ Deep Research trên Kimi"
+          >
+            <SparklesIcon size={13} color={isDeepResearch ? "#7c3aed" : "#64748b"} />
+            <span>Deep Research</span>
+            <span
+              style={{
+                fontSize: 9.5,
+                padding: "1px 4px",
+                borderRadius: 3,
+                backgroundColor: isDeepResearch ? "#7c3aed" : "#f1f5f9",
+                color: isDeepResearch ? "#ffffff" : "#64748b",
+                fontWeight: 700,
+              }}
+            >
+              {isDeepResearch ? "ON" : "OFF"}
+            </span>
+          </button>
         )}
 
         {/* 3. Mode Selector */}

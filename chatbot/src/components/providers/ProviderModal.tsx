@@ -245,6 +245,11 @@ export function ProviderModal({
               const isClaude = p.id === "claude";
               const isDeepSeek = p.id === "deepseek";
               const isPerplexity = p.id === "perplexity";
+              const isKimi = p.id === "kimi";
+
+              const isDeepThinking = sel.deep_thinking !== undefined ? sel.deep_thinking : (caps?.deep_thinking ?? false);
+              const isWebSearch = sel.web_search !== undefined ? sel.web_search : (caps?.web_search ?? true);
+              const isDeepResearch = sel.deep_research !== undefined ? sel.deep_research : (caps?.deep_research ?? false);
 
               // 1. Models: Empty for ChatGPT, Copilot, and DeepSeek
               const claudeFallbackModels = [
@@ -269,6 +274,17 @@ export function ProviderModal({
                 { id: "nemotron-3-ultra", label: "Nemotron 3 Ultra", description: "Mô hình Nemotron 3 Ultra trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
               ];
 
+              const kimiFallbackModels = [
+                { id: "instant", label: "Instant", description: "Fast chat, quick replies (Phản hồi nhanh)", selected: true, disabled: false, badge: "Instant" },
+                { id: "k3", label: "K3", description: "Chat & Agent, flagship all-rounder (Toàn diện, suy luận mạnh)", selected: false, disabled: false, badge: "K3" },
+                { id: "k2.8", label: "K2.8", description: "Preview · Well-rounded and efficient for everyday tasks", selected: false, disabled: false, badge: "Preview" },
+              ];
+
+              const kimiFallbackThinking = [
+                { id: "standard", label: "Standard", description: "Suy luận tiêu chuẩn, phản hồi cân bằng", selected: false, disabled: false, badge: "Standard" },
+                { id: "high", label: "High", description: "Suy luận chuyên sâu cao nhất", selected: true, disabled: false, badge: "High" },
+              ];
+
               const models = isChatGPT || isCopilot || isDeepSeek
                 ? []
                 : isClaude
@@ -290,29 +306,40 @@ export function ProviderModal({
                         badge: m.id === "auto" ? "Auto" : (m.badge || "Pro"),
                       }))
                       : perplexityFallbackModels)
-                    : caps?.available_models && caps.available_models.length > 0
-                      ? caps.available_models
-                      : p.id === "gemini"
-                        ? [
-                          { id: "gemini-3.8-flash", label: "3.8 Flash", description: "Trợ giúp toàn diện", selected: true, badge: "Flash" },
-                          { id: "gemini-3.5-flash-lite", label: "3.5 Flash-Lite", description: "Câu trả lời nhanh nhất", selected: false, badge: "Lite" },
-                          { id: "gemini-3.1-pro", label: "3.1 Pro", description: "Suy luận nâng cao", selected: false, badge: "Pro" },
-                          { id: "gemini-4-argon", label: "4 Argon", description: "Nhiệm vụ phức tạp", selected: false, badge: "Argon" },
-                        ]
-                        : p.id === "qwen"
+                    : isKimi
+                      ? (caps?.available_models && caps.available_models.length > 0 && !caps.available_models.some((m) => m.id === "default")
+                        ? caps.available_models
+                        : kimiFallbackModels).map((m) => {
+                          const isInstantDisabled = isDeepResearch && m.id === "instant";
+                          return {
+                            ...m,
+                            disabled: isInstantDisabled || m.disabled,
+                            badge: isInstantDisabled ? "Không hỗ trợ DR" : m.badge,
+                          };
+                        })
+                      : caps?.available_models && caps.available_models.length > 0
+                        ? caps.available_models
+                        : p.id === "gemini"
                           ? [
-                            { id: "qwen-3.8-max", label: "Qwen3.8-Max (Flagship)", description: "Mô hình cờ đầu thế hệ mới nhất", selected: true, badge: "Max" },
-                            { id: "qwen-3.7-plus", label: "Qwen3.7-Plus (High Performance)", description: "Mô hình hiệu năng cao", selected: false, badge: "Plus" },
-                            { id: "qwen-3.8-omni-flash", label: "Qwen3.8-Omni-Flash (Multimodal)", description: "Mô hình đa phương tiện tự nhiên", selected: false, badge: "Omni" },
+                            { id: "gemini-3.8-flash", label: "3.8 Flash", description: "Trợ giúp toàn diện", selected: true, badge: "Flash" },
+                            { id: "gemini-3.5-flash-lite", label: "3.5 Flash-Lite", description: "Câu trả lời nhanh nhất", selected: false, badge: "Lite" },
+                            { id: "gemini-3.1-pro", label: "3.1 Pro", description: "Suy luận nâng cao", selected: false, badge: "Pro" },
+                            { id: "gemini-4-argon", label: "4 Argon", description: "Nhiệm vụ phức tạp", selected: false, badge: "Argon" },
                           ]
-                          : [
-                            {
-                              id: "auto",
-                              label: "Auto (Tự động)",
-                              description: "Tự động chọn mô hình phù hợp",
-                              selected: true,
-                            },
-                          ];
+                          : p.id === "qwen"
+                            ? [
+                              { id: "qwen-3.8-max", label: "Qwen3.8-Max (Flagship)", description: "Mô hình cờ đầu thế hệ mới nhất", selected: true, badge: "Max" },
+                              { id: "qwen-3.7-plus", label: "Qwen3.7-Plus (High Performance)", description: "Mô hình hiệu năng cao", selected: false, badge: "Plus" },
+                              { id: "qwen-3.8-omni-flash", label: "Qwen3.8-Omni-Flash (Multimodal)", description: "Mô hình đa phương tiện tự nhiên", selected: false, badge: "Omni" },
+                            ]
+                            : [
+                              {
+                                id: "auto",
+                                label: "Auto (Tự động)",
+                                description: "Tự động chọn mô hình phù hợp",
+                                selected: true,
+                              },
+                            ];
 
               // 2. Reasoning: Empty for ChatGPT, Copilot, DeepSeek, and Perplexity
               const thinkingLevels = isChatGPT || isCopilot || isDeepSeek || isPerplexity
@@ -327,25 +354,29 @@ export function ProviderModal({
                       { id: "extra", label: "Extra", description: "Rất cao - Suy luận chuyên sâu cho nghiên cứu phức tạp", selected: false, badge: "Extra" },
                       { id: "max", label: "Max", description: "Tối đa - 8x hoặc nhiều hơn mức sử dụng giới hạn", selected: false, badge: "Max" },
                     ])
-                  : caps?.thinking_levels && caps.thinking_levels.length > 0
-                    ? caps.thinking_levels
-                    : p.id === "gemini"
-                      ? [
-                        { id: "low", label: "Thấp (Nhanh chóng & hiệu quả)", description: "Nhanh chóng và hiệu quả", selected: true, badge: "Low" },
-                        { id: "medium", label: "Trung bình (Độ sâu cân bằng)", description: "Độ sâu cân bằng", selected: false, badge: "Med" },
-                        { id: "high", label: "Cao (Cực kỳ kỹ lưỡng)", description: "Cực kỳ kỹ lưỡng", selected: false, badge: "High" },
-                      ]
-                      : p.id === "qwen"
+                  : isKimi
+                    ? (caps?.thinking_levels && caps.thinking_levels.length > 0 && !caps.thinking_levels.some((t) => t.id === "auto")
+                      ? caps.thinking_levels
+                      : kimiFallbackThinking)
+                    : caps?.thinking_levels && caps.thinking_levels.length > 0
+                      ? caps.thinking_levels
+                      : p.id === "gemini"
                         ? [
-                          { id: "auto", label: "Auto (Tự động cân bằng)", description: "Tự động điều chỉnh mức độ suy luận", selected: true, badge: "Auto" },
-                          { id: "thinking", label: "Thinking (Suy luận sâu đa bước)", description: "Kích hoạt chuỗi tư duy mở rộng", selected: false, badge: "Think" },
-                          { id: "fast", label: "Fast (Phản hồi nhanh)", description: "Bỏ qua tư duy đa bước", selected: false, badge: "Fast" },
+                          { id: "low", label: "Thấp (Nhanh chóng & hiệu quả)", description: "Nhanh chóng và hiệu quả", selected: true, badge: "Low" },
+                          { id: "medium", label: "Trung bình (Độ sâu cân bằng)", description: "Độ sâu cân bằng", selected: false, badge: "Med" },
+                          { id: "high", label: "Cao (Cực kỳ kỹ lưỡng)", description: "Cực kỳ kỹ lưỡng", selected: false, badge: "High" },
                         ]
-                        : [];
+                        : p.id === "qwen"
+                          ? [
+                            { id: "auto", label: "Auto (Tự động cân bằng)", description: "Tự động điều chỉnh mức độ suy luận", selected: true, badge: "Auto" },
+                            { id: "thinking", label: "Thinking (Suy luận sâu đa bước)", description: "Kích hoạt chuỗi tư duy mở rộng", selected: false, badge: "Think" },
+                            { id: "fast", label: "Fast (Phản hồi nhanh)", description: "Bỏ qua tư duy đa bước", selected: false, badge: "Fast" },
+                          ]
+                          : [];
 
-              // 3. Modes: Copilot (All 5 options). Gemini, Qwen, Claude, DeepSeek, ChatGPT, and Perplexity have no modes.
+              // 3. Modes: Copilot (All 5 options). Gemini, Qwen, Claude, DeepSeek, ChatGPT, Perplexity, and Kimi have no modes.
               const modes =
-                p.id === "gemini" || p.id === "qwen" || isClaude || isDeepSeek || isChatGPT || isPerplexity
+                p.id === "gemini" || p.id === "qwen" || isClaude || isDeepSeek || isChatGPT || isPerplexity || isKimi
                   ? []
                   : isCopilot && (!caps?.modes || caps.modes.length === 0)
                     ? [
@@ -424,10 +455,6 @@ export function ProviderModal({
 
               const currentModeId = modes.length > 0 ? (sel.mode_id || caps?.selected_mode_id || modes[0]?.id || (isCopilot ? "auto" : "standard")) : "";
               const currentMode = modes.length > 0 ? (modes.find((m) => m.id === currentModeId) || modes[0]) : undefined;
-
-              const isDeepThinking = sel.deep_thinking !== undefined ? sel.deep_thinking : (caps?.deep_thinking ?? false);
-              const isWebSearch = sel.web_search !== undefined ? sel.web_search : (caps?.web_search ?? true);
-              const isDeepResearch = sel.deep_research !== undefined ? sel.deep_research : (caps?.deep_research ?? false);
 
               return (
                 <div
@@ -819,7 +846,6 @@ export function ProviderModal({
                                   fontSize: 11,
                                   fontWeight: 700,
                                   color: "var(--brand-blue)",
-                                  textTransform: "uppercase",
                                   letterSpacing: "0.4px",
                                 }}
                               >
@@ -892,7 +918,6 @@ export function ProviderModal({
                                 fontSize: 11,
                                 fontWeight: 700,
                                 color: "var(--text-secondary)",
-                                textTransform: "uppercase",
                                 letterSpacing: "0.4px",
                               }}
                             >
@@ -999,6 +1024,191 @@ export function ProviderModal({
                           </span>
                         </div>
                       </div>
+                    ) : isKimi ? (
+                      /* Kimi: Row 1 = Model & Thinking Effort dropdowns, Row 2 = Deep Research toggle */
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 8,
+                          flexGrow: 1,
+                        }}
+                      >
+                        {/* Row 1: Model & Thinking Effort */}
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: 10,
+                          }}
+                        >
+                          {/* 1. Model Selector */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <label
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: "var(--text-secondary)",
+                                  letterSpacing: "0.4px",
+                                }}
+                              >
+                                Mô hình AI (Model)
+                              </label>
+                              {currentModel?.badge && (
+                                <span
+                                  style={{
+                                    fontSize: 9.5,
+                                    padding: "1px 5px",
+                                    borderRadius: 3,
+                                    backgroundColor: "var(--brand-blue)",
+                                    color: "#ffffff",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {currentModel.badge}
+                                </span>
+                              )}
+                            </div>
+                            <select
+                              value={currentModelId}
+                              onChange={(e) => {
+                                const targetM = models.find((m) => m.id === e.target.value);
+                                if (targetM?.disabled) return;
+                                onUpdateSelection?.(p.id, { model_id: e.target.value });
+                              }}
+                              style={{
+                                width: "100%",
+                                padding: "6px 8px",
+                                borderRadius: 6,
+                                border: "1px solid var(--border-default, #cbd5e1)",
+                                backgroundColor: "#ffffff",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: "var(--text-primary, #0f172a)",
+                                cursor: "pointer",
+                                outline: "none",
+                              }}
+                            >
+                              {models.map((m) => (
+                                <option key={m.id} value={m.id} disabled={m.disabled}>
+                                  {m.label}
+                                </option>
+                              ))}
+                            </select>
+                            <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
+                              {currentModel?.description || "Menu mô hình cạnh nút Gửi"}
+                            </span>
+                          </div>
+
+                          {/* 2. Thinking Effort Selector */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <label
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: "var(--text-secondary)",
+                                  letterSpacing: "0.4px",
+                                }}
+                              >
+                                Mức suy luận (Reasoning)
+                              </label>
+                              {currentThinking?.badge && (
+                                <span
+                                  style={{
+                                    fontSize: 9.5,
+                                    padding: "1px 5px",
+                                    borderRadius: 3,
+                                    backgroundColor: "#dbeafe",
+                                    color: "var(--brand-blue)",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {currentThinking.badge}
+                                </span>
+                              )}
+                            </div>
+                            <select
+                              value={currentThinkingId}
+                              onChange={(e) => {
+                                onUpdateSelection?.(p.id, { thinking_level_id: e.target.value });
+                              }}
+                              style={{
+                                width: "100%",
+                                padding: "6px 8px",
+                                borderRadius: 6,
+                                border: "1px solid var(--border-default, #cbd5e1)",
+                                backgroundColor: "#ffffff",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: "var(--text-primary, #0f172a)",
+                                cursor: "pointer",
+                                outline: "none",
+                              }}
+                            >
+                              {thinkingLevels.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.label}
+                                </option>
+                              ))}
+                            </select>
+                            <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
+                              {currentThinking?.description || "2 mức suy luận trong menu mô hình"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Row 2: Deep Research Toggle */}
+                        <div
+                          onClick={() => {
+                            const nextDr = !isDeepResearch;
+                            const updates: Partial<ProviderSelectionConfig> = { deep_research: nextDr };
+                            if (nextDr && (currentModelId === "instant" || !currentModelId || currentModelId === "default")) {
+                              updates.model_id = "k3";
+                            }
+                            onUpdateSelection?.(p.id, updates);
+                          }}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "8px 12px",
+                            borderRadius: 6,
+                            border: `1.5px solid ${isDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
+                            backgroundColor: isDeepResearch ? "#f5f3ff" : "#ffffff",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                            gap: '5px'
+                          }}
+                          title="Bật/Tắt tính năng Deep Research của Kimi (Nút phía dưới khung nhập liệu)"
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                            <SparklesIcon size={15} color={isDeepResearch ? "#7c3aed" : "#64748b"} />
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: isDeepResearch ? "#7c3aed" : "var(--text-primary, #0f172a)" }}>
+                                Deep Research
+                              </div>
+                              <div style={{ fontSize: 10, color: "var(--text-muted, #64748b)" }}>
+                                Nghiên cứu chuyên sâu đa nguồn (Nút nằm ở danh sách phía dưới khung nhập liệu)
+                              </div>
+                            </div>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: "2px 8px",
+                              borderRadius: 10,
+                              backgroundColor: isDeepResearch ? "#7c3aed" : "#e2e8f0",
+                              color: isDeepResearch ? "#ffffff" : "#64748b",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {isDeepResearch ? "BẬT" : "TẮT"}
+                          </span>
+                        </div>
+                      </div>
                     ) : (
                       /* Other AI Providers (Claude, Gemini, Qwen): Row 1 = Model & Reasoning, Row 2 = Mode */
                       <div
@@ -1017,7 +1227,6 @@ export function ProviderModal({
                                 fontSize: 11,
                                 fontWeight: 700,
                                 color: "var(--text-secondary)",
-                                textTransform: "uppercase",
                                 letterSpacing: "0.4px",
                               }}
                             >
@@ -1140,7 +1349,6 @@ export function ProviderModal({
                                   fontSize: 11,
                                   fontWeight: 700,
                                   color: "var(--text-secondary)",
-                                  textTransform: "uppercase",
                                   letterSpacing: "0.4px",
                                 }}
                               >

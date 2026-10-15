@@ -197,6 +197,52 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
       cachedSelections["perplexity"].deep_thinking = false;
       cachedSelections["perplexity"].web_search = true;
     }
+    if (cachedCaps["kimi"]) {
+      cachedCaps["kimi"].modes = [];
+      cachedCaps["kimi"].selected_mode_id = undefined;
+      const hasBadKimiModels =
+        !cachedCaps["kimi"].available_models ||
+        cachedCaps["kimi"].available_models.length === 0 ||
+        cachedCaps["kimi"].available_models.some((m) => m.id === "default");
+      if (hasBadKimiModels) {
+        cachedCaps["kimi"].available_models = [
+          { id: "instant", label: "Instant", description: "Fast chat, quick replies (Phản hồi nhanh)", selected: true, disabled: false, badge: "Instant" },
+          { id: "k3", label: "K3", description: "Chat & Agent, flagship all-rounder (Toàn diện, suy luận mạnh)", selected: false, disabled: false, badge: "K3" },
+          { id: "k2.8", label: "K2.8", description: "Preview · Well-rounded and efficient for everyday tasks", selected: false, disabled: false, badge: "Preview" },
+        ];
+        cachedCaps["kimi"].selected_model_id = "instant";
+      }
+      const hasBadKimiThinking =
+        !cachedCaps["kimi"].thinking_levels ||
+        cachedCaps["kimi"].thinking_levels.length === 0 ||
+        cachedCaps["kimi"].thinking_levels.some((t) => t.id === "auto");
+      if (hasBadKimiThinking) {
+        cachedCaps["kimi"].thinking_levels = [
+          { id: "standard", label: "Standard", description: "Suy luận tiêu chuẩn, phản hồi cân bằng", selected: false, disabled: false, badge: "Standard" },
+          { id: "high", label: "High", description: "Suy luận chuyên sâu cao nhất", selected: true, disabled: false, badge: "High" },
+        ];
+        cachedCaps["kimi"].selected_thinking_level_id = "high";
+      }
+      if (cachedCaps["kimi"].deep_research === undefined) cachedCaps["kimi"].deep_research = false;
+      if (cachedCaps["kimi"].web_search === undefined) cachedCaps["kimi"].web_search = true;
+    }
+    if (cachedSelections["kimi"]) {
+      cachedSelections["kimi"].mode_id = "";
+      if (cachedSelections["kimi"].deep_research === undefined) cachedSelections["kimi"].deep_research = false;
+      if (cachedSelections["kimi"].deep_research) {
+        if (!cachedSelections["kimi"].model_id || cachedSelections["kimi"].model_id === "instant" || cachedSelections["kimi"].model_id === "default") {
+          cachedSelections["kimi"].model_id = "k3";
+        }
+      } else {
+        if (!cachedSelections["kimi"].model_id || cachedSelections["kimi"].model_id === "default") {
+          cachedSelections["kimi"].model_id = "instant";
+        }
+      }
+      if (!cachedSelections["kimi"].thinking_level_id || cachedSelections["kimi"].thinking_level_id === "auto") {
+        cachedSelections["kimi"].thinking_level_id = "high";
+      }
+      if (cachedSelections["kimi"].web_search === undefined) cachedSelections["kimi"].web_search = true;
+    }
     saveStorage(CAPS_STORAGE_KEY, cachedCaps);
     saveStorage(SELECTIONS_STORAGE_KEY, cachedSelections);
     setCapabilitiesMap(cachedCaps);
@@ -266,6 +312,35 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           caps.deep_thinking = false;
           caps.web_search = true;
         }
+        if (p === "kimi" && caps) {
+          caps.modes = [];
+          caps.selected_mode_id = undefined;
+          const hasBadKimiModels =
+            !caps.available_models ||
+            caps.available_models.length === 0 ||
+            caps.available_models.some((m) => m.id === "default");
+          if (hasBadKimiModels) {
+            caps.available_models = [
+              { id: "instant", label: "Instant", description: "Fast chat, quick replies (Phản hồi nhanh)", selected: true, disabled: false, badge: "Instant" },
+              { id: "k3", label: "K3", description: "Chat & Agent, flagship all-rounder (Toàn diện, suy luận mạnh)", selected: false, disabled: false, badge: "K3" },
+              { id: "k2.8", label: "K2.8", description: "Preview · Well-rounded and efficient for everyday tasks", selected: false, disabled: false, badge: "Preview" },
+            ];
+            caps.selected_model_id = "instant";
+          }
+          const hasBadKimiThinking =
+            !caps.thinking_levels ||
+            caps.thinking_levels.length === 0 ||
+            caps.thinking_levels.some((t) => t.id === "auto");
+          if (hasBadKimiThinking) {
+            caps.thinking_levels = [
+              { id: "standard", label: "Standard", description: "Suy luận tiêu chuẩn, phản hồi cân bằng", selected: false, disabled: false, badge: "Standard" },
+              { id: "high", label: "High", description: "Suy luận chuyên sâu cao nhất", selected: true, disabled: false, badge: "High" },
+            ];
+            caps.selected_thinking_level_id = "high";
+          }
+          if (caps.deep_research === undefined) caps.deep_research = false;
+          if (caps.web_search === undefined) caps.web_search = true;
+        }
         setCapabilitiesMap((prev) => {
           const updated = { ...prev, [p]: caps };
           saveStorage(CAPS_STORAGE_KEY, updated);
@@ -280,17 +355,25 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           const isDeepSeek = p === "deepseek";
           const isClaude = p === "claude";
           const isPerplexity = p === "perplexity";
+          const isKimi = p === "kimi";
 
-          // Safe model for Claude (fallback to sonnet if opus/fable/default was stored)
+          // Safe model for Claude & Kimi
+          const isKimiDeepResearch = isKimi && (existing.deep_research !== undefined ? existing.deep_research : (caps.deep_research ?? false));
           const rawModelId = existing.model_id || caps.selected_model_id || caps.available_models.find((m) => !m.disabled)?.id || "";
           const safeModelId = isClaude && (!rawModelId || rawModelId === "default" || rawModelId === "claude-opus-5.5" || rawModelId === "claude-fable-5.1")
             ? "claude-sonnet-5.5"
+            : isKimi && isKimiDeepResearch && (!rawModelId || rawModelId === "instant" || rawModelId === "default")
+            ? "k3"
+            : isKimi && (!rawModelId || rawModelId === "default")
+            ? "instant"
             : rawModelId;
 
           // Safe thinking for Claude (fallback to medium if "auto" was stored from prior bug)
-          const defaultThinking = isClaude ? "medium" : "";
+          const defaultThinking = isClaude ? "medium" : isKimi ? "high" : "";
           const safeThinking = isClaude && (!existing.thinking_level_id || existing.thinking_level_id === "auto")
             ? (caps.selected_thinking_level_id || "medium")
+            : isKimi && (!existing.thinking_level_id || existing.thinking_level_id === "auto")
+            ? (caps.selected_thinking_level_id || "high")
             : (existing.thinking_level_id || caps.selected_thinking_level_id || caps.thinking_levels[0]?.id || defaultThinking);
 
           const updated = {
@@ -304,7 +387,7 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
               thinking_level_id: (isDeepSeek || isCopilot || isChatGPT || isPerplexity)
                 ? ""
                 : safeThinking,
-              mode_id: (isDeepSeek || isChatGPT || isPerplexity)
+              mode_id: (isDeepSeek || isChatGPT || isPerplexity || isKimi)
                 ? ""
                 : existing.mode_id || caps.selected_mode_id || caps.modes[0]?.id || (isCopilot ? "auto" : ""),
               deep_thinking: isPerplexity
@@ -312,12 +395,12 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
                 : (isDeepSeek || isChatGPT)
                 ? (existing.deep_thinking !== undefined ? existing.deep_thinking : (caps.deep_thinking ?? false))
                 : existing.deep_thinking,
-              web_search: isPerplexity
+              web_search: isPerplexity || isKimi
                 ? true
                 : (isDeepSeek || isChatGPT)
                 ? (existing.web_search !== undefined ? existing.web_search : (caps.web_search ?? true))
                 : existing.web_search,
-              deep_research: isChatGPT
+              deep_research: (isChatGPT || isKimi)
                 ? (existing.deep_research !== undefined ? existing.deep_research : (caps.deep_research ?? false))
                 : existing.deep_research,
             },
@@ -383,11 +466,22 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
         const existing = prev[p] || {};
         const isChatGPT = p === "chatgpt";
         const isPerplexity = p === "perplexity";
-        const safeUpdates = isChatGPT
-          ? { ...updates, model_id: "", thinking_level_id: "", mode_id: "" }
-          : isPerplexity
-          ? { ...updates, model_id: "auto", thinking_level_id: "", mode_id: "", deep_thinking: false, web_search: true }
-          : updates;
+        const isKimi = p === "kimi";
+        let safeUpdates = updates;
+        if (isChatGPT) {
+          safeUpdates = { ...updates, model_id: "", thinking_level_id: "", mode_id: "" };
+        } else if (isPerplexity) {
+          safeUpdates = { ...updates, model_id: "auto", thinking_level_id: "", mode_id: "", deep_thinking: false, web_search: true };
+        } else if (isKimi) {
+          safeUpdates = { ...updates, mode_id: "" };
+          const willBeDeepResearch = updates.deep_research !== undefined ? updates.deep_research : existing.deep_research;
+          if (willBeDeepResearch) {
+            const currentOrUpdatedModel = updates.model_id !== undefined ? updates.model_id : existing.model_id;
+            if (!currentOrUpdatedModel || currentOrUpdatedModel === "instant" || currentOrUpdatedModel === "default") {
+              safeUpdates.model_id = "k3";
+            }
+          }
+        }
         const updated = {
           ...prev,
           [p]: { ...existing, ...safeUpdates },

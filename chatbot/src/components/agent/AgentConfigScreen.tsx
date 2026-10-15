@@ -159,6 +159,28 @@ export function AgentConfigScreen({
       return;
     }
 
+    if (selectedOrchestrator === "kimi") {
+      setOrchMode("");
+      const isDr = orchSel?.deep_research !== undefined ? orchSel.deep_research : (orchCaps?.deep_research ?? false);
+      setOrchDeepResearch(isDr);
+      const chosenModel = orchSel?.model_id || orchCaps?.selected_model_id || (orchCaps?.available_models && orchCaps.available_models.length > 0 ? orchCaps.available_models[0].id : "instant");
+      if (isDr && (chosenModel === "instant" || !chosenModel || chosenModel === "default")) {
+        setOrchModel("k3");
+      } else {
+        setOrchModel(chosenModel || "instant");
+      }
+      if (orchSel?.thinking_level_id) {
+        setOrchThinkingLevel(orchSel.thinking_level_id);
+      } else if (orchCaps?.selected_thinking_level_id) {
+        setOrchThinkingLevel(orchCaps.selected_thinking_level_id);
+      } else if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0) {
+        setOrchThinkingLevel(orchCaps.thinking_levels[0].id);
+      } else {
+        setOrchThinkingLevel("high");
+      }
+      return;
+    }
+
     if (selectedOrchestrator === "copilot") {
       setOrchModel("");
       setOrchThinkingLevel("");
@@ -256,6 +278,28 @@ export function AgentConfigScreen({
       setLeadMode("");
       setLeadDeepThinking(false);
       setLeadWebSearch(true);
+      return;
+    }
+
+    if (selectedLead === "kimi") {
+      setLeadMode("");
+      const isDr = leadSel?.deep_research !== undefined ? leadSel.deep_research : (leadCaps?.deep_research ?? false);
+      setLeadDeepResearch(isDr);
+      const chosenModel = leadSel?.model_id || leadCaps?.selected_model_id || (leadCaps?.available_models && leadCaps.available_models.length > 0 ? leadCaps.available_models[0].id : "instant");
+      if (isDr && (chosenModel === "instant" || !chosenModel || chosenModel === "default")) {
+        setLeadModel("k3");
+      } else {
+        setLeadModel(chosenModel || "instant");
+      }
+      if (leadSel?.thinking_level_id) {
+        setLeadThinkingLevel(leadSel.thinking_level_id);
+      } else if (leadCaps?.selected_thinking_level_id) {
+        setLeadThinkingLevel(leadCaps.selected_thinking_level_id);
+      } else if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0) {
+        setLeadThinkingLevel(leadCaps.thinking_levels[0].id);
+      } else {
+        setLeadThinkingLevel("high");
+      }
       return;
     }
 
@@ -381,10 +425,28 @@ export function AgentConfigScreen({
         { id: "glm-4-plus", label: "GLM-4 Plus", badge: "GLM" },
       ];
     }
+    if (selectedOrchestrator === "kimi") {
+      const kimiFallbackModels: AgentOption[] = [
+        { id: "instant", label: "Instant (Phản hồi nhanh)", badge: "Fast" },
+        { id: "k3", label: "K3 (Chat & Agent)", badge: "All-Rounder" },
+        { id: "k2.8", label: "K2.8 (Preview · Well-rounded)", badge: "Preview" },
+      ];
+      const baseModels = orchCaps?.available_models && orchCaps.available_models.length > 0 && !orchCaps.available_models.some((m) => m.id === "default")
+        ? orchCaps.available_models
+        : kimiFallbackModels;
+      return baseModels.map((m) => {
+        const isInstantDisabled = orchDeepResearch && m.id === "instant";
+        return {
+          ...m,
+          disabled: isInstantDisabled || m.disabled,
+          badge: isInstantDisabled ? "Không hỗ trợ DR" : m.badge,
+        };
+      });
+    }
     return [
       { id: "default", label: orchProviderObj?.modelName || "Mặc định" },
     ];
-  }, [orchCaps, selectedOrchestrator, orchProviderObj]);
+  }, [orchCaps, selectedOrchestrator, orchProviderObj, orchDeepResearch]);
 
   // Computed thinking levels for Orchestrator
   const orchThinkingLevels = useMemo<AgentOption[]>(() => {
@@ -417,12 +479,22 @@ export function AgentConfigScreen({
         { id: "max", label: "Tối đa (Max)", badge: "Max" },
       ];
     }
+    if (selectedOrchestrator === "kimi") {
+      const kimiFallbackThinking: AgentOption[] = [
+        { id: "standard", label: "Standard (Tiêu chuẩn)", badge: "Standard" },
+        { id: "high", label: "High (Chuyên sâu)", badge: "High" },
+      ];
+      if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0) {
+        return orchCaps.thinking_levels;
+      }
+      return kimiFallbackThinking;
+    }
     return [];
   }, [orchCaps, selectedOrchestrator]);
 
   // Computed modes for Orchestrator
   const orchModes = useMemo<AgentOption[]>(() => {
-    if (selectedOrchestrator === "gemini" || selectedOrchestrator === "qwen" || selectedOrchestrator === "claude" || selectedOrchestrator === "deepseek" || selectedOrchestrator === "chatgpt" || selectedOrchestrator === "perplexity") {
+    if (selectedOrchestrator === "gemini" || selectedOrchestrator === "qwen" || selectedOrchestrator === "claude" || selectedOrchestrator === "deepseek" || selectedOrchestrator === "chatgpt" || selectedOrchestrator === "perplexity" || selectedOrchestrator === "kimi") {
       return [];
     }
     if (orchCaps?.modes && orchCaps.modes.length > 0) {
@@ -510,10 +582,28 @@ export function AgentConfigScreen({
         { id: "glm-4-plus", label: "GLM-4 Plus", badge: "GLM" },
       ];
     }
+    if (selectedLead === "kimi") {
+      const kimiFallbackModels: AgentOption[] = [
+        { id: "instant", label: "Instant (Phản hồi nhanh)", badge: "Fast" },
+        { id: "k3", label: "K3 (Chat & Agent)", badge: "All-Rounder" },
+        { id: "k2.8", label: "K2.8 (Preview · Well-rounded)", badge: "Preview" },
+      ];
+      const baseModels = leadCaps?.available_models && leadCaps.available_models.length > 0 && !leadCaps.available_models.some((m) => m.id === "default")
+        ? leadCaps.available_models
+        : kimiFallbackModels;
+      return baseModels.map((m) => {
+        const isInstantDisabled = leadDeepResearch && m.id === "instant";
+        return {
+          ...m,
+          disabled: isInstantDisabled || m.disabled,
+          badge: isInstantDisabled ? "Không hỗ trợ DR" : m.badge,
+        };
+      });
+    }
     return [
       { id: "default", label: leadProviderObj?.modelName || "Mặc định" },
     ];
-  }, [leadCaps, selectedLead, leadProviderObj]);
+  }, [leadCaps, selectedLead, leadProviderObj, leadDeepResearch]);
 
   // Computed thinking levels for Lead Provider
   const leadThinkingLevels = useMemo<AgentOption[]>(() => {
@@ -546,12 +636,22 @@ export function AgentConfigScreen({
         { id: "max", label: "Tối đa (Max)", badge: "Max" },
       ];
     }
+    if (selectedLead === "kimi") {
+      const kimiFallbackThinking: AgentOption[] = [
+        { id: "standard", label: "Standard (Tiêu chuẩn)", badge: "Standard" },
+        { id: "high", label: "High (Chuyên sâu)", badge: "High" },
+      ];
+      if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0) {
+        return leadCaps.thinking_levels;
+      }
+      return kimiFallbackThinking;
+    }
     return [];
   }, [leadCaps, selectedLead]);
 
   // Computed modes for Lead Provider
   const leadModes = useMemo<AgentOption[]>(() => {
-    if (selectedLead === "gemini" || selectedLead === "qwen" || selectedLead === "claude" || selectedLead === "deepseek" || selectedLead === "chatgpt" || selectedLead === "perplexity") {
+    if (selectedLead === "gemini" || selectedLead === "qwen" || selectedLead === "claude" || selectedLead === "deepseek" || selectedLead === "chatgpt" || selectedLead === "perplexity" || selectedLead === "kimi") {
       return [];
     }
     if (leadCaps?.modes && leadCaps.modes.length > 0) {
@@ -585,7 +685,7 @@ export function AgentConfigScreen({
   const handleSelectTopThinkingDelegated = () => {
     setSelectedDelegatedProviders(
       availableProviders
-        .filter((p) => p.supportsDeepMode || ["deepseek", "qwen", "gemini", "chatgpt", "copilot", "claude", "perplexity"].includes(p.id))
+        .filter((p) => p.supportsDeepMode || ["deepseek", "qwen", "gemini", "chatgpt", "copilot", "claude", "perplexity", "kimi"].includes(p.id))
         .map((p) => p.id)
     );
   };
@@ -693,6 +793,14 @@ export function AgentConfigScreen({
       orchConfig.web_search = true;
       orchConfig.mode = "";
       orchConfig.mode_id = "";
+    } else if (selectedOrchestrator === "kimi") {
+      orchConfig.model = orchModel || "instant";
+      orchConfig.model_id = orchModel || "instant";
+      orchConfig.thinking_level_id = orchThinkingLevel || "high";
+      orchConfig.thinking = orchThinkingLevel || "high";
+      orchConfig.deep_research = orchDeepResearch;
+      orchConfig.mode = "";
+      orchConfig.mode_id = "";
     } else if (selectedOrchestrator === "zhipu") {
       orchConfig.model = orchModel || "glm-5.3";
       orchConfig.mode = orchMode || "high";
@@ -743,6 +851,14 @@ export function AgentConfigScreen({
       leadConfig.thinking = false;
       leadConfig.deep_thinking = false;
       leadConfig.web_search = true;
+      leadConfig.mode = "";
+      leadConfig.mode_id = "";
+    } else if (selectedLead === "kimi") {
+      leadConfig.model = leadModel || "instant";
+      leadConfig.model_id = leadModel || "instant";
+      leadConfig.thinking_level_id = leadThinkingLevel || "high";
+      leadConfig.thinking = leadThinkingLevel || "high";
+      leadConfig.deep_research = leadDeepResearch;
       leadConfig.mode = "";
       leadConfig.mode_id = "";
     }
@@ -1212,6 +1328,53 @@ export function AgentConfigScreen({
                         />
                         <span>Kích hoạt Thinking / Deep Reasoning Mode</span>
                       </label>
+                    )}
+
+                    {/* Kimi Deep Research Toggle */}
+                    {selectedOrchestrator === "kimi" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = !orchDeepResearch;
+                          setOrchDeepResearch(nextVal);
+                          if (nextVal && (orchModel === "instant" || !orchModel || orchModel === "default")) {
+                            setOrchModel("k3");
+                            onUpdateSelection?.(selectedOrchestrator, { deep_research: nextVal, model_id: "k3" });
+                          } else {
+                            onUpdateSelection?.(selectedOrchestrator, { deep_research: nextVal });
+                          }
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-sm, 6px)",
+                          border: `1.5px solid ${orchDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
+                          backgroundColor: orchDeepResearch ? "#f5f3ff" : "#ffffff",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: orchDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Bật/Tắt chế độ Deep Research của Moonshot Kimi"
+                      >
+                        <SparklesIcon size={14} color={orchDeepResearch ? "#7c3aed" : "#64748b"} />
+                        <span>Deep Research</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 10,
+                            backgroundColor: orchDeepResearch ? "#7c3aed" : "#e2e8f0",
+                            color: orchDeepResearch ? "#ffffff" : "#64748b",
+                          }}
+                        >
+                          {orchDeepResearch ? "BẬT" : "TẮT"}
+                        </span>
+                      </button>
                     )}
 
                     {/* 3. Mode Selector */}
@@ -1733,6 +1896,53 @@ export function AgentConfigScreen({
                         />
                         <span>Kích hoạt Suy luận sâu (Thinking / Deep Research) cho Lead Provider</span>
                       </label>
+                    )}
+
+                    {/* Kimi Deep Research Toggle */}
+                    {selectedLead === "kimi" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = !leadDeepResearch;
+                          setLeadDeepResearch(nextVal);
+                          if (nextVal && (leadModel === "instant" || !leadModel || leadModel === "default")) {
+                            setLeadModel("k3");
+                            onUpdateSelection?.(selectedLead, { deep_research: nextVal, model_id: "k3" });
+                          } else {
+                            onUpdateSelection?.(selectedLead, { deep_research: nextVal });
+                          }
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-sm, 6px)",
+                          border: `1.5px solid ${leadDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
+                          backgroundColor: leadDeepResearch ? "#f5f3ff" : "#ffffff",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: leadDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Bật/Tắt chế độ Deep Research của Moonshot Kimi"
+                      >
+                        <SparklesIcon size={14} color={leadDeepResearch ? "#7c3aed" : "#64748b"} />
+                        <span>Deep Research</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 10,
+                            backgroundColor: leadDeepResearch ? "#7c3aed" : "#e2e8f0",
+                            color: leadDeepResearch ? "#ffffff" : "#64748b",
+                          }}
+                        >
+                          {leadDeepResearch ? "BẬT" : "TẮT"}
+                        </span>
+                      </button>
                     )}
 
                     {/* 3. Mode Selector */}
