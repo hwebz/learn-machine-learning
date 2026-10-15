@@ -592,7 +592,15 @@ async def worker_loop(queue: object) -> None:
         if event is None:
             event = asyncio.Event()
         try:
-            await run_pipeline(job_id, event)
+            async with SessionLocal() as session:
+                job = await session.get(Job, job_id)
+                job_type = getattr(job, "job_type", "research") if job else "research"
+
+            if job_type == "agent":
+                from app.orchestrator.agent_pipeline import run_agent_pipeline
+                await run_agent_pipeline(job_id, event)
+            else:
+                await run_pipeline(job_id, event)
         finally:
             queue.done(job_id)
 

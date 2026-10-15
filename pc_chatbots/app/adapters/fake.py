@@ -56,7 +56,41 @@ class FakeAdapter:
         started = datetime.now(timezone.utc)
         source = "https://example.com/research-method"
         title = "Example research method"
-        answer = f"This is a placeholder response for the requested research. Provider: {self.name}."
+
+        if "agents_dispatch" in prompt or "Research Orchestrator" in prompt:
+            import json
+            answer = json.dumps({
+                "research_topic": prompt.split("\n")[-1].strip() or "Nghiên cứu công nghệ",
+                "agents_dispatch": [
+                    {
+                        "id": "deepseek",
+                        "name": "DeepSeek",
+                        "config": {"thinking": True},
+                        "sub_topic": "Kiến trúc mô hình và giải thuật chuyên sâu",
+                        "question": "Phân tích các giải thuật và cấu trúc mô hình nền tảng.",
+                    },
+                    {
+                        "id": "perplexity",
+                        "name": "Perplexity",
+                        "config": {"thinking": True},
+                        "sub_topic": "Dữ liệu ứng dụng thực tế và nguồn kiểm chứng",
+                        "question": "Tìm kiếm các bằng chứng và số liệu ứng dụng thực tế trên toàn cầu.",
+                    },
+                ],
+            }, ensure_ascii=False)
+        elif "Lead Research Synthesizer" in prompt or "TONE DIRECTIVE" in prompt:
+            answer = (
+                f"# Báo cáo Nghiên cứu Chuyên sâu (Lead: {self.name})\n\n"
+                "## 1. Tổng quan & Luận điểm chính\n"
+                "Kết quả nghiên cứu đã được tổng hợp mạch lạc từ các nhánh điều tra chuyên biệt.\n\n"
+                "## 2. Phân tích chi tiết theo nguồn dẫn\n"
+                "- Nhánh thuật toán đã làm rõ cơ chế suy luận và tính toán.\n"
+                "- Nhánh dữ liệu thực tế đã bổ sung các trường hợp thành công nổi bật.\n\n"
+                "## 3. Kết luận & Đề xuất hành động\n"
+                "Hệ thống đa tác nhân đã hoàn thành việc khảo sát và đúc kết tri thức toàn diện."
+            )
+        else:
+            answer = f"This is a placeholder response for the requested research. Provider: {self.name}."
         return ProviderResult(
             provider=self.name,
             prompt=prompt,

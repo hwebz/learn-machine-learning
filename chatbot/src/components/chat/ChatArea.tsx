@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { ChatSession, ProviderInfo, StepLog, ThinkingStep, SourceLink, Message } from "../../types/chat";
 import { SUGGESTED_PROMPTS } from "../../lib/constants";
 import { extractProviderResponse } from "../../lib/providerResponse";
 import { MarkdownContent } from "./MarkdownContent";
 import { ProviderActionBanner } from "./ProviderActionBanner";
+import { ScrollableTabsRow } from "./ScrollableTabsRow";
+import { AgentDispatchBanner } from "../agent/AgentDispatchBanner";
 import { detectAllProvidersNeedingAction } from "../../lib/providerAction";
 import { useVoiceRecording } from "../../lib/useVoiceRecording";
 import {
@@ -639,27 +641,24 @@ export function ChatArea({
   const [canScrollTop, setCanScrollTop] = useState(false);
   const [canScrollBottom, setCanScrollBottom] = useState(false);
   const [showScrollNav, setShowScrollNav] = useState(false);
-  const [isAutoScrollPaused, setIsAutoScrollPaused] = useState(false);
   const [activeStreamingTab, setActiveStreamingTab] = useState<string>("");
+  const wasGeneratingRef = useRef<boolean>(false);
+  const userSelectedStreamingTabRef = useRef<string | null>(null);
 
-  const isAutoScrollPausedRef = useRef(false);
-  const isProgrammaticScrollRef = useRef(false);
-  const lastScrollTopRef = useRef<number>(0);
-
+  // When a brand-new generation starts, clear manual tab selection so default staging can begin
   useEffect(() => {
-    isAutoScrollPausedRef.current = isAutoScrollPaused;
-  }, [isAutoScrollPaused]);
-
-  // When a new generation starts, re-enable auto bottom scrolling and reset active streaming tab
-  useEffect(() => {
-    if (isGenerating) {
-      setIsAutoScrollPaused(false);
-      isAutoScrollPausedRef.current = false;
-      if (selectedProviders.length > 0) {
-        setActiveStreamingTab(selectedProviders[0].id);
-      }
+    if (!wasGeneratingRef.current && isGenerating) {
+      userSelectedStreamingTabRef.current = null;
+      setActiveStreamingTab("");
     }
-  }, [isGenerating, selectedProviders]);
+    wasGeneratingRef.current = isGenerating;
+  }, [isGenerating]);
+
+  // Reset tab selection when session changes
+  useEffect(() => {
+    userSelectedStreamingTabRef.current = null;
+    setActiveStreamingTab("");
+  }, [session.id]);
 
   const checkScrollState = useCallback(() => {
     const el = messagesContainerRef.current;
@@ -671,19 +670,6 @@ export function ChatArea({
 
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
     setCanScrollBottom(distanceFromBottom > 40);
-
-    // If user scrolled up manually away from the bottom
-    if (!isProgrammaticScrollRef.current) {
-      if (scrollTop < lastScrollTopRef.current - 5 && distanceFromBottom > 50) {
-        setIsAutoScrollPaused(true);
-        isAutoScrollPausedRef.current = true;
-      } else if (distanceFromBottom <= 25 && isAutoScrollPausedRef.current) {
-        // If user manually scrolled all the way back to the bottom, re-engage auto-scroll
-        setIsAutoScrollPaused(false);
-        isAutoScrollPausedRef.current = false;
-      }
-    }
-    lastScrollTopRef.current = scrollTop;
   }, []);
 
   useEffect(() => {
@@ -691,40 +677,79 @@ export function ChatArea({
     if (!el) return;
     checkScrollState();
 
-    const handleWheel = (e: WheelEvent) => {
-      if (e.deltaY < 0) {
-        // User scrolled mouse wheel up -> interrupt auto-scroll
-        setIsAutoScrollPaused(true);
-        isAutoScrollPausedRef.current = true;
-      }
-    };
-
-    let touchStartY = 0;
-    const handleTouchStart = (e: TouchEvent) => {
-      touchStartY = e.touches[0].clientY;
-    };
-    const handleTouchMove = (e: TouchEvent) => {
-      const touchY = e.touches[0].clientY;
-      if (touchY > touchStartY + 10) {
-        // User swiped down to see older messages -> interrupt auto-scroll
-        setIsAutoScrollPaused(true);
-        isAutoScrollPausedRef.current = true;
-      }
-    };
-
     el.addEventListener("scroll", checkScrollState, { passive: true });
-    el.addEventListener("wheel", handleWheel, { passive: true });
-    el.addEventListener("touchstart", handleTouchStart, { passive: true });
-    el.addEventListener("touchmove", handleTouchMove, { passive: true });
     window.addEventListener("resize", checkScrollState);
     return () => {
       el.removeEventListener("scroll", checkScrollState);
-      el.removeEventListener("wheel", handleWheel);
-      el.removeEventListener("touchstart", handleTouchStart);
-      el.removeEventListener("touchmove", handleTouchMove);
       window.removeEventListener("resize", checkScrollState);
     };
   }, [checkScrollState]);
+
+  // Keep scroll navigation buttons state in sync when messages or active steps change (without auto-scrolling)
+  useEffect(() => {
+    checkScrollState();
+  }, [session.messages, activeSteps, checkScrollState]);
+
+  // Derive live Agent Dispatch Plan from activeSteps if not yet stored on session
+  const liveDispatchPlan = useMemo(() => {
+    if (session.orchestrator_dispatch && session.orchestrator_dispatch.length > 0) {
+      return session.orchestrator_dispatch;
+    }
+    for (let i = activeSteps.length - 1; i >= 0; i--) {
+      const d = activeSteps[i].data?.dispatch;
+      if (Array.isArray(d) && d.length > 0) return d;
+    }
+    return undefined;
+  }, [session.orchestrator_dispatch, activeSteps]);
+
+  // Derive live Completed Subtask Runs from activeSteps during generation
+  const liveProviderRuns = useMemo(() => {
+    const runsMap = new Map<string, any>();
+    for (const st of activeSteps) {
+      if (st.data?.role === "subtask") {
+        const branchIdx = st.data.branch_index || 1;
+        const k = st.data.provider_role_key || st.data.subtask_id || `${st.provider}_${branchIdx}`;
+        if (
+          st.step === "completed" ||
+          st.data.status === "ok" ||
+          st.data.status === "completed" ||
+          st.data.status === "error" ||
+          st.data.status === "failed" ||
+          st.data.answer_md ||
+          st.data.answer_markdown
+        ) {
+          runsMap.set(k, {
+            provider: st.provider || st.data.provider,
+            branch: st.data.branch,
+            branch_index: branchIdx,
+            provider_role_key: st.data.provider_role_key || k,
+            subtask_id: st.data.subtask_id,
+            status: st.data.status || (st.step === "completed" ? "ok" : "completed"),
+            elapsed_s: st.data.elapsed_s,
+            elapsed_ms: st.data.elapsed_ms,
+            answer_md: st.data.answer_md || st.data.answer_markdown,
+          });
+        }
+      }
+    }
+    return Array.from(runsMap.values());
+  }, [activeSteps]);
+
+  // Derive live Agent Overall Status from activeSteps & session
+  const liveAgentStatus = useMemo(() => {
+    if (session.status === "completed" || session.status === "failed" || session.status === "cancelled") {
+      return session.status;
+    }
+    for (let i = activeSteps.length - 1; i >= 0; i--) {
+      const st = activeSteps[i];
+      const jobStatus = (st.data as any)?.job_status;
+      if (jobStatus && jobStatus !== "running") return jobStatus;
+      if (st.data?.role === "lead" || st.message?.includes("Lead Provider")) return "leading";
+      if (st.data?.role === "subtask" || st.step === "orchestrator_result" || st.data?.dispatch) return "researching";
+      if (st.data?.role === "orchestrator") return "orchestrating";
+    }
+    return session.status || "orchestrating";
+  }, [session.status, activeSteps]);
 
   const scrollToTop = () => {
     if (messagesContainerRef.current) {
@@ -736,11 +761,6 @@ export function ChatArea({
   };
 
   const scrollToBottom = () => {
-    // Unpause auto-scroll and re-bind it
-    setIsAutoScrollPaused(false);
-    isAutoScrollPausedRef.current = false;
-    isProgrammaticScrollRef.current = true;
-
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTo({
         top: messagesContainerRef.current.scrollHeight,
@@ -749,26 +769,7 @@ export function ChatArea({
     } else {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-
-    setTimeout(() => {
-      isProgrammaticScrollRef.current = false;
-    }, 450);
   };
-
-  // Auto-scroll to bottom on new message or live streaming updates if not paused by user
-  useEffect(() => {
-    if (isAutoScrollPausedRef.current) return;
-    const el = messagesContainerRef.current;
-    if (!el) return;
-
-    isProgrammaticScrollRef.current = true;
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-
-    const timer = setTimeout(() => {
-      isProgrammaticScrollRef.current = false;
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [session.messages, isGenerating, activeSteps, isAutoScrollPaused]);
 
   // Adjust textarea height automatically
   useEffect(() => {
@@ -796,8 +797,6 @@ export function ChatArea({
       const attachmentsList = attachedFiles.map((f) => `[Tệp đính kèm: ${f.name} (${f.size})]`).join(" ");
       finalPrompt = finalPrompt ? `${finalPrompt}\n\n${attachmentsList}` : attachmentsList;
     }
-    setIsAutoScrollPaused(false);
-    isAutoScrollPausedRef.current = false;
     onSendMessage(finalPrompt);
     setInputText("");
     setAttachedFiles([]);
@@ -1148,6 +1147,22 @@ export function ChatArea({
                   );
                 })()}
 
+                {/* Agent Orchestrator Multi-Provider Plan & Synthesis Banner */}
+                {(msg.job_type === "agent" || session.job_type === "agent") && (
+                  <AgentDispatchBanner
+                    orchestratorProvider={msg.orchestrator_provider || session.orchestrator_provider}
+                    leadProvider={msg.lead_provider || session.lead_provider}
+                    tone={msg.tone || session.tone}
+                    dispatchPlan={msg.orchestrator_dispatch || session.orchestrator_dispatch}
+                    status={session.status}
+                    providerRuns={msg.provider_runs}
+                    steps={msg.steps || activeSteps}
+                    topic={session.title || msg.content}
+                    message={msg}
+                    onSelectThinking={onSelectThinking}
+                  />
+                )}
+
                 {/* Main Content Body with Full Markdown & Syntax Highlighter */}
                 <div className="message-content-body">
                   <MarkdownContent content={msg.content} />
@@ -1325,6 +1340,20 @@ export function ChatArea({
                 );
               })()}
 
+              {session.job_type === "agent" && (
+                <AgentDispatchBanner
+                  orchestratorProvider={session.orchestrator_provider}
+                  leadProvider={session.lead_provider}
+                  tone={session.tone}
+                  dispatchPlan={liveDispatchPlan}
+                  status={liveAgentStatus}
+                  providerRuns={liveProviderRuns}
+                  steps={activeSteps}
+                  topic={session.title || session.messages[0]?.content}
+                  onSelectThinking={onSelectThinking}
+                />
+              )}
+
               {/* Active Step in message-steps-accordion (Only 1 active step shown) */}
               {(() => {
                 const activeStep = activeSteps.length > 0 ? activeSteps[activeSteps.length - 1] : null;
@@ -1447,7 +1476,267 @@ export function ChatArea({
 
               {/* Real-time Streaming Response - Reusing real response preview with markdown-rendered-content */}
               {(() => {
-                // Determine candidate providers for this run
+                // Check if this active run is an Agent job
+                const isAgentRun =
+                  session?.job_type === "agent" ||
+                  Boolean(session?.orchestrator_provider) ||
+                  activeSteps.some((st) => st.data?.role || st.data?.dispatch);
+
+                if (isAgentRun) {
+                  const orchProv = normalizeProvider(session?.orchestrator_provider || "gemini");
+                  const leadProv = normalizeProvider(session?.lead_provider || "chatgpt");
+                  const dispatchPlan = liveDispatchPlan || [];
+
+                  interface AgentStreamCandidate {
+                    key: string;
+                    label: string;
+                    providerId: string;
+                    role: "orchestrator" | "subtask" | "lead";
+                    roleTag: string;
+                  }
+
+                  const candidates: AgentStreamCandidate[] = [];
+
+                  // 1. Orchestrator
+                  candidates.push({
+                    key: "orchestrator",
+                    label: orchProv.toUpperCase(),
+                    providerId: orchProv,
+                    role: "orchestrator",
+                    roleTag: "Orchestrator",
+                  });
+
+                  // 2. Subtasks
+                  dispatchPlan.forEach((item: any, idx: number) => {
+                    const branchIdx = item.branch_index || (idx + 1);
+                    const sp = normalizeProvider(item.id);
+                    const k = item.provider_role_key || `subtask:${sp}_${branchIdx}`;
+                    candidates.push({
+                      key: k,
+                      label: item.name || sp.toUpperCase(),
+                      providerId: sp,
+                      role: "subtask",
+                      roleTag: `Nhánh #${branchIdx}`,
+                    });
+                  });
+
+                  // 3. Lead Synthesizer
+                  candidates.push({
+                    key: "lead",
+                    label: leadProv.toUpperCase(),
+                    providerId: leadProv,
+                    role: "lead",
+                    roleTag: "Lead Synthesizer",
+                  });
+
+                  // Collect streaming text for each candidate
+                  const streamingTextByKey: Record<string, string> = {};
+                  for (let i = activeSteps.length - 1; i >= 0; i--) {
+                    const st = activeSteps[i];
+                    const text = (st.streamingText || (st.data as any)?.streaming_text || "").trim();
+                    if (!text) continue;
+
+                    const stKey = st.data?.provider_role_key;
+                    const stRole = st.data?.role || ((st.status as string) === "orchestrating" ? "orchestrator" : (st.status as string) === "leading" ? "lead" : undefined);
+
+                    if (stKey && !streamingTextByKey[stKey]) {
+                      streamingTextByKey[stKey] = text;
+                    }
+                    if (stRole === "orchestrator" && !streamingTextByKey["orchestrator"]) {
+                      streamingTextByKey["orchestrator"] = text;
+                    }
+                    if (stRole === "lead" && !streamingTextByKey["lead"]) {
+                      streamingTextByKey["lead"] = text;
+                    }
+                    if (stRole === "subtask") {
+                      for (const c of candidates) {
+                        if (c.role === "subtask" && !streamingTextByKey[c.key]) {
+                          if (st.data?.provider_role_key === c.key ||
+                              (st.data?.subtask_id && st.data.subtask_id.includes(c.key)) ||
+                              (st.data?.branch && c.label.includes(st.data.branch))) {
+                            streamingTextByKey[c.key] = text;
+                          }
+                        }
+                      }
+                    }
+                  }
+
+                  const hasAnyText = Object.values(streamingTextByKey).some((t) => t.length > 0);
+                  if (!hasAnyText && candidates.length === 0) return null;
+
+                  // Pick active tab: priority to user explicit choice, then active stage
+                  let defaultKey = "orchestrator";
+                  if (liveAgentStatus === "leading") defaultKey = "lead";
+                  else if (liveAgentStatus === "researching") {
+                    const firstSub = candidates.find((c) => c.role === "subtask" && streamingTextByKey[c.key]);
+                    defaultKey = firstSub?.key || candidates.find((c) => c.role === "subtask")?.key || "orchestrator";
+                  }
+
+                  const userChoice = userSelectedStreamingTabRef.current;
+                  const currentTabKey =
+                    userChoice && candidates.some((c) => c.key === userChoice)
+                      ? userChoice
+                      : activeStreamingTab && candidates.some((c) => c.key === activeStreamingTab)
+                      ? activeStreamingTab
+                      : defaultKey;
+
+                  const currentCandidate = candidates.find((c) => c.key === currentTabKey) || candidates[0];
+                  const currentText = streamingTextByKey[currentCandidate?.key || ""] || "";
+
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <ScrollableTabsRow
+                        titlePrefix={
+                          <span
+                            style={{
+                              fontSize: 11.5,
+                              fontWeight: 700,
+                              color: "var(--text-secondary)",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              marginRight: 4,
+                              whiteSpace: "nowrap",
+                              userSelect: "none",
+                            }}
+                          >
+                            <span>✦</span> Xem trực tiếp:
+                          </span>
+                        }
+                      >
+                        {candidates.map((c) => {
+                          const isSelected = c.key === currentTabKey;
+                          const streamText = streamingTextByKey[c.key] || "";
+                          const hasText = streamText.length > 0;
+
+                          return (
+                            <button
+                              key={c.key}
+                              type="button"
+                              onClick={() => {
+                                userSelectedStreamingTabRef.current = c.key;
+                                setActiveStreamingTab(c.key);
+                                if (onSelectThinking) {
+                                  onSelectThinking(c.key);
+                                }
+                              }}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 6,
+                                padding: "5px 12px",
+                                borderRadius: "var(--radius-full)",
+                                fontSize: 12,
+                                fontWeight: isSelected ? 700 : 500,
+                                cursor: "pointer",
+                                flexShrink: 0,
+                                border: isSelected ? "1.5px solid var(--brand-blue)" : "1px solid #e2e8f0",
+                                backgroundColor: isSelected ? "var(--brand-blue-light)" : "#ffffff",
+                                color: isSelected ? "var(--brand-blue)" : "var(--text-secondary)",
+                                boxShadow: isSelected ? "0 1px 3px rgba(37, 99, 235, 0.12)" : "0 1px 2px rgba(0,0,0,0.03)",
+                                transition: "all 0.15s ease",
+                                whiteSpace: "nowrap",
+                              }}
+                              title={`Xem phản hồi thời gian thực của ${c.label} (${c.roleTag})`}
+                            >
+                              <ModelBadgeLogo providerId={c.providerId} size={15} />
+                              <span>{c.label}</span>
+                              <span
+                                style={{
+                                  fontSize: 9.5,
+                                  fontWeight: 700,
+                                  padding: "1px 5px",
+                                  borderRadius: 4,
+                                  backgroundColor: c.role === "orchestrator" ? "rgba(124, 58, 237, 0.15)" : c.role === "lead" ? "rgba(16, 163, 127, 0.15)" : "rgba(59, 130, 246, 0.15)",
+                                  color: c.role === "orchestrator" ? "#7c3aed" : c.role === "lead" ? "#10a37f" : "#2563eb",
+                                }}
+                              >
+                                {c.roleTag}
+                              </span>
+                              {hasText ? (
+                                <span
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 4,
+                                    fontSize: 10.5,
+                                    fontWeight: 600,
+                                    padding: "1px 6px",
+                                    borderRadius: 10,
+                                    backgroundColor: isSelected ? "rgba(37, 99, 235, 0.15)" : "#f1f5f9",
+                                    color: isSelected ? "var(--brand-blue)" : "#64748b",
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      width: 5,
+                                      height: 5,
+                                      borderRadius: "50%",
+                                      backgroundColor: "#22c55e",
+                                      animation: "pulseGlow 1s infinite",
+                                    }}
+                                  />
+                                  {streamText.length} ký tự
+                                </span>
+                              ) : (
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    color: "#94a3b8",
+                                    fontStyle: "italic",
+                                  }}
+                                >
+                                  (đang suy nghĩ)
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </ScrollableTabsRow>
+
+                      {/* Selected Provider Streaming Response Body */}
+                      {currentText ? (
+                        <div className="message-content-body">
+                          <MarkdownContent content={currentText} />
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            padding: "20px 16px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 12,
+                            backgroundColor: "#f8fafc",
+                            borderRadius: "var(--radius-md)",
+                            border: "1px dashed #cbd5e1",
+                            color: "var(--text-secondary)",
+                            fontSize: 13,
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 16,
+                              height: 16,
+                              border: "2px solid #3b82f6",
+                              borderTopColor: "transparent",
+                              borderRadius: "50%",
+                              animation: "spin 0.8s linear infinite",
+                              flexShrink: 0,
+                            }}
+                          />
+                          <div>
+                            <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>
+                              {currentCandidate.label} ({currentCandidate.roleTag})
+                            </span>{" "}
+                            đang suy nghĩ và thu thập dữ liệu... Câu trả lời sẽ hiển thị tại đây khi bắt đầu sinh phản hồi.
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                // Normal / standard chat mode fallback
                 const candidateProviders: ProviderInfo[] =
                   selectedProviders.length > 0
                     ? selectedProviders
@@ -1486,8 +1775,11 @@ export function ChatArea({
                 }
 
                 // Multiple providers mode: render tab selection on top
+                const userChoice = userSelectedStreamingTabRef.current;
                 const currentTabProviderId =
-                  activeStreamingTab && candidateProviders.some((p) => p.id === activeStreamingTab)
+                  userChoice && candidateProviders.some((p) => p.id === userChoice)
+                    ? userChoice
+                    : activeStreamingTab && candidateProviders.some((p) => p.id === activeStreamingTab)
                     ? activeStreamingTab
                     : (candidateProviders.find((p) => streamingTextByProvider[p.id])?.id || candidateProviders[0].id);
 
@@ -1499,32 +1791,25 @@ export function ChatArea({
                 return (
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     {/* Provider Selection Tabs for Real-time Streaming */}
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        borderBottom: "1.5px solid #e2e8f0",
-                        paddingBottom: 8,
-                        overflowX: "auto",
-                        scrollbarWidth: "none",
-                      }}
+                    <ScrollableTabsRow
+                      titlePrefix={
+                        <span
+                          style={{
+                            fontSize: 11.5,
+                            fontWeight: 700,
+                            color: "var(--text-secondary)",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            marginRight: 4,
+                            whiteSpace: "nowrap",
+                            userSelect: "none",
+                          }}
+                        >
+                          <span>✦</span> Xem trực tiếp:
+                        </span>
+                      }
                     >
-                      <span
-                        style={{
-                          fontSize: 11.5,
-                          fontWeight: 700,
-                          color: "var(--text-secondary)",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 5,
-                          marginRight: 4,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        <span>✦</span> Xem trực tiếp:
-                      </span>
-
                       {candidateProviders.map((p) => {
                         const isSelected = p.id === currentTabProviderId;
                         const streamText = streamingTextByProvider[p.id] || "";
@@ -1535,6 +1820,7 @@ export function ChatArea({
                             key={p.id}
                             type="button"
                             onClick={() => {
+                              userSelectedStreamingTabRef.current = p.id;
                               setActiveStreamingTab(p.id);
                               if (onSelectThinking) {
                                 onSelectThinking(p.id);
@@ -1549,6 +1835,7 @@ export function ChatArea({
                               fontSize: 12,
                               fontWeight: isSelected ? 700 : 500,
                               cursor: "pointer",
+                              flexShrink: 0,
                               border: isSelected ? "1.5px solid var(--brand-blue)" : "1px solid #e2e8f0",
                               backgroundColor: isSelected ? "var(--brand-blue-light)" : "#ffffff",
                               color: isSelected ? "var(--brand-blue)" : "var(--text-secondary)",
@@ -1599,7 +1886,7 @@ export function ChatArea({
                           </button>
                         );
                       })}
-                    </div>
+                    </ScrollableTabsRow>
 
                     {/* Selected Provider Streaming Response Body */}
                     {currentText ? (
@@ -1664,33 +1951,13 @@ export function ChatArea({
           </button>
           <button
             type="button"
-            className={`scroll-nav-btn ${!canScrollBottom ? "disabled" : ""} ${isGenerating && isAutoScrollPaused ? "resume-auto-scroll" : ""}`}
+            className={`scroll-nav-btn ${!canScrollBottom ? "disabled" : ""}`}
             onClick={scrollToBottom}
             disabled={!canScrollBottom}
-            title={
-              isGenerating && isAutoScrollPaused
-                ? "Cuộn xuống cuối trang và tiếp tục tự động theo dõi câu trả lời"
-                : "Cuộn xuống cuối trang (Scroll to bottom)"
-            }
+            title="Cuộn xuống cuối trang (Scroll to bottom)"
             aria-label="Scroll to bottom"
-            style={{ position: "relative" }}
           >
             <ArrowDownCircleIcon size={20} />
-            {isGenerating && isAutoScrollPaused && (
-              <span
-                style={{
-                  position: "absolute",
-                  top: -2,
-                  right: -2,
-                  width: 9,
-                  height: 9,
-                  borderRadius: "50%",
-                  backgroundColor: "#22c55e",
-                  border: "2px solid #ffffff",
-                  boxShadow: "0 0 6px rgba(34, 197, 94, 0.6)",
-                }}
-              />
-            )}
           </button>
         </div>
       )}

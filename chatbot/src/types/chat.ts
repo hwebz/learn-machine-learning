@@ -31,7 +31,7 @@ export interface StepLog {
   provider?: string;
   step?: string;
   message: string;
-  status: "pending" | "running" | "completed" | "error";
+  status: "pending" | "running" | "completed" | "error" | "orchestrating" | "researching" | "leading";
   data?: any;
   thinkingText?: string;
   thinkingSteps?: ThinkingStep[];
@@ -55,10 +55,25 @@ export interface Message {
   sources?: SourceLink[];
   claims?: ClaimItem[];
   disagreements?: DisagreementItem[];
-  provider_runs?: Record<string, any>;
+  provider_runs?: Record<string, any> | any[];
   provider_options?: Record<string, any>;
   factCheckStatus?: "verified" | "reviewing" | "unverified";
   steps?: StepLog[];
+  job_type?: "research" | "agent";
+  orchestrator_provider?: string;
+  lead_provider?: string;
+  tone?: string;
+  orchestrator_dispatch?: AgentDispatchPlanItem[];
+}
+
+export interface AgentDispatchPlanItem {
+  id: string;
+  name: string;
+  config?: Record<string, any>;
+  sub_topic: string;
+  question: string;
+  branch_index?: number;
+  provider_role_key?: string;
 }
 
 import { ProviderSelectionConfig } from "./capabilities";
@@ -75,8 +90,13 @@ export interface ChatSession {
   selectedProvider?: string;
   depth?: DepthMode;
   jobId?: string;
-  status?: "queued" | "running" | "completed" | "partial" | "failed" | "cancelled";
+  status?: "queued" | "running" | "completed" | "partial" | "failed" | "cancelled" | "orchestrating" | "researching" | "leading";
   providerConfigurations?: Record<string, ProviderSelectionConfig>;
+  job_type?: "research" | "agent";
+  orchestrator_provider?: string;
+  lead_provider?: string;
+  tone?: string;
+  orchestrator_dispatch?: AgentDispatchPlanItem[];
 }
 
 export interface ProviderInfo {

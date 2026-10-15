@@ -49,6 +49,13 @@ async def init_db() -> None:
             new_cols = {
                 "title": "VARCHAR",
                 "pinned": "BOOLEAN DEFAULT 0",
+                "job_type": "VARCHAR DEFAULT 'research'",
+                "orchestrator_provider": "VARCHAR",
+                "orchestrator_config_json": "TEXT",
+                "lead_provider": "VARCHAR",
+                "lead_config_json": "TEXT",
+                "tone": "VARCHAR",
+                "orchestrator_dispatch_json": "TEXT",
             }
             for col_name, col_type in new_cols.items():
                 if col_name not in cols:

@@ -28,12 +28,17 @@ export interface ResearchResponseData {
   created_at?: string;
   finished_at?: string;
   steps?: StepLog[];
+  job_type?: "research" | "agent";
+  orchestrator_provider?: string;
+  lead_provider?: string;
+  tone?: string;
+  orchestrator_dispatch?: any[];
 }
 
 export interface ResearchHistoryItem {
   job_id: string;
   query: string;
-  status: "queued" | "running" | "completed" | "partial" | "failed" | "cancelled";
+  status: "queued" | "running" | "completed" | "partial" | "failed" | "cancelled" | "orchestrating" | "leading";
   subtasks_total: number;
   subtasks_done: number;
   report_markdown: string;
@@ -44,8 +49,42 @@ export interface ResearchHistoryItem {
   error?: string | null;
   depth?: DepthMode;
   providers: string[];
+  job_type?: "research" | "agent";
+  orchestrator_provider?: string;
+  lead_provider?: string;
+  tone?: string;
+  orchestrator_dispatch?: any[];
   created_at?: string;
   finished_at?: string;
+}
+
+export interface AgentResearchRequestPayload {
+  query: string;
+  orchestrator_provider: string;
+  orchestrator_config?: Record<string, any>;
+  lead_provider: string;
+  lead_config?: Record<string, any>;
+  tone: string;
+  max_minutes?: number;
+}
+
+export async function createAgentResearchJob(
+  payload: AgentResearchRequestPayload,
+  apiKey: string = DEFAULT_API_KEY
+): Promise<{ job_id: string }> {
+  const res = await fetch("/api/backend/agent-research", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": apiKey,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Lỗi máy chủ (${res.status})`);
+  }
+  return await res.json();
 }
 
 export async function fetchResearchHistory(
@@ -189,7 +228,8 @@ export async function cancelResearchJob(
 
 export interface SSECallbacks {
   onStep: (stepLog: StepLog) => void;
-  onProgress?: (progress: { subtasks_total: number; subtasks_done: number }) => void;
+  onProgress?: (progress: { subtasks_total: number; subtasks_done: number; status?: string }) => void;
+  onStatus?: (status: string) => void;
   onResult: (result: ResearchResponseData) => void;
   onError: (err: string) => void;
   onDone: () => void;
@@ -212,25 +252,35 @@ export function subscribeJobEvents(
     try {
       const data = JSON.parse(dataStr);
 
-      if (data.progress && callbacks.onProgress) {
-        callbacks.onProgress(data.progress);
+      if (data.status && callbacks.onStatus) {
+        callbacks.onStatus(data.status);
       }
 
-      if (data.message || data.step) {
+      if (data.progress && callbacks.onProgress) {
+        callbacks.onProgress({ ...data.progress, status: data.status });
+      }
+
+      if (data.message || data.step || data.event_type === "orchestrator_result") {
         const payloadData = data.data || {};
         const stepLog: StepLog = {
           id: `step-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
           provider: data.provider,
-          step: data.step,
+          step: data.step || data.event_type,
           message: data.message || `Processing on ${data.provider || "orchestrator"}...`,
           status:
             data.status === "completed"
               ? "completed"
               : data.status === "failed" || data.status === "error"
               ? "error"
+              : data.status === "orchestrating" || data.status === "researching" || data.status === "leading"
+              ? (data.status as any)
               : "running",
-          data: payloadData,
+          data: {
+            ...payloadData,
+            job_status: data.status,
+            event_type: data.event_type,
+          },
           thinkingText: payloadData.thinking_text || undefined,
           thinkingSteps: payloadData.thinking_steps || undefined,
           citations: payloadData.citations || undefined,
@@ -240,8 +290,8 @@ export function subscribeJobEvents(
         callbacks.onStep(stepLog);
       }
 
-      // If payload includes completed answer data
-      if (data.data && typeof data.data === "object" && data.data.report_markdown) {
+      // If payload is an explicit full result object with provider_runs
+      if (data.event_type === "result" && data.data && typeof data.data === "object" && data.data.report_markdown && data.data.provider_runs) {
         if (!resultDelivered) {
           resultDelivered = true;
           callbacks.onResult(data.data);
@@ -261,21 +311,21 @@ export function subscribeJobEvents(
       handleMessageData(e.data);
     };
 
-    eventSource.addEventListener("step", (e: MessageEvent) => {
-      handleMessageData(e.data);
-    });
-
-    eventSource.addEventListener("thinking", (e: MessageEvent) => {
-      handleMessageData(e.data);
-    });
-
-    eventSource.addEventListener("progress", (e: MessageEvent) => {
-      handleMessageData(e.data);
-    });
-
-    eventSource.addEventListener("result", (e: MessageEvent) => {
-      handleMessageData(e.data);
-    });
+    const sseEventNames = [
+      "step",
+      "thinking",
+      "progress",
+      "result",
+      "orchestrator_result",
+      "agent_status",
+      "status",
+      "completed",
+    ];
+    for (const evtName of sseEventNames) {
+      eventSource.addEventListener(evtName, (e: MessageEvent) => {
+        handleMessageData(e.data);
+      });
+    }
 
     eventSource.addEventListener("done", async () => {
       if (isClosed) return;
@@ -283,7 +333,7 @@ export function subscribeJobEvents(
       eventSource?.close();
       try {
         const finalResult = await getResearchResult(jobId);
-        if (finalResult && !resultDelivered) {
+        if (finalResult) {
           resultDelivered = true;
           callbacks.onResult(finalResult);
         }
@@ -354,7 +404,7 @@ export function subscribeJobEvents(
             isClosed = true;
             try {
               const finalResult = await getResearchResult(jobId);
-              if (finalResult && !resultDelivered) {
+              if (finalResult) {
                 resultDelivered = true;
                 callbacks.onResult(finalResult);
               }

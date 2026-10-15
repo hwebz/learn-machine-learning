@@ -11,9 +11,45 @@ ProviderName = Literal[
     "minimax", "meta", "pi", "mistral",
 ]
 JobStatus = Literal[
-    "queued", "planning", "researching", "extracting", "verifying", "synthesizing",
+    "queued", "orchestrating", "planning", "researching", "extracting", "verifying", "synthesizing", "leading",
     "completed", "partial", "failed", "needs_user_action", "cancelled",
 ]
+
+TonePreset = Literal[
+    "academic", "professional", "analytical", "explanatory",
+    "journalistic", "creative", "executive", "conversational",
+]
+
+
+class AgentDispatchItem(BaseModel):
+    id: str
+    name: str
+    config: dict[str, Any] = Field(default_factory=dict)
+    sub_topic: str
+    question: str
+
+
+class OrchestratorOutput(BaseModel):
+    research_topic: str
+    agents_dispatch: list[AgentDispatchItem] = Field(min_length=1, max_length=10)
+
+
+class AgentResearchRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=20_000)
+    orchestrator_provider: ProviderName
+    orchestrator_config: dict[str, Any] | None = Field(default_factory=dict)
+    lead_provider: ProviderName
+    lead_config: dict[str, Any] | None = Field(default_factory=dict)
+    tone: str = Field(default="professional")
+    max_minutes: int = Field(default=30, ge=1, le=180)
+
+    @field_validator("query")
+    @classmethod
+    def trim_query(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("query must not be blank")
+        return value
 
 
 class ResearchRequest(BaseModel):
@@ -70,7 +106,14 @@ class ProviderRunResponse(BaseModel):
     provider: str
     status: str
     elapsed_ms: int = 0
+    elapsed_s: float | None = None
+    role: str | None = None
+    branch: str | None = None
+    branch_index: int | None = None
+    subtask_id: str | None = None
+    provider_role_key: str | None = None
     answer_markdown: str | None = None
+    answer_md: str | None = None
 
 
 class ResearchResponse(BaseModel):
@@ -89,6 +132,11 @@ class ResearchResponse(BaseModel):
     steps: list[dict[str, Any]] = Field(default_factory=list)
     error: str | None
     provider_options: dict[str, Any] | None = Field(default=None)
+    job_type: str = "research"
+    orchestrator_provider: str | None = None
+    lead_provider: str | None = None
+    tone: str | None = None
+    orchestrator_dispatch: list[dict[str, Any]] | None = None
     created_at: datetime
     finished_at: datetime | None
 

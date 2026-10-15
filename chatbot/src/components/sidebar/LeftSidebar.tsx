@@ -22,6 +22,7 @@ interface LeftSidebarProps {
   activeSessionId: string;
   onSelectSession: (id: string) => void;
   onNewChat: () => void;
+  onNewAgent: () => void;
   onOpenProvidersModal: () => void;
   onOpenJobsModal: () => void;
   onOpenSettingsModal?: () => void;
@@ -37,6 +38,7 @@ export function LeftSidebar({
   activeSessionId,
   onSelectSession,
   onNewChat,
+  onNewAgent,
   onOpenProvidersModal,
   onOpenJobsModal,
   onOpenSettingsModal,
@@ -191,6 +193,25 @@ export function LeftSidebar({
           ) : session.pinned ? (
             <PinIcon size={12} color="var(--brand-blue)" filled={true} />
           ) : null}
+          {session.job_type === "agent" && (
+            <span
+              style={{
+                fontSize: 9.5,
+                fontWeight: 700,
+                color: "#8b5cf6",
+                background: "rgba(139, 92, 246, 0.15)",
+                padding: "1px 5px",
+                borderRadius: 4,
+                flexShrink: 0,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 2,
+              }}
+              title={`Deep Research Agent (Tone: ${session.tone || 'standard'})`}
+            >
+              🤖 Agent
+            </span>
+          )}
           <span className="sidebar-chat-title">{session.title}</span>
         </div>
 
@@ -312,6 +333,42 @@ export function LeftSidebar({
         >
           <PlusIcon size={16} />
           <span>New Chat</span>
+        </button>
+
+        <button
+          className="nav-item nav-agent-item"
+          onClick={() => {
+            setActiveNav("chats");
+            onNewAgent();
+          }}
+          title="Khởi chạy tác nhân điều phối đa mô hình (Deep Research Orchestrator)"
+          style={{
+            background: "linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.12) 100%)",
+            border: "1px solid rgba(139, 92, 246, 0.3)",
+            color: "#a855f7",
+            fontWeight: 600,
+          }}
+        >
+          <span style={{ fontSize: 16 }}>🤖</span>
+          <span style={{
+            background: "linear-gradient(135deg, #6366f1 0%, #a855f7 100%)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            fontWeight: 700,
+          }}>
+            New Agent
+          </span>
+          <span style={{
+            fontSize: 9,
+            marginLeft: "auto",
+            padding: "1px 5px",
+            borderRadius: 4,
+            background: "rgba(139, 92, 246, 0.18)",
+            color: "#8b5cf6",
+            fontWeight: 700,
+          }}>
+            AUTO
+          </span>
         </button>
 
         <button

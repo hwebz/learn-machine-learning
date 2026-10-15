@@ -14,6 +14,7 @@ from sqlmodel import select
 
 from app.api.auth import require_api_key
 from app.api.schemas import (
+    AgentResearchRequest,
     JobUpdateRequest,
     ResearchAccepted,
     ResearchRequest,
@@ -77,6 +78,13 @@ def _job_response(
     except Exception:
         config = {}
 
+    orchestrator_dispatch = None
+    if getattr(job, "orchestrator_dispatch_json", None):
+        try:
+            orchestrator_dispatch = json.loads(job.orchestrator_dispatch_json)
+        except Exception:
+            orchestrator_dispatch = None
+
     return ResearchResponse(
         job_id=job.id,
         query=job.query,
@@ -92,6 +100,11 @@ def _job_response(
         provider_runs=runs,
         steps=steps or [],
         provider_options=config.get("provider_options", {}),
+        job_type=getattr(job, "job_type", "research") or "research",
+        orchestrator_provider=getattr(job, "orchestrator_provider", None),
+        lead_provider=getattr(job, "lead_provider", None),
+        tone=getattr(job, "tone", None),
+        orchestrator_dispatch=orchestrator_dispatch,
         error=job.error,
         created_at=job.created_at,
         finished_at=job.finished_at,
@@ -232,6 +245,44 @@ async def create_research(payload: ResearchRequest, request: Request) -> Researc
     return ResearchAccepted(job_id=job_id)
 
 
+@router.post("/agent-research", response_model=ResearchAccepted, status_code=status.HTTP_202_ACCEPTED, dependencies=protected)
+async def create_agent_research(payload: AgentResearchRequest, request: Request) -> ResearchAccepted:
+    job_id = str(uuid4())
+    job = Job(
+        id=job_id,
+        query=payload.query,
+        config_json=payload.model_dump_json(),
+        status="queued",
+        job_type="agent",
+        orchestrator_provider=payload.orchestrator_provider,
+        orchestrator_config_json=json.dumps(payload.orchestrator_config or {}),
+        lead_provider=payload.lead_provider,
+        lead_config_json=json.dumps(payload.lead_config or {}),
+        tone=payload.tone,
+        subtasks_total=1,
+    )
+    async with SessionLocal() as session:
+        session.add(job)
+        session.add(JobEvent(
+            job_id=job_id,
+            status="queued",
+            event_type="progress",
+            message="Nhiệm vụ Deep Research Orchestrator đã được đưa vào hàng đợi xử lý.",
+            subtasks_total=job.subtasks_total,
+            subtasks_done=0,
+        ))
+        await session.commit()
+    await request.app.state.job_queue.put(job_id)
+    logger.info(
+        "agent_research_job_queued",
+        job_id=job_id,
+        orchestrator=payload.orchestrator_provider,
+        lead=payload.lead_provider,
+        tone=payload.tone,
+    )
+    return ResearchAccepted(job_id=job_id)
+
+
 @router.get("/research", response_model=list[dict[str, Any]], dependencies=protected)
 async def list_research(limit: int = 50) -> list[dict[str, Any]]:
     async with SessionLocal() as session:
@@ -297,6 +348,13 @@ async def list_research(limit: int = 50) -> list[dict[str, Any]]:
                     "isThinking": bool(ev.event_type == "thinking" or (isinstance(ev_data, dict) and ev_data.get("is_thinking"))),
                 })
 
+            orchestrator_dispatch = None
+            if getattr(j, "orchestrator_dispatch_json", None):
+                try:
+                    orchestrator_dispatch = json.loads(j.orchestrator_dispatch_json)
+                except Exception:
+                    orchestrator_dispatch = None
+
             result.append({
                 "job_id": j.id,
                 "query": j.query,
@@ -314,6 +372,11 @@ async def list_research(limit: int = 50) -> list[dict[str, Any]]:
                 "depth": config.get("depth"),
                 "providers": config.get("providers", []),
                 "provider_options": config.get("provider_options", {}),
+                "job_type": getattr(j, "job_type", "research") or "research",
+                "orchestrator_provider": getattr(j, "orchestrator_provider", None),
+                "lead_provider": getattr(j, "lead_provider", None),
+                "tone": getattr(j, "tone", None),
+                "orchestrator_dispatch": orchestrator_dispatch,
                 "created_at": j.created_at.isoformat() if j.created_at else None,
                 "finished_at": j.finished_at.isoformat() if j.finished_at else None,
             })

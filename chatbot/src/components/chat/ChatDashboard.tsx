@@ -10,8 +10,10 @@ import { RightSidebar } from "../inspector/RightSidebar";
 import { ProviderModal } from "../providers/ProviderModal";
 import { JobsModal } from "../jobs/JobsModal";
 import { SettingsModal } from "../settings/SettingsModal";
+import { AgentConfigScreen } from "../agent/AgentConfigScreen";
 import {
   createResearchJob,
+  createAgentResearchJob,
   cancelResearchJob,
   subscribeJobEvents,
   fetchResearchHistory,
@@ -75,6 +77,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
   const [isProvidersModalOpen, setIsProvidersModalOpen] = useState<boolean>(false);
   const [isJobsModalOpen, setIsJobsModalOpen] = useState<boolean>(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
+  const [isAgentConfigOpen, setIsAgentConfigOpen] = useState<boolean>(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState<boolean>(false);
   const [inspectedMessage, setInspectedMessage] = useState<Message | undefined>(undefined);
   const [inspectedProvider, setInspectedProvider] = useState<string | undefined>(undefined);
@@ -85,7 +88,12 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
   const handleSelectThinking = (provider?: string, message?: Message) => {
     setIsRightSidebarOpen(true);
-    setInspectedMessage(message);
+    if (message) {
+      setInspectedMessage(message);
+      if (message.steps && message.steps.length > 0) {
+        setActiveSteps(message.steps);
+      }
+    }
     setInspectedProvider(provider ? provider.toLowerCase() : undefined);
   };
 
@@ -124,7 +132,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             assistantMsgs.push({
               id: `msg-${job.job_id}-asst`,
               role: "assistant",
-              authorName: `AI Research Engine (${jobProviders.join(", ")})`,
+              authorName: `AI Research Engine${jobProviders.length ? ' (' : ''}${jobProviders.join(", ")}${jobProviders.length ? ')' : ''}`,
               timestamp: job.finished_at
                 ? new Date(job.finished_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
                 : "",
@@ -138,6 +146,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               provider_options: (job as any).provider_options || {},
               factCheckStatus: "verified",
               steps: (job as any).steps || [],
+              job_type: (job as any).job_type || "research",
+              orchestrator_provider: (job as any).orchestrator_provider,
+              lead_provider: (job as any).lead_provider,
+              tone: (job as any).tone,
+              orchestrator_dispatch: (job as any).orchestrator_dispatch,
             });
           }
 
@@ -157,6 +170,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             selectedProvider: jobProviders[0] || "copilot",
             status: job.status,
             messages: [userMsg, ...assistantMsgs],
+            job_type: (job as any).job_type || "research",
+            orchestrator_provider: (job as any).orchestrator_provider,
+            lead_provider: (job as any).lead_provider,
+            tone: (job as any).tone,
+            orchestrator_dispatch: (job as any).orchestrator_dispatch,
           });
         }
       }
@@ -185,7 +203,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               asstMsgs.push({
                 id: `msg-${directJob.job_id}-asst`,
                 role: "assistant",
-                authorName: `AI Research Engine (${directProviders.join(", ")})`,
+                authorName: `AI Research Engine${directProviders.length ? ' (' : ''}${directProviders.join(", ")}${directProviders.length ? ')' : ''}`,
                 timestamp: directJob.finished_at
                   ? new Date(directJob.finished_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
                   : "",
@@ -199,6 +217,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                 provider_options: directJob.provider_options || {},
                 factCheckStatus: "verified",
                 steps: directJob.steps || [],
+                job_type: (directJob as any).job_type || "research",
+                orchestrator_provider: (directJob as any).orchestrator_provider,
+                lead_provider: (directJob as any).lead_provider,
+                tone: (directJob as any).tone,
+                orchestrator_dispatch: (directJob as any).orchestrator_dispatch,
               });
             }
 
@@ -215,6 +238,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               selectedProvider: directProviders[0] || "copilot",
               status: directJob.status as any,
               messages: [userMsg, ...asstMsgs],
+              job_type: (directJob as any).job_type || "research",
+              orchestrator_provider: (directJob as any).orchestrator_provider,
+              lead_provider: (directJob as any).lead_provider,
+              tone: (directJob as any).tone,
+              orchestrator_dispatch: (directJob as any).orchestrator_dispatch,
             };
             newSessions.unshift(directSession);
           }
@@ -422,7 +450,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         const asstMsg: Message = {
           id: `msg-${targetJobId}-detail`,
           role: "assistant",
-          authorName: `AI Research Engine (${fullJobProviders.join(", ")})`,
+          authorName: `AI Research Engine${fullJobProviders.length ? ' (' : ''}${fullJobProviders.join(", ")}${fullJobProviders.length ? ')' : ''}`,
           timestamp: fullJob.finished_at
             ? new Date(fullJob.finished_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
             : (existingAsst?.timestamp || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })),
@@ -485,6 +513,233 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     }
   };
 
+  const handleNewAgent = () => {
+    if (isGenerating) {
+      handleStopResearch();
+    }
+    setIsAgentConfigOpen(true);
+  };
+
+  const handleStartAgentResearch = async (config: {
+    query: string;
+    orchestrator_provider: string;
+    orchestrator_config: Record<string, any>;
+    lead_provider: string;
+    lead_config: Record<string, any>;
+    tone: string;
+  }) => {
+    setIsAgentConfigOpen(false);
+
+    isCancelledRef.current = false;
+    activeJobIdRef.current = null;
+    if (activeUnsubscribeRef.current) {
+      activeUnsubscribeRef.current();
+      activeUnsubscribeRef.current = null;
+    }
+
+    const userMessage: Message = {
+      id: `msg-${Date.now()}`,
+      role: "user",
+      authorName: "Researcher",
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      content: config.query,
+      job_type: "agent",
+      orchestrator_provider: config.orchestrator_provider,
+      lead_provider: config.lead_provider,
+      tone: config.tone,
+    };
+
+    const newId = `session-agent-${Date.now()}`;
+    const newSession: ChatSession = {
+      id: newId,
+      title: config.query.slice(0, 36) + (config.query.length > 36 ? "..." : ""),
+      pinned: false,
+      createdAt: "Vừa xong",
+      createdTimestamp: Date.now(),
+      selectedProviders: [config.orchestrator_provider, config.lead_provider],
+      selectedProvider: config.orchestrator_provider,
+      messages: [userMessage],
+      status: "orchestrating",
+      job_type: "agent",
+      orchestrator_provider: config.orchestrator_provider,
+      lead_provider: config.lead_provider,
+      tone: config.tone,
+    };
+
+    setSessions((prev) => [newSession, ...prev]);
+    setActiveSessionId(newId);
+    setIsGenerating(true);
+    setActiveSteps([]);
+    setInspectedMessage(undefined);
+    setIsRightSidebarOpen(true);
+    setInspectedProvider(config.orchestrator_provider);
+
+    try {
+      const jobAccepted = await createAgentResearchJob({
+        query: config.query,
+        orchestrator_provider: config.orchestrator_provider,
+        orchestrator_config: config.orchestrator_config,
+        lead_provider: config.lead_provider,
+        lead_config: config.lead_config,
+        tone: config.tone,
+      });
+
+      if (isCancelledRef.current) {
+        cancelResearchJob(jobAccepted.job_id).catch(() => { });
+        return;
+      }
+
+      activeJobIdRef.current = jobAccepted.job_id;
+
+      if (typeof window !== "undefined") {
+        window.history.replaceState(null, "", `/chat/${jobAccepted.job_id}`);
+      }
+
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === newId
+            ? { ...s, id: jobAccepted.job_id, jobId: jobAccepted.job_id }
+            : s
+        )
+      );
+      setActiveSessionId(jobAccepted.job_id);
+
+      const unsub = subscribeJobEvents(jobAccepted.job_id, {
+        onStatus: (newStatus) => {
+          if (isCancelledRef.current) return;
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === jobAccepted.job_id || s.jobId === jobAccepted.job_id
+                ? { ...s, status: newStatus as any }
+                : s
+            )
+          );
+        },
+        onStep: (stepLog) => {
+          if (isCancelledRef.current) return;
+          setActiveSteps((prev) => [...prev, stepLog]);
+
+          const rawJobStatus = (stepLog.data as any)?.job_status;
+          const dispatch = stepLog.data?.dispatch;
+
+          setSessions((prev) =>
+            prev.map((s) => {
+              if (s.id !== jobAccepted.job_id && s.jobId !== jobAccepted.job_id) return s;
+              let nextStatus = s.status;
+              if (rawJobStatus && rawJobStatus !== "running") {
+                nextStatus = rawJobStatus as any;
+              } else if (dispatch && nextStatus === "orchestrating") {
+                nextStatus = "researching" as any;
+              }
+              return {
+                ...s,
+                status: nextStatus,
+                orchestrator_dispatch: dispatch || s.orchestrator_dispatch,
+              };
+            })
+          );
+        },
+        onResult: (result) => {
+          if (isCancelledRef.current) return;
+          const finalReport = result.report_markdown;
+          if (finalReport) {
+            const assistantMsg: Message = {
+              id: `msg-${jobAccepted.job_id}-asst`,
+              role: "assistant",
+              authorName: `Deep Research Orchestrator (${config.orchestrator_provider.toUpperCase()} ➜ ${config.lead_provider.toUpperCase()})`,
+              timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              content: finalReport,
+              providers: [config.orchestrator_provider, config.lead_provider],
+              sources: result.sources || [],
+              claims: result.claims || [],
+              provider_runs: result.provider_runs || [],
+              factCheckStatus: "verified",
+              steps: activeSteps,
+              job_type: "agent",
+              orchestrator_provider: config.orchestrator_provider,
+              lead_provider: config.lead_provider,
+              tone: config.tone,
+              orchestrator_dispatch: (result as any).orchestrator_dispatch,
+            };
+
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === jobAccepted.job_id || s.jobId === jobAccepted.job_id
+                  ? {
+                    ...s,
+                    status: "completed",
+                    messages: [...s.messages.filter((m) => m.role === "user"), assistantMsg],
+                    orchestrator_dispatch: (result as any).orchestrator_dispatch || s.orchestrator_dispatch,
+                  }
+                  : s
+              )
+            );
+            setIsGenerating(false);
+          }
+        },
+        onError: (err) => {
+          console.warn("Agent job SSE error:", err);
+          setIsGenerating(false);
+        },
+        onDone: async () => {
+          if (isCancelledRef.current) return;
+          try {
+            const finalResult = await getResearchResult(jobAccepted.job_id);
+            if (finalResult && finalResult.report_markdown) {
+              const assistantMsg: Message = {
+                id: `msg-${jobAccepted.job_id}-asst`,
+                role: "assistant",
+                authorName: `Deep Research Orchestrator (${config.orchestrator_provider.toUpperCase()} ➜ ${config.lead_provider.toUpperCase()})`,
+                timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                content: finalResult.report_markdown,
+                providers: [config.orchestrator_provider, config.lead_provider],
+                sources: finalResult.sources || [],
+                claims: finalResult.claims || [],
+                provider_runs: finalResult.provider_runs || [],
+                factCheckStatus: "verified",
+                steps: activeSteps,
+                job_type: "agent",
+                orchestrator_provider: config.orchestrator_provider,
+                lead_provider: config.lead_provider,
+                tone: config.tone,
+                orchestrator_dispatch: finalResult.orchestrator_dispatch,
+              };
+
+              setSessions((prev) =>
+                prev.map((s) =>
+                  s.id === jobAccepted.job_id || s.jobId === jobAccepted.job_id
+                    ? {
+                      ...s,
+                      status: "completed",
+                      messages: [...s.messages.filter((m) => m.role === "user"), assistantMsg],
+                      orchestrator_dispatch: finalResult.orchestrator_dispatch || s.orchestrator_dispatch,
+                    }
+                    : s
+                )
+              );
+            }
+          } catch (e) {
+            console.warn("Could not fetch final research result in onDone:", e);
+          } finally {
+            setIsGenerating(false);
+          }
+        },
+      });
+
+      activeUnsubscribeRef.current = unsub;
+    } catch (err: any) {
+      console.error("Failed to start agent research job:", err);
+      setIsGenerating(false);
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === newId
+            ? { ...s, status: "failed" }
+            : s
+        )
+      );
+    }
+  };
+
 
   const handleTogglePin = (id: string) => {
     const session = sessions.find((s) => s.id === id || s.jobId === id);
@@ -522,15 +777,31 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     }
     setSessions((prev) => {
       const remaining = prev.filter((s) => s.id !== id && s.jobId !== id);
-      if (activeSessionId === id || activeSessionId === targetJobId) {
-        if (remaining.length > 0) {
-          handleSelectSession(remaining[0].id, true);
-        } else {
-          setTimeout(() => handleNewChat(), 0);
-        }
-      }
       return remaining;
     });
+    // Deleted the conversation currently being viewed: return to the New Chat
+    // screen at "/" so the user can start over; otherwise stay where we are.
+    if (activeSessionId === id || activeSessionId === targetJobId) {
+      const emptySession: ChatSession = {
+        id: `session-${Date.now()}`,
+        title: "Phiên nghiên cứu mới",
+        pinned: false,
+        createdAt: "Vừa xong",
+        createdTimestamp: Date.now(),
+        selectedProviders: [],
+        selectedProvider: "",
+        messages: [],
+      };
+      setActiveSessionId(emptySession.id);
+      setActiveSteps([]);
+      setInspectedMessage(undefined);
+      setInspectedProvider(undefined);
+      setIsRightSidebarOpen(false);
+      setSessions((prev) => [emptySession, ...prev]);
+      if (typeof window !== "undefined" && window.location.pathname !== "/") {
+        window.history.pushState(null, "", "/");
+      }
+    }
   };
 
   const handleToggleProvider = (providerId: string) => {
@@ -617,7 +888,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         const assistantMsg: Message = {
           id: asstMsgId,
           role: "assistant",
-          authorName: `AI Research Engine (${currentProviderIds.join(", ")})`,
+          authorName: `AI Research Engine${currentProviderIds.length ? ' (' : ''}${currentProviderIds.join(", ")}${currentProviderIds.length ? ')' : ''}`,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           content: stoppedText,
           providers: currentProviderIds,
@@ -760,7 +1031,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             const assistantMsg: Message = {
               id: asstMsgId,
               role: "assistant",
-              authorName: `AI Research Engine (${currentProviderIds.join(", ")})`,
+              authorName: `AI Research Engine${currentProviderIds.length ? ' (' : ''}${currentProviderIds.join(", ")}${currentProviderIds.length ? ')' : ''}`,
               timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               content: result.report_markdown || "Đã hoàn thành nghiên cứu và tổng hợp câu trả lời từ các mô hình.",
               providers: currentProviderIds,
@@ -865,7 +1136,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               const assistantMsg: Message = {
                 id: asstMsgId,
                 role: "assistant",
-                authorName: `AI Research Engine (${(result.providers || activeSession.selectedProviders || [provider]).join(", ")})`,
+                authorName: `AI Research Engine${(result.providers || activeSession.selectedProviders || [provider]).length ? ' (' : ''}${(result.providers || activeSession.selectedProviders || [provider]).join(", ")}${(result.providers || activeSession.selectedProviders || [provider]).length ? ')' : ''}`,
                 timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
                 content: result.report_markdown || "Đã cập nhật câu trả lời từ các mô hình.",
                 providers: result.providers || activeSession.selectedProviders || [provider],
@@ -981,7 +1252,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       const assistantMsg: Message = {
         id: asstMsgId,
         role: "assistant",
-        authorName: `AI Research Engine (${activeInfoList.map((p) => p.name).join(", ")})`,
+        authorName: `AI Research Engine${activeInfoList.length ? ' (' : ''}${activeInfoList.map((p) => p.name).join(", ")}${activeInfoList.length ? ')' : ''}`,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         content: simulatedMarkdown,
         providers: providerIds,
@@ -1037,6 +1308,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         activeSessionId={activeSessionId}
         onSelectSession={(id) => handleSelectSession(id, true)}
         onNewChat={handleNewChat}
+        onNewAgent={handleNewAgent}
         onOpenProvidersModal={() => setIsProvidersModalOpen(true)}
         onOpenJobsModal={() => setIsJobsModalOpen(true)}
         onOpenSettingsModal={() => setIsSettingsModalOpen(true)}
@@ -1069,6 +1341,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       {/* 3. Right Sidebar (Inspection & Details) */}
       {isRightSidebarOpen && (
         <RightSidebar
+          session={activeSession}
           selectedProvider={primarySelectedProvider}
           selectedProviders={selectedProviders}
           currentMessage={inspectedMessage || (latestMessage?.role === "assistant" ? latestMessage : undefined)}
@@ -1116,6 +1389,14 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
       />
+
+      {/* 7. Deep Research Orchestrator Config Screen */}
+      {isAgentConfigOpen && (
+        <AgentConfigScreen
+          onStartAgentResearch={handleStartAgentResearch}
+          onCancel={() => setIsAgentConfigOpen(false)}
+        />
+      )}
     </div>
   );
 }

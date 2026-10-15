@@ -27,6 +27,13 @@ class Job(SQLModel, table=True):
     claims_json: str = "[]"
     disagreements_json: str = "[]"
     provider_runs_json: str = "[]"
+    job_type: str = "research"
+    orchestrator_provider: str | None = None
+    orchestrator_config_json: str | None = None
+    lead_provider: str | None = None
+    lead_config_json: str | None = None
+    tone: str | None = None
+    orchestrator_dispatch_json: str | None = None
 
 
 class JobEvent(SQLModel, table=True):

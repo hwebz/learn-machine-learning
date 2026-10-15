@@ -143,12 +143,13 @@ export function PiLogo({ size = 24, className = "", color, style }: ProviderLogo
 /** Universal Chatbot Provider Logo Component */
 export function ProviderLogo({
   type = "chatgpt",
+  providerId,
   size = 24,
   className = "",
   color,
   style,
-}: ProviderLogoProps & { type?: string }) {
-  const norm = (type || "").trim().toLowerCase();
+}: ProviderLogoProps & { type?: string; providerId?: string }) {
+  const norm = (providerId || type || "").trim().toLowerCase();
 
   if (norm === "chatgpt" || norm.includes("openai") || norm.includes("gpt")) {
     return <ChatGptLogo size={size} className={className} color={color} style={style} />;

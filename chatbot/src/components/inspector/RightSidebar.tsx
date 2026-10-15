@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Message, ProviderInfo, StepLog, ThinkingStep, SourceLink } from "../../types/chat";
+import { Message, ProviderInfo, StepLog, ThinkingStep, SourceLink, ChatSession } from "../../types/chat";
 import {
   ModelBadgeLogo,
   CheckCircleIcon,
@@ -199,8 +199,13 @@ export function resolveProviderOptions(
 }
 
 interface ProviderThinkingDetail {
+  key: string;
   provider: string;
   displayName: string;
+  role?: "orchestrator" | "subtask" | "lead" | "standard";
+  subTopic?: string;
+  timeTaken?: string;
+  branchIdx?: number;
   thinkingSteps: (ThinkingStep & { timestamp?: string; options?: any })[];
   thinkingText: string;
   citations: SourceLink[];
@@ -210,6 +215,7 @@ interface ProviderThinkingDetail {
 }
 
 interface RightSidebarProps {
+  session?: ChatSession;
   selectedProvider: ProviderInfo;
   selectedProviders?: ProviderInfo[];
   currentMessage?: Message;
@@ -225,6 +231,7 @@ interface RightSidebarProps {
 }
 
 export function RightSidebar({
+  session,
   selectedProvider,
   selectedProviders = [],
   currentMessage,
@@ -319,13 +326,77 @@ export function RightSidebar({
   // Pre-aggregate thinking details for all providers present
   const providersMap = new Map<string, ProviderThinkingDetail>();
 
+  // Check if session or message is in Agent mode
+  const isAgent =
+    session?.job_type === "agent" ||
+    currentMessage?.job_type === "agent" ||
+    Boolean(session?.orchestrator_provider || currentMessage?.orchestrator_provider);
+
+  const orchProv = normalizeProvider(session?.orchestrator_provider || currentMessage?.orchestrator_provider || "");
+  const leadProv = normalizeProvider(session?.lead_provider || currentMessage?.lead_provider || "");
+  const dispatchPlan = session?.orchestrator_dispatch || currentMessage?.orchestrator_dispatch || [];
+
+  if (isAgent) {
+    if (orchProv) {
+      providersMap.set("orchestrator", {
+        key: "orchestrator",
+        provider: orchProv,
+        displayName: `${orchProv.toUpperCase()} (Orchestrator)`,
+        role: "orchestrator",
+        thinkingSteps: [],
+        thinkingText: "",
+        citations: [],
+        logs: [],
+        isRunning: Boolean(isGenerating && session?.status === "orchestrating"),
+        timestamp: "",
+      });
+    }
+
+    dispatchPlan.forEach((item, idx) => {
+      const sp = normalizeProvider(item.id);
+      const branchIdx = item.branch_index || (idx + 1);
+      const k = item.provider_role_key || `subtask:${sp}_${branchIdx}`;
+      providersMap.set(k, {
+        key: k,
+        provider: sp,
+        displayName: `${(item.name || sp).toUpperCase()} (Nhánh #${branchIdx})`,
+        role: "subtask",
+        subTopic: item.sub_topic,
+        branchIdx,
+        thinkingSteps: [],
+        thinkingText: "",
+        citations: [],
+        logs: [],
+        isRunning: Boolean(isGenerating && (session?.status as string) === "researching"),
+        timestamp: "",
+      });
+    });
+
+    if (leadProv) {
+      providersMap.set("lead", {
+        key: "lead",
+        provider: leadProv,
+        displayName: `${leadProv.toUpperCase()} (Lead Synthesizer)`,
+        role: "lead",
+        thinkingSteps: [],
+        thinkingText: "",
+        citations: [],
+        logs: [],
+        isRunning: Boolean(isGenerating && session?.status === "leading"),
+        timestamp: "",
+      });
+    }
+  }
+
   for (const st of stepsToInspect) {
     const p = extractProvider(st);
     if (!p) continue;
-    if (!providersMap.has(p)) {
+    if (!isAgent && !providersMap.has(p)) {
       providersMap.set(p, {
+        key: p,
         provider: p,
         displayName: p.toUpperCase(),
+        role: "standard",
         thinkingSteps: [],
         thinkingText: "",
         citations: [],
@@ -338,8 +409,10 @@ export function RightSidebar({
 
   if (providersMap.size === 0 && stepsToInspect.length > 0) {
     providersMap.set("ai", {
+      key: "ai",
       provider: "ai",
       displayName: "AI ENGINE",
+      role: "standard",
       thinkingSteps: [],
       thinkingText: "",
       citations: [],
@@ -355,8 +428,10 @@ export function RightSidebar({
       const norm = normalizeProvider(p);
       if (!providersMap.has(norm)) {
         providersMap.set(norm, {
+          key: norm,
           provider: norm,
           displayName: norm.toUpperCase(),
+          role: "standard",
           thinkingSteps: [],
           thinkingText: "",
           citations: [],
@@ -368,10 +443,31 @@ export function RightSidebar({
     }
   }
 
-  for (const [p, detail] of providersMap.entries()) {
+  for (const [mapKey, detail] of providersMap.entries()) {
     const pSteps = stepsToInspect.filter((st) => {
-      const sp = extractProvider(st);
-      return sp === p || (providersMap.size === 1 && !sp);
+      const stRole = st.data?.role || ((st.status as string) === "orchestrating" ? "orchestrator" : (st.status as string) === "leading" ? "lead" : undefined);
+      const stKey = st.data?.provider_role_key;
+      const stProv = normalizeProvider(st.provider || st.data?.provider || "");
+
+      if (detail.role === "orchestrator") {
+        return stKey === "orchestrator" || stRole === "orchestrator" || st.step === "orchestrator_result";
+      }
+      if (detail.role === "lead") {
+        return stKey === "lead" || stRole === "lead" || (st.status as string) === "leading";
+      }
+      if (detail.role === "subtask") {
+        if (stKey && stKey === detail.key) return true;
+        const isSubtaskRole = stRole === "subtask" || (st.status as string) === "researching";
+        if (!isSubtaskRole) return false;
+        if (st.data?.branch && detail.subTopic && (st.data.branch.includes(detail.subTopic) || detail.subTopic.includes(st.data.branch))) return true;
+        if (st.data?.branch_index && detail.branchIdx && st.data.branch_index === detail.branchIdx) return true;
+        if (st.data?.subtask_id && detail.branchIdx && st.data.subtask_id.endsWith(`_${detail.branchIdx}`)) return true;
+        if (stProv === detail.provider && dispatchPlan.filter((d) => normalizeProvider(d.id) === detail.provider).length <= 1) {
+          return true;
+        }
+        return false;
+      }
+      return stProv === detail.provider;
     });
 
     const stepMap = new Map<string, ThinkingStep & { timestamp?: string }>();
@@ -424,7 +520,77 @@ export function RightSidebar({
         }
       }
     }
+
+    // Fallback: If no structured thinkingSteps were captured, synthesize from pSteps logs
+    if (stepMap.size === 0 && pSteps.length > 0) {
+      for (const st of pSteps) {
+        if (!st.message && !st.step) continue;
+        const sKey = (st.message || st.step || "").trim().toLowerCase();
+        if (!stepMap.has(sKey)) {
+          let desc = st.data?.thinking_text || st.data?.question;
+          if (!desc && st.data?.dispatch && Array.isArray(st.data.dispatch)) {
+            desc = `Kế hoạch điều phối ${st.data.dispatch.length} tác nhân:\n\n` +
+              st.data.dispatch.map((d: any, idx: number) => `### ${idx + 1}. ${d.name || d.id}: ${d.sub_topic}\n${d.question}`).join("\n\n");
+          }
+          if (!desc) {
+            desc = st.message;
+          }
+          stepMap.set(sKey, {
+            title: st.message || st.step || "Tiến trình",
+            description: desc,
+            status: st.status === "completed" ? "completed" : "running",
+            timestamp: st.timestamp,
+          });
+        }
+      }
+    }
+
     detail.thinkingSteps = Array.from(stepMap.values());
+
+    // Calculate time taken from runs or events
+    let foundTime = "";
+    if (currentMessage?.provider_runs) {
+      const runs = Array.isArray(currentMessage.provider_runs)
+        ? currentMessage.provider_runs
+        : Object.values(currentMessage.provider_runs);
+      if (detail.role === "subtask") {
+        const matchedRun = runs.find((r: any) =>
+          r?.provider_role_key === detail.key ||
+          (r?.branch && detail.subTopic && (r.branch.includes(detail.subTopic) || detail.subTopic.includes(r.branch))) ||
+          (r?.branch_index && detail.branchIdx && r.branch_index === detail.branchIdx) ||
+          (r?.subtask_id && detail.branchIdx && r.subtask_id.endsWith(`_${detail.branchIdx}`))
+        );
+        if (matchedRun?.elapsed_s) {
+          foundTime = `${matchedRun.elapsed_s}s`;
+        } else if (matchedRun?.elapsed_ms) {
+          foundTime = `${(matchedRun.elapsed_ms / 1000).toFixed(1)}s`;
+        }
+      } else if (detail.role === "orchestrator") {
+        const orchStep = pSteps.find((s) => s.step === "orchestrator_result" || s.data?.role === "orchestrator");
+        if (orchStep?.data?.elapsed_s) {
+          foundTime = `${orchStep.data.elapsed_s}s`;
+        }
+      } else if (detail.role === "lead") {
+        const leadStep = [...pSteps].reverse().find((s) => s.data?.role === "lead" && s.data?.elapsed_s);
+        if (leadStep?.data?.elapsed_s) {
+          foundTime = `${leadStep.data.elapsed_s}s`;
+        }
+      } else {
+        const matchedRun = runs.find((r: any) => normalizeProvider(r?.provider || "") === detail.provider);
+        if (matchedRun?.elapsed_s) {
+          foundTime = `${matchedRun.elapsed_s}s`;
+        } else if (matchedRun?.elapsed_ms) {
+          foundTime = `${(matchedRun.elapsed_ms / 1000).toFixed(1)}s`;
+        }
+      }
+    }
+    if (!foundTime) {
+      const lastWithElapsed = [...pSteps].reverse().find((st) => st.data?.elapsed_s);
+      if (lastWithElapsed?.data?.elapsed_s) {
+        foundTime = `${lastWithElapsed.data.elapsed_s}s`;
+      }
+    }
+    detail.timeTaken = foundTime;
 
     const citMap = new Map<string, SourceLink>();
     for (const st of pSteps) {
@@ -462,8 +628,14 @@ export function RightSidebar({
         (st.data && (st.data.status === "ok" || st.data.status === "partial" || Boolean(st.data.response_markdown))) ||
         /hoàn thành|phản hồi hợp lệ|kết quả một phần|thất bại|đã trả về|response_valid/i.test(st.message)
     );
-    const isResponseGenerated = !isGenerating || isDone || Boolean(currentMessage?.role === "assistant" && !isGenerating);
-    detail.isRunning = Boolean(isGenerating && !isResponseGenerated);
+    const isRoleStillRunning =
+      (detail.role === "orchestrator" && (session?.status as string) === "orchestrating") ||
+      (detail.role === "subtask" && (session?.status as string) === "researching" && !isDone) ||
+      (detail.role === "lead" && (session?.status as string) === "leading");
+
+    detail.isRunning = isAgent
+      ? Boolean(isGenerating && isRoleStillRunning)
+      : Boolean(isGenerating && !(!isGenerating || isDone || Boolean(currentMessage?.role === "assistant" && !isGenerating)));
 
     if (!detail.isRunning) {
       // The response has been generated: No in-progress (loading) step on the right hand side anymore!
@@ -486,7 +658,45 @@ export function RightSidebar({
     }
 
     // Always concatenate the last step for all providers in thinking steps to show the real response generated by the specific provider
-    const providerResponse = extractProviderResponse(p, pSteps, currentMessage);
+    let providerResponse = "";
+    if (detail.role === "lead") {
+      providerResponse = currentMessage?.content || "";
+    } else if (detail.role === "orchestrator") {
+      const resStep = pSteps.find((s) => s.step === "orchestrator_result" || s.data?.dispatch);
+      if (resStep?.data?.dispatch) {
+        providerResponse = `### Kế hoạch điều phối ${resStep.data.dispatch.length} tác nhân:\n\n` +
+          resStep.data.dispatch.map((d: any, i: number) => `#### ${i + 1}. ${d.name || d.id}: ${d.sub_topic}\n${d.question}`).join("\n\n");
+      } else {
+        providerResponse = extractProviderResponse(detail.provider, pSteps, currentMessage);
+      }
+    } else if (detail.role === "subtask") {
+      if (currentMessage?.provider_runs) {
+        const runs = Array.isArray(currentMessage.provider_runs)
+          ? currentMessage.provider_runs
+          : Object.values(currentMessage.provider_runs);
+        const matchedRun = runs.find((r: any) =>
+          r?.provider_role_key === detail.key ||
+          (r?.branch && detail.subTopic && (r.branch.includes(detail.subTopic) || detail.subTopic.includes(r.branch))) ||
+          (r?.branch_index && detail.branchIdx && r.branch_index === detail.branchIdx) ||
+          (r?.subtask_id && detail.branchIdx && r.subtask_id.endsWith(`_${detail.branchIdx}`))
+        );
+        if (matchedRun?.answer_md || matchedRun?.answer_markdown || matchedRun?.text) {
+          providerResponse = (matchedRun.answer_md || matchedRun.answer_markdown || matchedRun.text).trim();
+        }
+      }
+      if (!providerResponse) {
+        for (const st of [...pSteps].reverse()) {
+          const resp = st.data?.answer_markdown || st.data?.response_markdown || st.data?.streaming_text;
+          if (resp && typeof resp === "string" && resp.trim().length > 0) {
+            providerResponse = resp.trim();
+            break;
+          }
+        }
+      }
+    } else {
+      providerResponse = extractProviderResponse(detail.provider, pSteps, currentMessage);
+    }
+
     if (providerResponse) {
       const filteredSteps = detail.thinkingSteps.filter(
         (s) => !s.title.toLowerCase().includes("response generated")
@@ -505,24 +715,28 @@ export function RightSidebar({
 
   // Determine active provider tab
   const [selectedTab, setSelectedTab] = useState<string | undefined>(
-    inspectedProvider || (providerDetailsList[0]?.provider)
+    inspectedProvider || (providerDetailsList[0]?.key || providerDetailsList[0]?.provider)
   );
 
   useEffect(() => {
     if (inspectedProvider) {
-      setSelectedTab(inspectedProvider.toLowerCase());
+      const target = inspectedProvider.toLowerCase();
+      const matched = providerDetailsList.find(
+        (p) => p.key.toLowerCase() === target || p.provider.toLowerCase() === target || p.role === target
+      );
+      setSelectedTab(matched?.key || target);
     } else {
       setSelectedTab((prev) => {
-        if (prev && providerDetailsList.some((p) => p.provider === prev)) {
+        if (prev && providerDetailsList.some((p) => p.key === prev || p.provider === prev)) {
           return prev;
         }
-        return providerDetailsList[0]?.provider;
+        return providerDetailsList[0]?.key || providerDetailsList[0]?.provider;
       });
     }
   }, [inspectedProvider, providerDetailsList.length]);
 
   const activeDetail =
-    providerDetailsList.find((p) => p.provider === selectedTab) ||
+    providerDetailsList.find((p) => p.key === selectedTab || p.provider === selectedTab) ||
     providerDetailsList[0];
 
   // Collect live sources
@@ -563,12 +777,12 @@ export function RightSidebar({
 
   const currentProviderOpts = activeDetail
     ? resolveProviderOptions(
-        activeDetail.provider,
-        currentMessage,
-        stepsToInspect,
-        selectionsMap,
-        capabilitiesMap
-      )
+      activeDetail.provider,
+      currentMessage,
+      stepsToInspect,
+      selectionsMap,
+      capabilitiesMap
+    )
     : null;
 
   return (
@@ -670,14 +884,14 @@ export function RightSidebar({
         {providerDetailsList.length > 1 && (
           <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
             {providerDetailsList.map((prov) => {
-              const isSelected = (selectedTab || providerDetailsList[0].provider) === prov.provider;
+              const isSelected = (selectedTab || providerDetailsList[0].key) === prov.key;
               return (
                 <button
-                  key={prov.provider}
+                  key={prov.key}
                   type="button"
                   onClick={() => {
-                    setSelectedTab(prov.provider);
-                    onSelectProvider?.(prov.provider);
+                    setSelectedTab(prov.key);
+                    onSelectProvider?.(prov.key);
                   }}
                   style={{
                     fontSize: 11.5,
@@ -695,8 +909,23 @@ export function RightSidebar({
                     transition: "all 0.15s ease",
                   }}
                 >
-                  <ModelBadgeLogo type={prov.provider} size={15} />
-                  <span>{prov.displayName}</span>
+                  <ModelBadgeLogo providerId={prov.provider} size={15} />
+                  <span className="hidden">{prov.displayName}</span>
+                  {prov.role === "orchestrator" && (
+                    <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: "rgba(124, 58, 237, 0.15)", color: "#7c3aed", fontWeight: 700 }}>
+                      Orch
+                    </span>
+                  )}
+                  {prov.role === "lead" && (
+                    <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: "rgba(16, 163, 127, 0.15)", color: "#10a37f", fontWeight: 700 }}>
+                      Lead
+                    </span>
+                  )}
+                  {prov.role === "subtask" && (
+                    <span className="hidden" style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: "rgba(59, 130, 246, 0.15)", color: "#2563eb", fontWeight: 700 }}>
+                      Nhánh #{prov.branchIdx || 1}
+                    </span>
+                  )}
                   <span
                     style={{
                       fontSize: 10,
@@ -729,15 +958,40 @@ export function RightSidebar({
                 fontSize: 11.5,
               }}
             >
-              <span style={{ fontWeight: 700, color: "var(--brand-blue)", display: "flex", alignItems: "center", gap: 6 }}>
-                <ModelBadgeLogo type={activeDetail.provider} size={16} />
-                <span>{activeDetail.displayName} ({activeDetail.thinkingSteps.length} bước suy luận & tìm kiếm)</span>
-              </span>
-              {activeDetail.timestamp && (
-                <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
-                  ⏱ {activeDetail.timestamp}
+              <div style={{ fontWeight: 700, color: "var(--brand-blue)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <ModelBadgeLogo providerId={activeDetail.provider} size={16} />
+                <span>{activeDetail.displayName}</span>
+                {activeDetail.role === "orchestrator" && (
+                  <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "rgba(124, 58, 237, 0.15)", color: "#7c3aed", fontWeight: 700 }}>
+                    Master Orchestrator
+                  </span>
+                )}
+                {activeDetail.role === "lead" && (
+                  <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "rgba(16, 163, 127, 0.15)", color: "#10a37f", fontWeight: 700 }}>
+                    Lead Synthesizer
+                  </span>
+                )}
+                {activeDetail.role === "subtask" && (
+                  <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 4, background: "rgba(59, 130, 246, 0.15)", color: "#2563eb", fontWeight: 700 }}>
+                    Nhánh: {activeDetail.subTopic || activeDetail.displayName}
+                  </span>
+                )}
+                <span style={{ fontSize: 10.5, color: "var(--text-secondary)", fontWeight: 500 }}>
+                  ({activeDetail.thinkingSteps.length} bước)
                 </span>
-              )}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                {activeDetail.timeTaken && (
+                  <span style={{ color: "#2563eb", fontWeight: 600, fontSize: 10.5, background: "#eff6ff", padding: "1px 6px", borderRadius: 4, border: "1px solid #bfdbfe" }}>
+                    ⏱ {activeDetail.timeTaken}
+                  </span>
+                )}
+                {activeDetail.timestamp && (
+                  <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
+                    {activeDetail.timestamp}
+                  </span>
+                )}
+              </div>
             </div>
 
 
@@ -1127,6 +1381,7 @@ export function RightSidebar({
                   border: "1px solid #e2e8f0",
                   padding: "6px 8px",
                 }}
+                open
               >
                 <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text-muted)", fontSize: 11 }}>
                   Nhật ký thực thi ({activeDetail.logs.length} sự kiện)
@@ -1183,7 +1438,7 @@ export function RightSidebar({
             </div>
 
             {/* Domain Badges Grid */}
-            <div className="sources-badges-grid">
+            <div className="sources-badges-grid hidden">
               {sources.map((src, i) => {
                 const domain = src.domain || (src.url ? new URL(src.url).hostname.replace("www.", "") : "web");
                 const iconInfo = getDomainIconColor(domain);

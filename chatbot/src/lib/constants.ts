@@ -236,3 +236,70 @@ export const SUGGESTED_PROMPTS = [
 
 export const INITIAL_CHAT_SESSIONS: ChatSession[] = [];
 
+export interface TonePresetItem {
+  id: string;
+  label: string;
+  description: string;
+  icon: string;
+  badge: string;
+}
+
+export const TONE_PRESETS: TonePresetItem[] = [
+  {
+    id: "academic",
+    label: "Academic",
+    description: "Văn phong học thuật, chuẩn mực, trích dẫn dày đặc và khách quan.",
+    icon: "📚",
+    badge: "Học thuật",
+  },
+  {
+    id: "professional",
+    label: "Professional",
+    description: "Chuyên nghiệp, súc tích, định hướng hành động cho doanh nghiệp.",
+    icon: "💼",
+    badge: "Chuyên nghiệp",
+  },
+  {
+    id: "analytical",
+    label: "Analytical",
+    description: "Phân tích đối sánh chuyên sâu, bóc tách ưu/nhược điểm và dữ liệu bằng chứng.",
+    icon: "🔬",
+    badge: "Phân tích",
+  },
+  {
+    id: "explanatory",
+    label: "Explanatory",
+    description: "Sư phạm, dễ hiểu, tuần tự từng bước kèm ẩn dụ thực tiễn sinh động.",
+    icon: "🎓",
+    badge: "Sư phạm",
+  },
+  {
+    id: "journalistic",
+    label: "Journalistic",
+    description: "Báo chí điều tra, đa chiều, bắt đầu bằng phát hiện cốt lõi và khách quan.",
+    icon: "📰",
+    badge: "Báo chí",
+  },
+  {
+    id: "creative",
+    label: "Creative",
+    description: "Lôi cuốn, giàu hình tượng, dẫn dắt câu chuyện ấn tượng và sâu sắc.",
+    icon: "✨",
+    badge: "Sáng tạo",
+  },
+  {
+    id: "executive",
+    label: "Executive Summary",
+    description: "Tóm tắt cấp cao siêu ngắn, TL;DR 3 câu, tập trung số liệu và quyết định nhanh.",
+    icon: "📊",
+    badge: "Tóm lược",
+  },
+  {
+    id: "conversational",
+    label: "Conversational",
+    description: "Thân thiện, gần gũi, hỏi đáp tự nhiên như trò chuyện với chuyên gia đầu ngành.",
+    icon: "💬",
+    badge: "Đàm thoại",
+  },
+];
+
