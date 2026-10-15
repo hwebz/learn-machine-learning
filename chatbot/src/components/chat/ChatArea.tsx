@@ -824,7 +824,8 @@ export function ChatArea({
           <div style={{ position: "relative" }} ref={modelDropdownRef}>
             <button
               className="model-badge-trigger"
-              onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+              // onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+              onClick={() => onOpenProvidersModal()}
               title="Chọn mô hình / Thêm nhiều nhà cung cấp"
             >
               {selectedCount > 1 ? (
@@ -848,7 +849,6 @@ export function ChatArea({
                   </span>
                 </>
               )}
-              <span style={{ fontSize: 10, color: "var(--text-muted)" }}>▼</span>
             </button>
 
             {isModelDropdownOpen && (
@@ -1552,8 +1552,8 @@ export function ChatArea({
                       for (const c of candidates) {
                         if (c.role === "subtask" && !streamingTextByKey[c.key]) {
                           if (st.data?.provider_role_key === c.key ||
-                              (st.data?.subtask_id && st.data.subtask_id.includes(c.key)) ||
-                              (st.data?.branch && c.label.includes(st.data.branch))) {
+                            (st.data?.subtask_id && st.data.subtask_id.includes(c.key)) ||
+                            (st.data?.branch && c.label.includes(st.data.branch))) {
                             streamingTextByKey[c.key] = text;
                           }
                         }
@@ -1577,8 +1577,8 @@ export function ChatArea({
                     userChoice && candidates.some((c) => c.key === userChoice)
                       ? userChoice
                       : activeStreamingTab && candidates.some((c) => c.key === activeStreamingTab)
-                      ? activeStreamingTab
-                      : defaultKey;
+                        ? activeStreamingTab
+                        : defaultKey;
 
                   const currentCandidate = candidates.find((c) => c.key === currentTabKey) || candidates[0];
                   const currentText = streamingTextByKey[currentCandidate?.key || ""] || "";
@@ -1741,8 +1741,8 @@ export function ChatArea({
                   selectedProviders.length > 0
                     ? selectedProviders
                     : providers.filter((p) =>
-                        activeSteps.some((st) => extractProvider(st) === p.id)
-                      );
+                      activeSteps.some((st) => extractProvider(st) === p.id)
+                    );
 
                 // Collect latest streaming text for each provider
                 const streamingTextByProvider: Record<string, string> = {};
@@ -1780,8 +1780,8 @@ export function ChatArea({
                   userChoice && candidateProviders.some((p) => p.id === userChoice)
                     ? userChoice
                     : activeStreamingTab && candidateProviders.some((p) => p.id === activeStreamingTab)
-                    ? activeStreamingTab
-                    : (candidateProviders.find((p) => streamingTextByProvider[p.id])?.id || candidateProviders[0].id);
+                      ? activeStreamingTab
+                      : (candidateProviders.find((p) => streamingTextByProvider[p.id])?.id || candidateProviders[0].id);
 
                 const currentText = streamingTextByProvider[currentTabProviderId] || "";
                 const currentProviderInfo =
@@ -2085,8 +2085,8 @@ export function ChatArea({
               isRecording
                 ? "Đang lắng nghe giọng nói từ micro của bạn..."
                 : selectedCount === 0
-                ? "Vui lòng chọn nhà cung cấp AI để bắt đầu..."
-                : `Đặt câu hỏi nghiên cứu tới ${selectedCount} mô hình AI (${selectedProviders.map((p) => p.name.split(" ")[0]).join(", ")})...`
+                  ? "Vui lòng chọn nhà cung cấp AI để bắt đầu..."
+                  : `Đặt câu hỏi nghiên cứu tới ${selectedCount} mô hình AI (${selectedProviders.map((p) => p.name.split(" ")[0]).join(", ")})...`
             }
             rows={1}
             value={inputText}
@@ -2178,8 +2178,8 @@ export function ChatArea({
                   isRecording
                     ? "Đang thu âm... Bấm để dừng và chuyển thành văn bản"
                     : isTranscribing
-                    ? "Đang chuyển thành văn bản qua backend..."
-                    : "Nhập liệu bằng giọng nói (Voice Chat STT)"
+                      ? "Đang chuyển thành văn bản qua backend..."
+                      : "Nhập liệu bằng giọng nói (Voice Chat STT)"
                 }
                 aria-label="Nhập liệu giọng nói"
               >

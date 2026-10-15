@@ -3282,3 +3282,214 @@ textarea {
 .live-tabs-nav-btn.right {
   right: -6px;
 }
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+.agent-card-mini-badge {
+  font-size: 8.5px;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background-color: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+  letter-spacing: 0.3px;
+}
+
+.agent-finetune-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.agent-dom-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1.5px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.agent-dom-badge.live {
+  background-color: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.agent-dom-badge.cached {
+  background-color: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.agent-synced-time {
+  font-size: 11px;
+  color: var(--text-muted, #94a3b8);
+  font-weight: 400;
+}
+
+.agent-resync-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3.5px 10px;
+  border-radius: 6px;
+  border: 1px solid #bfdbfe;
+  background-color: #ffffff;
+  color: var(--brand-blue, #2563eb);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.agent-resync-btn:hover:not(:disabled) {
+  background-color: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.agent-resync-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  background-color: #f8fafc;
+}
+
+.agent-sync-feedback {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin-top: 2px;
+}
+
+.agent-sync-feedback.success {
+  background-color: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.agent-sync-feedback.error {
+  background-color: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.agent-role-pill.sub {
+  background: rgba(14, 165, 233, 0.1);
+  color: #0284c7;
+}
+
+.agent-subproviders-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 10px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid var(--border-default, #e2e8f0);
+}
+
+.agent-counter-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background-color: #eff6ff;
+  color: var(--brand-blue, #2563eb);
+  border: 1px solid #bfdbfe;
+}
+
+.agent-counter-badge.empty {
+  background-color: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.agent-subproviders-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-mini-action-btn {
+  background: #ffffff;
+  border: 1px solid var(--border-default, #cbd5e1);
+  border-radius: 5px;
+  padding: 2.5px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #475569);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.agent-mini-action-btn:hover {
+  background: #f1f5f9;
+  color: var(--text-primary, #0f172a);
+  border-color: #94a3b8;
+}
+
+.agent-mini-action-btn.primary {
+  background: #eff6ff;
+  color: var(--brand-blue, #2563eb);
+  border-color: #bfdbfe;
+}
+
+.agent-mini-action-btn.primary:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.agent-provider-card.delegated-selected {
+  border-color: #0284c7;
+  background: #f0f9ff;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.18);
+}
+
+.agent-checkbox-card-indicator {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 2px solid #cbd5e1;
+  background-color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.agent-checkbox-card-indicator.checked {
+  border-color: #0284c7;
+  background-color: #0284c7;
+}
+
+.agent-delegated-warning {
+  font-size: 11.5px;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 6px 12px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

@@ -66,6 +66,7 @@ export interface AgentResearchRequestPayload {
   lead_config?: Record<string, any>;
   tone: string;
   max_minutes?: number;
+  delegated_providers?: string[];
 }
 
 export async function createAgentResearchJob(

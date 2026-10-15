@@ -527,6 +527,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     lead_provider: string;
     lead_config: Record<string, any>;
     tone: string;
+    delegated_providers?: string[];
   }) => {
     setIsAgentConfigOpen(false);
 
@@ -582,6 +583,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         lead_provider: config.lead_provider,
         lead_config: config.lead_config,
         tone: config.tone,
+        delegated_providers: config.delegated_providers,
       });
 
       if (isCancelledRef.current) {
@@ -1395,6 +1397,13 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         <AgentConfigScreen
           onStartAgentResearch={handleStartAgentResearch}
           onCancel={() => setIsAgentConfigOpen(false)}
+          providers={PROVIDERS_LIST}
+          capabilitiesMap={capsHook.capabilitiesMap}
+          selectionsMap={capsHook.selectionsMap}
+          onUpdateSelection={capsHook.updateSelection}
+          onSyncProvider={capsHook.syncProvider}
+          loadingProvider={capsHook.loadingProvider}
+          onLoadCapabilities={capsHook.loadProviderCapabilities}
         />
       )}
     </div>

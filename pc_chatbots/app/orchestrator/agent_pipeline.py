@@ -62,40 +62,110 @@ TONE_INSTRUCTIONS: dict[str, str] = {
 }
 
 
-def build_orchestrator_prompt(research_topic: str) -> str:
+PROVIDER_CATALOG: dict[str, dict[str, str]] = {
+    "chatgpt": {
+        "name": "ChatGPT",
+        "config": '{"thinking": boolean}',
+        "desc": "General synthesis, code, structured explanations, multi-step reasoning.",
+    },
+    "perplexity": {
+        "name": "Perplexity",
+        "config": '{"thinking": boolean}',
+        "desc": "Real-time search, finding live citations, latest statistics, academic papers.",
+    },
+    "gemini": {
+        "name": "Gemini",
+        "config": '{"model": "flash" | "pro" | "argon", "mode": "low" | "medium" | "high"}',
+        "desc": "Deep conceptual reasoning, multimodal data, broad context analysis.",
+    },
+    "copilot": {
+        "name": "Microsoft Copilot",
+        "config": '{"thinking": boolean}',
+        "desc": "Enterprise research, web grounding, business applications.",
+    },
+    "qwen": {
+        "name": "Qwen",
+        "config": '{"mode": "qwen-3.7-plus" | "qwen-3.8-max", "thinking": boolean}',
+        "desc": "Technical analysis, mathematics, deep Chinese/English bilingual queries.",
+    },
+    "kimi": {
+        "name": "Moonshot Kimi",
+        "config": '{"mode": "k3", "thinking": boolean}',
+        "desc": "Long-form context synthesis, document deep dives.",
+    },
+    "zhipu": {
+        "name": "Zhipu AI GLM",
+        "config": '{"model": "glm-5.3" | "glm-5.3-flash", "mode": "low" | "high" | "max"}',
+        "desc": "Structured knowledge, bilingual analysis.",
+    },
+    "deepseek": {
+        "name": "DeepSeek",
+        "config": '{"thinking": boolean}',
+        "desc": "Deep algorithmic thinking, rigorous logic, mathematical formulations.",
+    },
+    "claude": {
+        "name": "Anthropic Claude",
+        "config": '{"thinking": boolean}',
+        "desc": "Rigorous logical analysis, nuanced writing, academic critique.",
+    },
+    "grok": {
+        "name": "xAI Grok",
+        "config": '{"thinking": boolean}',
+        "desc": "Real-time discovery, contrarian thinking, edge-case analysis.",
+    },
+    "mistral": {
+        "name": "Mistral Le Chat",
+        "config": '{"thinking": boolean}',
+        "desc": "Concise reasoning, European multilingual benchmarks, fast inference.",
+    },
+    "minimax": {
+        "name": "MiniMax",
+        "config": '{"thinking": boolean}',
+        "desc": "Document processing, creative angles, conversational reasoning.",
+    },
+    "meta": {
+        "name": "Meta AI",
+        "config": '{"thinking": boolean}',
+        "desc": "Open foundation research, general knowledge synthesis.",
+    },
+    "pi": {
+        "name": "Inflection Pi",
+        "config": '{"thinking": boolean}',
+        "desc": "Exploratory inquiry, accessible explanations.",
+    },
+}
+
+
+def build_orchestrator_prompt(research_topic: str, allowed_providers: list[str] | None = None) -> str:
+    valid_allowed = [p.lower() for p in (allowed_providers or []) if p.lower() in PROVIDER_CATALOG]
+    if not valid_allowed:
+        valid_allowed = list(PROVIDER_CATALOG.keys())
+
+    provider_lines: list[str] = []
+    for idx, pid in enumerate(valid_allowed, start=1):
+        info = PROVIDER_CATALOG[pid]
+        provider_lines.append(
+            f'{idx}. {info["name"]} (id: "{pid}", name: "{info["name"]}")\n'
+            f'   - config: {info["config"]}\n'
+            f'   - Best for: {info["desc"]}'
+        )
+    providers_text = "\n".join(provider_lines)
+    allowed_ids_str = ", ".join(f'"{pid}"' for pid in valid_allowed)
+
     return f"""You are a Master Research Orchestrator.
 Your goal is to analyze the research topic provided by the user and intelligently decompose it into 2 to 5 specialized sub-tasks.
-Each sub-task must be assigned to the most appropriate AI provider with optimal configuration.
+Each sub-task must be assigned to the most appropriate AI provider from the ALLOWED providers list below.
 
-## Available Providers and Configurations:
-1. ChatGPT (id: "chatgpt", name: "ChatGPT")
-   - config: {{"thinking": boolean}}
-   - Best for: General synthesis, code, structured explanations, multi-step reasoning.
-2. Perplexity (id: "perplexity", name: "Perplexity")
-   - config: {{"thinking": boolean}}
-   - Best for: Real-time search, finding live citations, latest statistics, academic papers.
-3. Gemini (id: "gemini", name: "Gemini")
-   - config: {{"model": "flash" | "pro" | "argon", "mode": "low" | "medium" | "high"}}
-   - Best for: Deep conceptual reasoning, multimodal data, broad context analysis.
-4. Microsoft Copilot (id: "copilot", name: "Microsoft Copilot")
-   - config: {{"thinking": boolean}}
-   - Best for: Enterprise research, web grounding, business applications.
-5. Qwen (id: "qwen", name: "Qwen")
-   - config: {{"mode": "qwen-3.7-plus" | "qwen-3.8-max", "thinking": boolean}}
-   - Best for: Technical analysis, mathematics, deep Chinese/English bilingual queries.
-6. Moonshot Kimi (id: "kimi", name: "Moonshot Kimi")
-   - config: {{"mode": "k3", "thinking": boolean}}
-   - Best for: Long-form context synthesis, document deep dives.
-7. Zhipu AI GLM (id: "glm", name: "Zhipu AI GLM")
-   - config: {{"model": "glm-5.3" | "glm-5.3-flash", "mode": "low" | "high" | "max"}}
-   - Best for: Structured knowledge, bilingual analysis.
-8. DeepSeek (id: "deepseek", name: "DeepSeek")
-   - config: {{"thinking": boolean}}
-   - Best for: Deep algorithmic thinking, rigorous logic, mathematical formulations.
+## Available Allowed Providers and Configurations:
+{providers_text}
+
+## STRICT REQUIREMENT: Allowed Delegation Providers
+You are STRICTLY RESTRICTED to assigning sub-tasks ONLY to providers in this allowed list: [{allowed_ids_str}].
+DO NOT assign any sub-task to any provider outside this list. Every single item in "agents_dispatch" MUST have "id" strictly matching one of [{allowed_ids_str}].
 
 ## Rules:
 - Decompose the topic into 2 to 5 distinct, non-overlapping sub-topics.
-- Assign each sub-topic to the provider best suited for that angle.
+- Assign each sub-topic to the provider best suited for that angle among the allowed providers.
 - Each "question" must be a self-contained, detailed prompt for that provider to investigate.
 - The output MUST be strictly valid JSON matching the schema below. Do not wrap in markdown or add explanations.
 
@@ -231,6 +301,14 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             except Exception:
                 lead_config = {}
 
+            delegated_providers: list[str] = []
+            try:
+                cfg_obj = json.loads(job.config_json) if job.config_json else {}
+                raw_delegated = cfg_obj.get("delegated_providers") or []
+                delegated_providers = [str(p).lower() for p in raw_delegated if str(p).lower() in PROVIDER_CATALOG]
+            except Exception:
+                delegated_providers = []
+
         if cancel_event.is_set():
             await _set_agent_status(job_id, "cancelled")
             return
@@ -247,7 +325,7 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
         )
 
         orch_adapter = create_adapter(orchestrator_prov)
-        orch_prompt = build_orchestrator_prompt(research_topic)
+        orch_prompt = build_orchestrator_prompt(research_topic, allowed_providers=delegated_providers)
 
         ask_kwargs: dict[str, Any] = {
             "timeout_s": 300,
@@ -293,23 +371,37 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             dispatch_items = [item.model_dump() for item in validated.agents_dispatch]
         except Exception as json_err:
             logger.warning("orchestrator_json_parse_failed", error=str(json_err), raw=orch_res.answer_markdown[:300])
-            # Fallback default plan
+            # Fallback default plan using allowed delegated providers
+            p1 = delegated_providers[0] if delegated_providers else "deepseek"
+            p2 = delegated_providers[1 % len(delegated_providers)] if delegated_providers else "perplexity"
             dispatch_items = [
                 {
-                    "id": "deepseek",
-                    "name": "DeepSeek",
+                    "id": p1,
+                    "name": PROVIDER_CATALOG.get(p1, {}).get("name", p1.title()),
                     "config": {"thinking": True},
                     "sub_topic": "Nền tảng lý thuyết & Giải thuật",
                     "question": f"Phân tích chuyên sâu về kiến trúc và thuật toán liên quan đến: {research_topic}",
                 },
                 {
-                    "id": "perplexity",
-                    "name": "Perplexity",
+                    "id": p2,
+                    "name": PROVIDER_CATALOG.get(p2, {}).get("name", p2.title()),
                     "config": {"thinking": True},
                     "sub_topic": "Dữ liệu ứng dụng thực tế & Nguồn dẫn chứng",
                     "question": f"Tìm kiếm các số liệu, tài liệu học thuật và trường hợp ứng dụng thực tế mới nhất của: {research_topic}",
                 },
             ]
+
+        # Enforce that only allowed delegated providers are used
+        if delegated_providers:
+            sanitized_dispatch: list[dict[str, Any]] = []
+            for item in dispatch_items:
+                pid = str(item.get("id", "")).lower()
+                if pid not in delegated_providers:
+                    fallback_id = delegated_providers[len(sanitized_dispatch) % len(delegated_providers)]
+                    item["id"] = fallback_id
+                    item["name"] = PROVIDER_CATALOG.get(fallback_id, {}).get("name", fallback_id.title())
+                sanitized_dispatch.append(item)
+            dispatch_items = sanitized_dispatch
 
         orch_duration = round(time.monotonic() - orch_start, 1)
         for idx, item in enumerate(dispatch_items, start=1):
