@@ -205,6 +205,24 @@ export function AgentConfigScreen({
       return;
     }
 
+    if (selectedOrchestrator === "gemini") {
+      setOrchMode("");
+      const isDr = orchSel?.deep_research !== undefined ? orchSel.deep_research : (orchCaps?.deep_research ?? false);
+      setOrchDeepResearch(isDr);
+      const chosenModel = orchSel?.model_id || orchCaps?.selected_model_id || (orchCaps?.available_models && orchCaps.available_models.length > 0 ? orchCaps.available_models[0].id : "pro");
+      setOrchModel(chosenModel);
+      if (orchSel?.thinking_level_id) {
+        setOrchThinkingLevel(orchSel.thinking_level_id);
+      } else if (orchCaps?.selected_thinking_level_id) {
+        setOrchThinkingLevel(orchCaps.selected_thinking_level_id);
+      } else if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0) {
+        setOrchThinkingLevel(orchCaps.thinking_levels[0].id);
+      } else {
+        setOrchThinkingLevel("medium");
+      }
+      return;
+    }
+
     if (selectedOrchestrator === "copilot") {
       setOrchModel("");
       setOrchThinkingLevel("");
@@ -346,6 +364,24 @@ export function AgentConfigScreen({
       }
       setLeadWebSearch(leadSel?.web_search !== undefined ? leadSel.web_search : (leadCaps?.web_search ?? true));
       setLeadResearchMode(leadSel?.research_mode || leadCaps?.research_mode || "normal");
+      return;
+    }
+
+    if (selectedLead === "gemini") {
+      setLeadMode("");
+      const isDr = leadSel?.deep_research !== undefined ? leadSel.deep_research : (leadCaps?.deep_research ?? false);
+      setLeadDeepResearch(isDr);
+      const chosenModel = leadSel?.model_id || leadCaps?.selected_model_id || (leadCaps?.available_models && leadCaps.available_models.length > 0 ? leadCaps.available_models[0].id : "pro");
+      setLeadModel(chosenModel);
+      if (leadSel?.thinking_level_id) {
+        setLeadThinkingLevel(leadSel.thinking_level_id);
+      } else if (leadCaps?.selected_thinking_level_id) {
+        setLeadThinkingLevel(leadCaps.selected_thinking_level_id);
+      } else if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0) {
+        setLeadThinkingLevel(leadCaps.thinking_levels[0].id);
+      } else {
+        setLeadThinkingLevel("medium");
+      }
       return;
     }
 
@@ -803,7 +839,9 @@ export function AgentConfigScreen({
     };
     if (selectedOrchestrator === "gemini") {
       orchConfig.model = orchModel || "pro";
-      orchConfig.mode = orchMode || "high";
+      orchConfig.mode = "";
+      orchConfig.mode_id = "";
+      orchConfig.deep_research = orchDeepResearch;
     } else if (selectedOrchestrator === "qwen") {
       orchConfig.model = orchModel || "qwen-3.8-max";
       orchConfig.thinking_level_id = orchDeepResearch ? "auto" : (orchThinkingLevel || "auto");
@@ -868,7 +906,9 @@ export function AgentConfigScreen({
     };
     if (selectedLead === "gemini") {
       leadConfig.model = leadModel || "pro";
-      leadConfig.mode = leadMode || "high";
+      leadConfig.mode = "";
+      leadConfig.mode_id = "";
+      leadConfig.deep_research = leadDeepResearch;
     } else if (selectedLead === "qwen") {
       leadConfig.model = leadModel || "qwen-3.8-max";
       leadConfig.thinking_level_id = leadDeepResearch ? "auto" : (leadThinkingLevel || "auto");
@@ -1569,6 +1609,48 @@ export function AgentConfigScreen({
                           }}
                         >
                           {orchResearchMode === "advanced" ? "BẬT" : "TẮT"}
+                        </span>
+                      </button>
+                    )}
+
+                    {/* Gemini Deep Research Toggle */}
+                    {selectedOrchestrator === "gemini" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = !orchDeepResearch;
+                          setOrchDeepResearch(nextVal);
+                          onUpdateSelection?.(selectedOrchestrator, { deep_research: nextVal });
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-sm, 6px)",
+                          border: `1.5px solid ${orchDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
+                          backgroundColor: orchDeepResearch ? "#f5f3ff" : "#ffffff",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: orchDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Bật/Tắt tính năng Deep Research của Gemini (+ menu)"
+                      >
+                        <SparklesIcon size={14} color={orchDeepResearch ? "#7c3aed" : "#64748b"} />
+                        <span>Deep Research</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 10,
+                            backgroundColor: orchDeepResearch ? "#7c3aed" : "#e2e8f0",
+                            color: orchDeepResearch ? "#ffffff" : "#64748b",
+                          }}
+                        >
+                          {orchDeepResearch ? "BẬT" : "TẮT"}
                         </span>
                       </button>
                     )}
@@ -2277,6 +2359,48 @@ export function AgentConfigScreen({
                           }}
                         >
                           {leadResearchMode === "advanced" ? "BẬT" : "TẮT"}
+                        </span>
+                      </button>
+                    )}
+
+                    {/* Gemini Deep Research Toggle */}
+                    {selectedLead === "gemini" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = !leadDeepResearch;
+                          setLeadDeepResearch(nextVal);
+                          onUpdateSelection?.(selectedLead, { deep_research: nextVal });
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-sm, 6px)",
+                          border: `1.5px solid ${leadDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
+                          backgroundColor: leadDeepResearch ? "#f5f3ff" : "#ffffff",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: leadDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Bật/Tắt tính năng Deep Research của Gemini (+ menu)"
+                      >
+                        <SparklesIcon size={14} color={leadDeepResearch ? "#7c3aed" : "#64748b"} />
+                        <span>Deep Research</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 10,
+                            backgroundColor: leadDeepResearch ? "#7c3aed" : "#e2e8f0",
+                            color: leadDeepResearch ? "#ffffff" : "#64748b",
+                          }}
+                        >
+                          {leadDeepResearch ? "BẬT" : "TẮT"}
                         </span>
                       </button>
                     )}

@@ -72,9 +72,11 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
     if (cachedCaps["gemini"]) {
       cachedCaps["gemini"].modes = [];
       cachedCaps["gemini"].selected_mode_id = undefined;
+      if (cachedCaps["gemini"].deep_research === undefined) cachedCaps["gemini"].deep_research = false;
     }
     if (cachedSelections["gemini"]) {
       cachedSelections["gemini"].mode_id = "";
+      if (cachedSelections["gemini"].deep_research === undefined) cachedSelections["gemini"].deep_research = false;
     }
     if (cachedCaps["qwen"]) {
       cachedCaps["qwen"].modes = [];
@@ -359,6 +361,9 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           if (caps.deep_research === undefined) caps.deep_research = false;
           if (!caps.research_mode) caps.research_mode = "normal";
         }
+        if (p === "gemini" && caps) {
+          if (caps.deep_research === undefined) caps.deep_research = false;
+        }
         setCapabilitiesMap((prev) => {
           const updated = { ...prev, [p]: caps };
           saveStorage(CAPS_STORAGE_KEY, updated);
@@ -375,6 +380,7 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           const isPerplexity = p === "perplexity";
           const isKimi = p === "kimi";
           const isQwen = p === "qwen";
+          const isGemini = p === "gemini";
 
           // Safe model for Claude & Kimi
           const isKimiDeepResearch = isKimi && (existing.deep_research !== undefined ? existing.deep_research : (caps.deep_research ?? false));
@@ -409,7 +415,7 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
               thinking_level_id: (isDeepSeek || isCopilot || isChatGPT || isPerplexity)
                 ? ""
                 : safeThinking,
-              mode_id: (isDeepSeek || isChatGPT || isPerplexity || isKimi || isQwen)
+              mode_id: (isDeepSeek || isChatGPT || isPerplexity || isKimi || isQwen || isGemini)
                 ? ""
                 : existing.mode_id || caps.selected_mode_id || caps.modes[0]?.id || (isCopilot ? "auto" : ""),
               deep_thinking: isPerplexity
@@ -422,7 +428,7 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
                 : (isDeepSeek || isChatGPT || isQwen)
                 ? (existing.web_search !== undefined ? existing.web_search : (caps.web_search ?? true))
                 : existing.web_search,
-              deep_research: (isChatGPT || isKimi || isQwen)
+              deep_research: (isChatGPT || isKimi || isQwen || isGemini)
                 ? (existing.deep_research !== undefined ? existing.deep_research : (caps.deep_research ?? false))
                 : existing.deep_research,
               research_mode: isQwen
@@ -515,6 +521,8 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
               safeUpdates.research_mode = "normal";
             }
           }
+        } else if (p === "gemini") {
+          safeUpdates = { ...updates, mode_id: "" };
         }
         const updated = {
           ...prev,

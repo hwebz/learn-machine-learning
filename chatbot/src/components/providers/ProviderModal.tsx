@@ -247,6 +247,7 @@ export function ProviderModal({
               const isPerplexity = p.id === "perplexity";
               const isKimi = p.id === "kimi";
               const isQwen = p.id === "qwen";
+              const isGemini = p.id === "gemini";
 
               const isDeepThinking = sel.deep_thinking !== undefined ? sel.deep_thinking : (caps?.deep_thinking ?? false);
               const isWebSearch = sel.web_search !== undefined ? sel.web_search : (caps?.web_search ?? true);
@@ -1521,8 +1522,191 @@ export function ProviderModal({
                           )}
                         </div>
                       </div>
+                    ) : isGemini ? (
+                      /* Gemini: Row 1 = Model & Reasoning, Row 2 = Deep Research toggle */
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 10,
+                          flexGrow: 1,
+                        }}
+                      >
+                        {/* Row 1: Model & Reasoning */}
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: thinkingLevels.length > 0 ? "1fr 1fr" : "1fr",
+                            gap: 10,
+                          }}
+                        >
+                          {/* 1. Model Selector */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <label
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: "var(--text-secondary)",
+                                  letterSpacing: "0.4px",
+                                }}
+                              >
+                                Mô hình Gemini
+                              </label>
+                              <span
+                                style={{
+                                  fontSize: 9.5,
+                                  padding: "1px 5px",
+                                  borderRadius: 3,
+                                  backgroundColor: currentModel?.disabled ? "#fef3c7" : "var(--brand-blue)",
+                                  color: currentModel?.disabled ? "#b45309" : "#ffffff",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {currentModel?.badge || "Active"}
+                              </span>
+                            </div>
+                            <select
+                              disabled={models.length <= 1}
+                              value={currentModelId}
+                              onChange={(e) => {
+                                const targetM = models.find((m) => m.id === e.target.value);
+                                if (targetM?.disabled) return;
+                                onUpdateSelection?.(p.id, { model_id: e.target.value });
+                              }}
+                              style={{
+                                width: "100%",
+                                padding: "6px 8px",
+                                borderRadius: 6,
+                                border: "1px solid var(--border-default, #cbd5e1)",
+                                backgroundColor: "#ffffff",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: "var(--text-primary, #0f172a)",
+                                cursor: "pointer",
+                                outline: "none",
+                              }}
+                              title="Chọn mô hình Gemini"
+                            >
+                              {models.map((m) => (
+                                <option key={m.id} value={m.id} disabled={m.disabled}>
+                                  {m.label} {m.disabled ? "— (Upgrade)" : m.badge ? `[${m.badge}]` : ""}
+                                </option>
+                              ))}
+                            </select>
+                            <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
+                              {currentModel?.description || "Mô hình Google Gemini"}
+                            </span>
+                          </div>
+
+                          {/* 2. Reasoning Picker */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <label
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: "var(--text-secondary)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                }}
+                              >
+                                <BrainIcon size={12} color="var(--brand-blue)" />
+                                <span>Mức suy luận (Reasoning)</span>
+                              </label>
+                              {currentThinking?.badge && (
+                                <span
+                                  style={{
+                                    fontSize: 9.5,
+                                    padding: "1px 5px",
+                                    borderRadius: 3,
+                                    backgroundColor: "#eff6ff",
+                                    color: "var(--brand-blue)",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {currentThinking.badge}
+                                </span>
+                              )}
+                            </div>
+                            <select
+                              disabled={thinkingLevels.length <= 1}
+                              value={currentThinkingId}
+                              onChange={(e) => {
+                                onUpdateSelection?.(p.id, { thinking_level_id: e.target.value });
+                              }}
+                              style={{
+                                width: "100%",
+                                padding: "6px 8px",
+                                borderRadius: 6,
+                                border: "1px solid var(--border-default, #cbd5e1)",
+                                backgroundColor: thinkingLevels.length <= 1 ? "#f8fafc" : "#ffffff",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: thinkingLevels.length <= 1 ? "#64748b" : "var(--text-primary, #0f172a)",
+                                cursor: thinkingLevels.length <= 1 ? "not-allowed" : "pointer",
+                                outline: "none",
+                              }}
+                              title="Chọn mức độ suy luận"
+                            >
+                              {thinkingLevels.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.label}
+                                </option>
+                              ))}
+                            </select>
+                            <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
+                              {currentThinking?.description || "Mức suy luận Gemini"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Row 2: Deep Research Toggle */}
+                        <div
+                          onClick={() => onUpdateSelection?.(p.id, { deep_research: !isDeepResearch })}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "8px 10px",
+                            borderRadius: 6,
+                            border: `1.5px solid ${isDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
+                            backgroundColor: isDeepResearch ? "#f5f3ff" : "#ffffff",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                          }}
+                          title="Bật/Tắt tính năng Deep Research của Gemini (+ menu)"
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden" }}>
+                            <SparklesIcon size={14} color={isDeepResearch ? "#7c3aed" : "#64748b"} />
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 11.5, fontWeight: 700, color: isDeepResearch ? "#7c3aed" : "var(--text-primary, #0f172a)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                Deep Research
+                              </div>
+                              <div style={{ fontSize: 9.5, color: "var(--text-muted, #64748b)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                Nghiên cứu sâu (+ menu)
+                              </div>
+                            </div>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: 9.5,
+                              fontWeight: 700,
+                              padding: "2px 6px",
+                              borderRadius: 10,
+                              backgroundColor: isDeepResearch ? "#7c3aed" : "#e2e8f0",
+                              color: isDeepResearch ? "#ffffff" : "#64748b",
+                              marginLeft: 4,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {isDeepResearch ? "BẬT" : "TẮT"}
+                          </span>
+                        </div>
+                      </div>
                     ) : (
-                      /* Other AI Providers (Claude, Gemini, Qwen): Row 1 = Model & Reasoning, Row 2 = Mode */
+                      /* Other AI Providers (Claude): Row 1 = Model & Reasoning, Row 2 = Mode */
                       <div
                         style={{
                           display: "grid",

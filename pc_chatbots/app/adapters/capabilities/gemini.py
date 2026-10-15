@@ -123,7 +123,48 @@ class GeminiCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             account_type="pro",
             supported_data_types=data_types,
             voice_chat=voice,
+            deep_research=False,
         )
+
+    async def _find_plus_button(self, page: Any, timeout_s: float = 4.0) -> Any | None:
+        """Locate the '+' (Add / Tools / Upload) button near prompt textarea on Gemini."""
+        import time
+
+        candidates = [
+            "button[aria-label*='Thêm tệp' i]",
+            "button[aria-label*='Thêm' i]",
+            "button[aria-label*='Add' i]",
+            "button[aria-label*='Tải tệp' i]",
+            "button[aria-label*='Upload' i]",
+            "button:has(mat-icon[data-mat-icon-name='add'])",
+            "button:has(mat-icon:has-text('add'))",
+            "button:has(mat-icon[data-mat-icon-name='add_circle'])",
+            "button:has(mat-icon[data-mat-icon-name='add_circle_outline'])",
+            "button:has(mat-icon[data-mat-icon-name='attach_file'])",
+            "button[data-test-id*='add' i]",
+            "button[data-test-id*='upload' i]",
+            "button[data-test-id*='tool' i]",
+            "button.uploader-button",
+            ".input-area button:has-text('+')",
+            "rich-textarea ~ * button:has-text('+')",
+            "button:has-text('+')",
+            "button[aria-label*='Công cụ' i]",
+            "button[aria-label*='Tools' i]",
+        ]
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            for sel in candidates:
+                try:
+                    loc = page.locator(sel)
+                    cnt = await loc.count()
+                    for i in range(cnt):
+                        b = loc.nth(i)
+                        if await b.is_visible(timeout=200):
+                            return b
+                except Exception:
+                    continue
+            await asyncio.sleep(0.3)
+        return None
 
     async def _find_dropdown_button(self, page: Any, timeout_s: float = 8.0) -> Any | None:
         """Locate the Gemini mode/model dropdown trigger button with polling for SPA hydration."""
@@ -308,6 +349,25 @@ class GeminiCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             await asyncio.sleep(0.3)
             await page.keyboard.press("Escape")
 
+            # Check if Deep Research is currently enabled on the live DOM
+            is_dr_active = False
+            try:
+                active_dr_indicators = [
+                    "[aria-label*='Deep Research' i][aria-pressed='true']",
+                    "button[aria-label*='Deep Research' i].active",
+                    ".deep-research-chip",
+                    ".selected-tool:has-text('Deep Research')",
+                    "[data-test-id*='deep-research'][aria-checked='true']",
+                    ".input-area span:has-text('Deep Research')",
+                ]
+                for sel in active_dr_indicators:
+                    if await page.locator(sel).count() > 0:
+                        is_dr_active = True
+                        break
+            except Exception:
+                pass
+            caps.deep_research = is_dr_active
+
             caps.is_live_dom = True
             logger.info(
                 "gemini_dom_inspected_successfully",
@@ -315,6 +375,7 @@ class GeminiCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
                 selected_model=caps.selected_model_id,
                 thinking_levels_count=len(caps.thinking_levels),
                 selected_thinking=caps.selected_thinking_level_id,
+                deep_research=caps.deep_research,
             )
             return caps
         except Exception as exc:
@@ -328,12 +389,7 @@ class GeminiCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             return caps
 
     async def apply_selection(self, page: Any, config: ProviderSelectionRequest) -> None:
-        """Apply target model and thinking effort to Gemini's web interface."""
-        btn = await self._find_dropdown_button(page)
-        if btn is None:
-            logger.info("gemini_apply_button_not_found")
-            return
-
+        """Apply target model, thinking effort, and deep research to Gemini's web interface."""
         target_model = (config.model_id or "").lower().strip()
         target_thinking = (config.thinking_level_id or "").lower().strip()
         mode_val = (config.mode_id or "").lower().strip()
@@ -347,6 +403,7 @@ class GeminiCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             "gemini_applying_selection",
             target_model=target_model,
             target_thinking=target_thinking,
+            deep_research=config.deep_research,
         )
 
         try:
@@ -429,6 +486,61 @@ class GeminiCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
                     else:
                         await page.keyboard.press("Escape")
                         await asyncio.sleep(0.3)
+
+            # 3. Handle Deep Research toggle via '+' button
+            if config.deep_research is not None:
+                try:
+                    dr_active = False
+                    active_indicators = [
+                        "[aria-label*='Deep Research' i][aria-pressed='true']",
+                        "button[aria-label*='Deep Research' i].active",
+                        ".deep-research-chip",
+                        ".selected-tool:has-text('Deep Research')",
+                        ".input-area span:has-text('Deep Research')",
+                    ]
+                    for sel in active_indicators:
+                        if await page.locator(sel).count() > 0:
+                            dr_active = True
+                            break
+
+                    if dr_active != config.deep_research:
+                        dismissed = False
+                        if not config.deep_research:
+                            close_btn = page.locator(".deep-research-chip button, [aria-label*='Remove Deep Research' i], [aria-label*='Xóa Deep Research' i], .selected-tool:has-text('Deep Research') button").first
+                            if await close_btn.is_visible(timeout=500):
+                                await close_btn.click(timeout=1000)
+                                dismissed = True
+                                logger.info("gemini_deep_research_dismissed_via_chip")
+
+                        if not dismissed:
+                            plus_btn = await self._find_plus_button(page)
+                            if plus_btn:
+                                await plus_btn.click(timeout=3000)
+                                await asyncio.sleep(0.6)
+
+                                dr_item = page.locator(
+                                    "[role='menuitem']:has-text('Deep Research'), "
+                                    ".mat-mdc-menu-item:has-text('Deep Research'), "
+                                    "button:has-text('Deep Research'), "
+                                    "[role='option']:has-text('Deep Research'), "
+                                    "[role='menuitem']:has-text('Nghiên cứu chuyên sâu'), "
+                                    "[role='menuitem']:has-text('Nghiên cứu sâu')"
+                                ).first
+                                if await dr_item.is_visible(timeout=2000):
+                                    await dr_item.click(timeout=3000)
+                                    logger.info("gemini_deep_research_toggled", desired=config.deep_research)
+                                    await asyncio.sleep(0.8)
+                                else:
+                                    await page.keyboard.press("Escape")
+                                    await asyncio.sleep(0.3)
+                            else:
+                                logger.warning("gemini_plus_button_not_found_for_deep_research")
+                except Exception as dr_err:
+                    logger.warning("gemini_deep_research_toggle_failed", error=str(dr_err))
+                    try:
+                        await page.keyboard.press("Escape")
+                    except Exception:
+                        pass
 
             # Final cleanup: ensure popup menu is dismissed
             await page.keyboard.press("Escape")

@@ -58,6 +58,7 @@ export function ProviderOptionsBar({
   const isClaude = providerId === "claude";
   const isPerplexity = providerId === "perplexity";
   const isKimi = providerId === "kimi";
+  const isGemini = providerId === "gemini";
 
   const isDeepThinking = selection.deep_thinking ?? capabilities?.deep_thinking ?? false;
   const isWebSearch = selection.web_search ?? capabilities?.web_search ?? true;
@@ -929,6 +930,44 @@ export function ProviderOptionsBar({
               </button>
             )}
           </div>
+        )}
+
+        {/* Gemini Deep Research Toggle Button */}
+        {isGemini && (
+          <button
+            type="button"
+            onClick={() => onUpdateSelection({ deep_research: !isDeepResearch })}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "4px 9px",
+              borderRadius: "var(--radius-sm, 6px)",
+              border: `1px solid ${isDeepResearch ? "#7c3aed" : "var(--border-subtle, #cbd5e1)"}`,
+              backgroundColor: isDeepResearch ? "#f5f3ff" : "#ffffff",
+              fontSize: 12,
+              fontWeight: 600,
+              color: isDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+            title="Bật/Tắt chế độ Deep Research trên Google Gemini (+ Deep Research)"
+          >
+            <SparklesIcon size={13} color={isDeepResearch ? "#7c3aed" : "#64748b"} />
+            <span>Deep Research</span>
+            <span
+              style={{
+                fontSize: 9.5,
+                padding: "1px 4px",
+                borderRadius: 3,
+                backgroundColor: isDeepResearch ? "#7c3aed" : "#f1f5f9",
+                color: isDeepResearch ? "#ffffff" : "#64748b",
+                fontWeight: 700,
+              }}
+            >
+              {isDeepResearch ? "ON" : "OFF"}
+            </span>
+          </button>
         )}
 
         {/* 3. Mode Selector */}

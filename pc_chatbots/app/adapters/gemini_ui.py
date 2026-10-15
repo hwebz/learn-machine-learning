@@ -52,6 +52,7 @@ class GeminiUIAdapter(BrowserProviderAdapter):
                         model_id=parsed.get("model_id"),
                         thinking_level_id=parsed.get("thinking_level_id"),
                         mode_id=parsed.get("mode_id"),
+                        deep_research=parsed.get("deep_research"),
                     )
                     await strategy.apply_selection(page, config)
                     return
@@ -64,5 +65,6 @@ class GeminiUIAdapter(BrowserProviderAdapter):
             model_id="gemini-3.1-pro" if is_deep else "gemini-3.8-flash",
             thinking_level_id="high" if is_deep else "medium",
             mode_id=mode,
+            deep_research=True if is_deep else None,
         )
         await strategy.apply_selection(page, config)
