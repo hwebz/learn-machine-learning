@@ -92,22 +92,7 @@ class GeminiCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             ),
         ]
 
-        modes = [
-            OptionItem(
-                id="standard",
-                label="Standard (Tiêu chuẩn)",
-                description="Chế độ trò chuyện tiêu chuẩn nhanh chóng",
-                selected=True,
-                badge="Standard",
-            ),
-            OptionItem(
-                id="deep",
-                label="Deep Reasoning",
-                description="Kích hoạt mô hình 3.1 Pro với mức suy luận Cao",
-                selected=False,
-                badge="Deep",
-            ),
-        ]
+        modes: list[OptionItem] = []
 
         data_types = SupportedDataTypes(
             text=True,
@@ -134,7 +119,7 @@ class GeminiCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             thinking_levels=thinking_levels,
             selected_thinking_level_id="medium",
             modes=modes,
-            selected_mode_id="standard",
+            selected_mode_id=None,
             account_type="pro",
             supported_data_types=data_types,
             voice_chat=voice,

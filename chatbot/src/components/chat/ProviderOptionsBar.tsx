@@ -94,7 +94,9 @@ export function ProviderOptionsBar({
     },
   ];
 
-  const modes = capabilities?.modes && capabilities.modes.length > 0
+  const modes = providerId === "gemini"
+    ? []
+    : capabilities?.modes && capabilities.modes.length > 0
     ? capabilities.modes
     : isCopilot
     ? fallbackCopilotModes

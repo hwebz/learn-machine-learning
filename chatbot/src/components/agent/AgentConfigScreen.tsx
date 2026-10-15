@@ -129,8 +129,8 @@ export function AgentConfigScreen({
       setOrchMode(orchCaps.selected_mode_id);
     } else if (orchCaps?.modes && orchCaps.modes.length > 0) {
       setOrchMode(orchCaps.modes[0].id);
-    } else if (selectedOrchestrator === "gemini") {
-      setOrchMode("high");
+    } else {
+      setOrchMode("");
     }
   }, [selectedOrchestrator, orchCaps, orchSel]);
 
@@ -143,7 +143,7 @@ export function AgentConfigScreen({
     } else if (leadCaps?.available_models && leadCaps.available_models.length > 0) {
       setLeadModel(leadCaps.available_models[0].id);
     } else if (selectedLead === "gemini") {
-      setLeadModel("pro");
+      setLeadModel("gemini-3.1-pro");
     }
 
     if (leadSel?.thinking_level_id) {
@@ -160,8 +160,8 @@ export function AgentConfigScreen({
       setLeadMode(leadCaps.selected_mode_id);
     } else if (leadCaps?.modes && leadCaps.modes.length > 0) {
       setLeadMode(leadCaps.modes[0].id);
-    } else if (selectedLead === "gemini") {
-      setLeadMode("high");
+    } else {
+      setLeadMode("");
     }
   }, [selectedLead, leadCaps, leadSel]);
 
@@ -238,6 +238,9 @@ export function AgentConfigScreen({
 
   // Computed modes for Orchestrator
   const orchModes = useMemo<AgentOption[]>(() => {
+    if (selectedOrchestrator === "gemini") {
+      return [];
+    }
     if (orchCaps?.modes && orchCaps.modes.length > 0) {
       return orchCaps.modes;
     }
@@ -324,6 +327,9 @@ export function AgentConfigScreen({
 
   // Computed modes for Lead Provider
   const leadModes = useMemo<AgentOption[]>(() => {
+    if (selectedLead === "gemini") {
+      return [];
+    }
     if (leadCaps?.modes && leadCaps.modes.length > 0) {
       return leadCaps.modes;
     }

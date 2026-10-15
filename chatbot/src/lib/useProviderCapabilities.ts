@@ -54,6 +54,13 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
         cachedSelections["copilot"].mode_id = "auto";
       }
     }
+    if (cachedCaps["gemini"]) {
+      cachedCaps["gemini"].modes = [];
+      cachedCaps["gemini"].selected_mode_id = null;
+    }
+    if (cachedSelections["gemini"]) {
+      cachedSelections["gemini"].mode_id = "";
+    }
     setCapabilitiesMap(cachedCaps);
     setSelectionsMap(cachedSelections);
   }, []);
@@ -94,7 +101,7 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
                     caps.thinking_levels[0]?.id ||
                     "auto"
                   ),
-              mode_id: existing.mode_id || caps.selected_mode_id || caps.modes[0]?.id || (isCopilot ? "auto" : "standard"),
+              mode_id: existing.mode_id || caps.selected_mode_id || caps.modes[0]?.id || (isCopilot ? "auto" : (caps.modes && caps.modes.length > 0 ? "standard" : "")),
             },
           };
           saveStorage(SELECTIONS_STORAGE_KEY, updated);

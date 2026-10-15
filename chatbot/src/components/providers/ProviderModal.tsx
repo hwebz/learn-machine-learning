@@ -293,9 +293,11 @@ export function ProviderModal({
                 ? caps.thinking_levels
                 : [];
 
-              // 3. Modes: For ChatGPT, standard or thinking. For Copilot, all 5 options.
+              // 3. Modes: For ChatGPT, standard or thinking. For Copilot, all 5 options. Gemini has no modes.
               const modes =
-                p.id === "chatgpt"
+                p.id === "gemini"
+                  ? []
+                  : p.id === "chatgpt"
                   ? [
                       {
                         id: "standard",
@@ -367,8 +369,8 @@ export function ProviderModal({
               const currentThinking =
                 thinkingLevels.find((t) => t.id === currentThinkingId) || thinkingLevels[0];
 
-              const currentModeId = sel.mode_id || caps?.selected_mode_id || modes[0]?.id || (isCopilot ? "auto" : "standard");
-              const currentMode = modes.find((m) => m.id === currentModeId) || modes[0];
+              const currentModeId = modes.length > 0 ? (sel.mode_id || caps?.selected_mode_id || modes[0]?.id || (isCopilot ? "auto" : "standard")) : "";
+              const currentMode = modes.length > 0 ? (modes.find((m) => m.id === currentModeId) || modes[0]) : undefined;
 
               return (
                 <div

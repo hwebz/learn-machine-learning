@@ -165,26 +165,30 @@ export function resolveProviderOptions(
   }
 
   // 4. Mode Label
-  let modeLabel = norm === "copilot" ? "Auto" : "Tiêu chuẩn (Standard)";
-  const modeId = raw.mode_id;
-  if (modeId) {
-    const matched = activeCaps?.modes?.find((m) => m.id === modeId);
-    if (matched) {
-      modeLabel = matched.label || (matched as any).name || modeId;
-    } else if (modeId === "thinking") {
-      modeLabel = "Suy luận (Thinking)";
-    } else if (modeId === "auto") {
-      modeLabel = "Auto";
-    } else if (modeId === "quick") {
-      modeLabel = "Quick Response";
-    } else if (modeId === "think_deeper") {
-      modeLabel = "Think Deeper";
-    } else if (modeId === "gpt_5_6_quick") {
-      modeLabel = "GPT > GPT-5.6 Sol Quick Response";
-    } else if (modeId === "gpt_5_6_think") {
-      modeLabel = "GPT > GPT-5.6 Sol Think Deeper";
-    } else {
-      modeLabel = norm === "copilot" ? "Auto" : "Tiêu chuẩn (Standard)";
+  let modeLabel = "";
+  const hasModes = (activeCaps?.modes && activeCaps.modes.length > 0) || norm === "copilot" || norm === "chatgpt";
+  if (hasModes) {
+    modeLabel = norm === "copilot" ? "Auto" : "Tiêu chuẩn (Standard)";
+    const modeId = raw.mode_id;
+    if (modeId) {
+      const matched = activeCaps?.modes?.find((m) => m.id === modeId);
+      if (matched) {
+        modeLabel = matched.label || (matched as any).name || modeId;
+      } else if (modeId === "thinking") {
+        modeLabel = "Suy luận (Thinking)";
+      } else if (modeId === "auto") {
+        modeLabel = "Auto";
+      } else if (modeId === "quick") {
+        modeLabel = "Quick Response";
+      } else if (modeId === "think_deeper") {
+        modeLabel = "Think Deeper";
+      } else if (modeId === "gpt_5_6_quick") {
+        modeLabel = "GPT > GPT-5.6 Sol Quick Response";
+      } else if (modeId === "gpt_5_6_think") {
+        modeLabel = "GPT > GPT-5.6 Sol Think Deeper";
+      } else {
+        modeLabel = norm === "copilot" ? "Auto" : "Tiêu chuẩn (Standard)";
+      }
     }
   }
 
@@ -1158,19 +1162,21 @@ export function RightSidebar({
                                   >
                                     Suy luận: {currentProviderOpts.reasoning}
                                   </span>
-                                  <span
-                                    style={{
-                                      fontSize: 10,
-                                      padding: "1px 6px",
-                                      borderRadius: 3,
-                                      backgroundColor: "#ffffff",
-                                      border: "1px solid #dcfce7",
-                                      color: "#15803d",
-                                      fontWeight: 600,
-                                    }}
-                                  >
-                                    Chế độ: {currentProviderOpts.mode}
-                                  </span>
+                                  {currentProviderOpts.mode && (
+                                    <span
+                                      style={{
+                                        fontSize: 10,
+                                        padding: "1px 6px",
+                                        borderRadius: 3,
+                                        backgroundColor: "#ffffff",
+                                        border: "1px solid #dcfce7",
+                                        color: "#15803d",
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      Chế độ: {currentProviderOpts.mode}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             )}
