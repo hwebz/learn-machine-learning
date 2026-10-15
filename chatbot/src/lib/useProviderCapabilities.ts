@@ -161,6 +161,42 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
         cachedSelections["deepseek"].web_search = true;
       }
     }
+    if (cachedCaps["perplexity"]) {
+      cachedCaps["perplexity"].modes = [];
+      cachedCaps["perplexity"].selected_mode_id = undefined;
+      cachedCaps["perplexity"].thinking_levels = [];
+      cachedCaps["perplexity"].selected_thinking_level_id = undefined;
+      cachedCaps["perplexity"].selected_model_id = "auto";
+      cachedCaps["perplexity"].deep_thinking = false;
+      cachedCaps["perplexity"].web_search = true;
+      const hasBadPerplexityModels =
+        !cachedCaps["perplexity"].available_models ||
+        cachedCaps["perplexity"].available_models.length <= 1 ||
+        cachedCaps["perplexity"].available_models.some((m) => m.id === "default");
+      if (hasBadPerplexityModels) {
+        cachedCaps["perplexity"].available_models = [
+          { id: "auto", label: "Auto (Tự động)", description: "Mô hình mặc định của Perplexity (Tối ưu tự động theo ngữ cảnh)", selected: true, disabled: false, badge: "Auto" },
+          { id: "gpt-6-1-sol", label: "GPT-6.1 Sol", description: "Mô hình GPT-6.1 Sol trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
+          { id: "gpt-6-astra", label: "GPT-6 Astra", description: "Mô hình GPT-6 Astra trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Max" },
+          { id: "gemini-4-argon", label: "Gemini 4 Argon", description: "Mô hình Gemini 4 Argon trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "New" },
+          { id: "gemini-3-8-flash", label: "Gemini 3.8 Flash", description: "Mô hình Gemini 3.8 Flash trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
+          { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5", description: "Mô hình Claude Sonnet 5.5 trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
+          { id: "claude-opus-5-5", label: "Claude Opus 5.5", description: "Mô hình Claude Opus 5.5 trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Max" },
+          { id: "claude-fable-5-1", label: "Claude Fable 5.1", description: "Mô hình Claude Fable 5.1 trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Max" },
+          { id: "kimi-k3", label: "Kimi K3", description: "Mô hình Kimi K3 trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
+          { id: "glm-5-3", label: "GLM 5.3", description: "Mô hình GLM 5.3 trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
+          { id: "grok-4-7", label: "Grok 4.7", description: "Mô hình Grok 4.7 trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
+          { id: "nemotron-3-ultra", label: "Nemotron 3 Ultra", description: "Mô hình Nemotron 3 Ultra trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
+        ];
+      }
+    }
+    if (cachedSelections["perplexity"]) {
+      cachedSelections["perplexity"].model_id = "auto";
+      cachedSelections["perplexity"].thinking_level_id = "";
+      cachedSelections["perplexity"].mode_id = "";
+      cachedSelections["perplexity"].deep_thinking = false;
+      cachedSelections["perplexity"].web_search = true;
+    }
     saveStorage(CAPS_STORAGE_KEY, cachedCaps);
     saveStorage(SELECTIONS_STORAGE_KEY, cachedSelections);
     setCapabilitiesMap(cachedCaps);
@@ -221,6 +257,15 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           if (caps.deep_research === undefined) caps.deep_research = false;
           if (caps.deep_thinking === undefined) caps.deep_thinking = false;
         }
+        if (p === "perplexity" && caps) {
+          caps.modes = [];
+          caps.selected_mode_id = undefined;
+          caps.thinking_levels = [];
+          caps.selected_thinking_level_id = undefined;
+          caps.selected_model_id = "auto";
+          caps.deep_thinking = false;
+          caps.web_search = true;
+        }
         setCapabilitiesMap((prev) => {
           const updated = { ...prev, [p]: caps };
           saveStorage(CAPS_STORAGE_KEY, updated);
@@ -234,6 +279,7 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           const isChatGPT = p === "chatgpt";
           const isDeepSeek = p === "deepseek";
           const isClaude = p === "claude";
+          const isPerplexity = p === "perplexity";
 
           // Safe model for Claude (fallback to sonnet if opus/fable/default was stored)
           const rawModelId = existing.model_id || caps.selected_model_id || caps.available_models.find((m) => !m.disabled)?.id || "";
@@ -250,19 +296,25 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           const updated = {
             ...prev,
             [p]: {
-              model_id: (isDeepSeek || isCopilot || isChatGPT)
+              model_id: isPerplexity
+                ? "auto"
+                : (isDeepSeek || isCopilot || isChatGPT)
                 ? ""
                 : safeModelId,
-              thinking_level_id: (isDeepSeek || isCopilot || isChatGPT)
+              thinking_level_id: (isDeepSeek || isCopilot || isChatGPT || isPerplexity)
                 ? ""
                 : safeThinking,
-              mode_id: (isDeepSeek || isChatGPT)
+              mode_id: (isDeepSeek || isChatGPT || isPerplexity)
                 ? ""
                 : existing.mode_id || caps.selected_mode_id || caps.modes[0]?.id || (isCopilot ? "auto" : ""),
-              deep_thinking: (isDeepSeek || isChatGPT)
+              deep_thinking: isPerplexity
+                ? false
+                : (isDeepSeek || isChatGPT)
                 ? (existing.deep_thinking !== undefined ? existing.deep_thinking : (caps.deep_thinking ?? false))
                 : existing.deep_thinking,
-              web_search: (isDeepSeek || isChatGPT)
+              web_search: isPerplexity
+                ? true
+                : (isDeepSeek || isChatGPT)
                 ? (existing.web_search !== undefined ? existing.web_search : (caps.web_search ?? true))
                 : existing.web_search,
               deep_research: isChatGPT
@@ -329,9 +381,13 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
       const p = provider.toLowerCase();
       setSelectionsMap((prev) => {
         const existing = prev[p] || {};
-        const caps = capabilitiesMap[p];
         const isChatGPT = p === "chatgpt";
-        const safeUpdates = isChatGPT ? { ...updates, model_id: "", thinking_level_id: "", mode_id: "" } : updates;
+        const isPerplexity = p === "perplexity";
+        const safeUpdates = isChatGPT
+          ? { ...updates, model_id: "", thinking_level_id: "", mode_id: "" }
+          : isPerplexity
+          ? { ...updates, model_id: "auto", thinking_level_id: "", mode_id: "", deep_thinking: false, web_search: true }
+          : updates;
         const updated = {
           ...prev,
           [p]: { ...existing, ...safeUpdates },
@@ -340,7 +396,7 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
         return updated;
       });
     },
-    [capabilitiesMap]
+    []
   );
 
   // Active provider data computed

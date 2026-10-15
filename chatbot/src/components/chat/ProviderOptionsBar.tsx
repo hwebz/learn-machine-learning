@@ -56,12 +56,28 @@ export function ProviderOptionsBar({
   const isChatGPT = providerId === "chatgpt";
   const isDeepSeek = providerId === "deepseek";
   const isClaude = providerId === "claude";
+  const isPerplexity = providerId === "perplexity";
 
   const claudeFallbackModels: OptionItem[] = [
     { id: "claude-sonnet-5.5", label: "Sonnet 5.5", description: "Cân bằng hoàn hảo giữa trí tuệ và tốc độ", selected: true, badge: "Sonnet", disabled: false },
     { id: "claude-haiku-5.5", label: "Haiku 5.5", description: "Phản hồi nhanh nhất cho tác vụ ngắn gọn", selected: false, badge: "Haiku", disabled: false },
     { id: "claude-opus-5.5", label: "Opus 5.5", description: "Dành cho tài khoản Pro (Yêu cầu nâng cấp gói)", selected: false, badge: "Upgrade", disabled: true },
     { id: "claude-fable-5.1", label: "Fable 5.1", description: "Dành cho các thử thách khó khăn nhất (Yêu cầu nâng cấp gói)", selected: false, badge: "Upgrade", disabled: true },
+  ];
+
+  const perplexityFallbackModels: OptionItem[] = [
+    { id: "auto", label: "Auto (Tự động)", description: "Mô hình mặc định của Perplexity (Tối ưu tự động theo ngữ cảnh)", selected: true, disabled: false, badge: "Auto" },
+    { id: "gpt-6-1-sol", label: "GPT-6.1 Sol", description: "Mô hình GPT-6.1 Sol trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
+    { id: "gpt-6-astra", label: "GPT-6 Astra", description: "Mô hình GPT-6 Astra trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Max" },
+    { id: "gemini-4-argon", label: "Gemini 4 Argon", description: "Mô hình Gemini 4 Argon trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "New" },
+    { id: "gemini-3-8-flash", label: "Gemini 3.8 Flash", description: "Mô hình Gemini 3.8 Flash trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
+    { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5", description: "Mô hình Claude Sonnet 5.5 trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
+    { id: "claude-opus-5-5", label: "Claude Opus 5.5", description: "Mô hình Claude Opus 5.5 trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Max" },
+    { id: "claude-fable-5-1", label: "Claude Fable 5.1", description: "Mô hình Claude Fable 5.1 trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Max" },
+    { id: "kimi-k3", label: "Kimi K3", description: "Mô hình Kimi K3 trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
+    { id: "glm-5-3", label: "GLM 5.3", description: "Mô hình GLM 5.3 trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
+    { id: "grok-4-7", label: "Grok 4.7", description: "Mô hình Grok 4.7 trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
+    { id: "nemotron-3-ultra", label: "Nemotron 3 Ultra", description: "Mô hình Nemotron 3 Ultra trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
   ];
 
   const models: OptionItem[] = isDeepSeek || isCopilot || isChatGPT
@@ -77,6 +93,14 @@ export function ProviderOptionsBar({
         };
       })
       : claudeFallbackModels)
+    : isPerplexity
+    ? (capabilities?.available_models && capabilities.available_models.length > 0 && !capabilities.available_models.some((m) => m.id === "default")
+      ? capabilities.available_models.map((m) => ({
+        ...m,
+        disabled: m.id !== "auto",
+        badge: m.id === "auto" ? "Auto" : (m.badge || "Pro"),
+      }))
+      : perplexityFallbackModels)
     : capabilities?.available_models && capabilities.available_models.length > 0
     ? capabilities.available_models
     : providerId === "gemini"
@@ -94,7 +118,7 @@ export function ProviderOptionsBar({
       ]
     : [];
 
-  const thinkingLevels: OptionItem[] = isDeepSeek || isCopilot || isChatGPT
+  const thinkingLevels: OptionItem[] = isDeepSeek || isCopilot || isChatGPT || isPerplexity
     ? []
     : isClaude
     ? (capabilities?.thinking_levels && capabilities.thinking_levels.length > 0 && !capabilities.thinking_levels.some((t) => t.id === "auto")
@@ -160,7 +184,7 @@ export function ProviderOptionsBar({
     },
   ];
 
-  const modes = (providerId === "gemini" || providerId === "qwen" || providerId === "claude" || providerId === "deepseek" || providerId === "chatgpt")
+  const modes = (providerId === "gemini" || providerId === "qwen" || providerId === "claude" || providerId === "deepseek" || providerId === "chatgpt" || providerId === "perplexity")
     ? []
     : capabilities?.modes && capabilities.modes.length > 0
     ? capabilities.modes
@@ -171,7 +195,9 @@ export function ProviderOptionsBar({
   const voice = capabilities?.voice_chat;
 
   const selectableModels = models.filter((m) => !m.disabled);
-  const currentModel = models.find((m) => m.id === selection.model_id && !m.disabled) || selectableModels[0] || models[0];
+  const currentModel = isPerplexity
+    ? (models.find((m) => m.id === "auto") || models[0])
+    : (models.find((m) => m.id === selection.model_id && !m.disabled) || selectableModels[0] || models[0]);
   const currentThinking = isClaude
     ? (thinkingLevels.find((t) => t.id === selection.thinking_level_id && t.id !== "auto") || thinkingLevels.find((t) => t.id === "medium") || thinkingLevels[0])
     : (thinkingLevels.find((t) => t.id === selection.thinking_level_id) || thinkingLevels[0]);
@@ -447,6 +473,44 @@ export function ProviderOptionsBar({
           </div>
         )}
 
+        {/* Perplexity Disabled Thinking Toggle */}
+        {isPerplexity && (
+          <button
+            type="button"
+            disabled
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "4px 9px",
+              borderRadius: "var(--radius-sm, 6px)",
+              border: "1px solid var(--border-subtle, #cbd5e1)",
+              backgroundColor: "#f8fafc",
+              fontSize: 12,
+              fontWeight: 600,
+              color: "var(--text-muted, #94a3b8)",
+              cursor: "not-allowed",
+              opacity: 0.7,
+            }}
+            title="Tính năng Thinking bị khóa trên tài khoản Perplexity miễn phí"
+          >
+            <BrainIcon size={13} color="#94a3b8" />
+            <span>Thinking</span>
+            <span
+              style={{
+                fontSize: 9.5,
+                padding: "1px 4px",
+                borderRadius: 3,
+                backgroundColor: "#e2e8f0",
+                color: "#94a3b8",
+                fontWeight: 700,
+              }}
+            >
+              OFF (LOCKED)
+            </span>
+          </button>
+        )}
+
         {/* 1. Model Selector Dropdown */}
         {models.length > 0 && (
           <div ref={modelRef} style={{ position: "relative" }}>
@@ -481,7 +545,7 @@ export function ProviderOptionsBar({
                   fontWeight: 700,
                 }}
               >
-                Auto
+                {currentModel?.badge || (isCopilot ? "Auto" : "Active")}
               </span>
               {!isCopilot && <span style={{ fontSize: 10, color: "var(--text-muted, #94a3b8)" }}>▼</span>}
             </button>

@@ -150,6 +150,15 @@ export function AgentConfigScreen({
       return;
     }
 
+    if (selectedOrchestrator === "perplexity") {
+      setOrchModel("auto");
+      setOrchThinkingLevel("");
+      setOrchMode("");
+      setOrchDeepThinking(false);
+      setOrchWebSearch(true);
+      return;
+    }
+
     if (selectedOrchestrator === "copilot") {
       setOrchModel("");
       setOrchThinkingLevel("");
@@ -241,6 +250,15 @@ export function AgentConfigScreen({
       return;
     }
 
+    if (selectedLead === "perplexity") {
+      setLeadModel("auto");
+      setLeadThinkingLevel("");
+      setLeadMode("");
+      setLeadDeepThinking(false);
+      setLeadWebSearch(true);
+      return;
+    }
+
     if (selectedLead === "copilot") {
       setLeadModel("");
       setLeadThinkingLevel("");
@@ -298,6 +316,30 @@ export function AgentConfigScreen({
     if (selectedOrchestrator === "deepseek" || selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt") {
       return [];
     }
+    if (selectedOrchestrator === "perplexity") {
+      const perplexityFallbackModels: AgentOption[] = [
+        { id: "auto", label: "Auto (Tự động - Mặc định)", badge: "Auto", disabled: false },
+        { id: "gpt-6-1-sol", label: "GPT-6.1 Sol", badge: "Pro", disabled: true },
+        { id: "gpt-6-astra", label: "GPT-6 Astra", badge: "Max", disabled: true },
+        { id: "gemini-4-argon", label: "Gemini 4 Argon", badge: "New", disabled: true },
+        { id: "gemini-3-8-flash", label: "Gemini 3.8 Flash", badge: "Pro", disabled: true },
+        { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5", badge: "Pro", disabled: true },
+        { id: "claude-opus-5-5", label: "Claude Opus 5.5", badge: "Max", disabled: true },
+        { id: "claude-fable-5-1", label: "Claude Fable 5.1", badge: "Max", disabled: true },
+        { id: "kimi-k3", label: "Kimi K3", badge: "Pro", disabled: true },
+        { id: "glm-5-3", label: "GLM 5.3", badge: "Pro", disabled: true },
+        { id: "grok-4-7", label: "Grok 4.7", badge: "Pro", disabled: true },
+        { id: "nemotron-3-ultra", label: "Nemotron 3 Ultra", badge: "Pro", disabled: true },
+      ];
+      if (orchCaps?.available_models && orchCaps.available_models.length > 0 && !orchCaps.available_models.some((m) => m.id === "default")) {
+        return orchCaps.available_models.map((m) => ({
+          ...m,
+          disabled: m.id !== "auto",
+          badge: m.id === "auto" ? "Auto" : (m.badge || "Pro"),
+        }));
+      }
+      return perplexityFallbackModels;
+    }
     if (selectedOrchestrator === "claude") {
       const base: AgentOption[] = orchCaps?.available_models && orchCaps.available_models.length > 0
         ? orchCaps.available_models
@@ -346,7 +388,7 @@ export function AgentConfigScreen({
 
   // Computed thinking levels for Orchestrator
   const orchThinkingLevels = useMemo<AgentOption[]>(() => {
-    if (selectedOrchestrator === "deepseek" || selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt") {
+    if (selectedOrchestrator === "deepseek" || selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt" || selectedOrchestrator === "perplexity") {
       return [];
     }
     if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0) {
@@ -380,7 +422,7 @@ export function AgentConfigScreen({
 
   // Computed modes for Orchestrator
   const orchModes = useMemo<AgentOption[]>(() => {
-    if (selectedOrchestrator === "gemini" || selectedOrchestrator === "qwen" || selectedOrchestrator === "claude" || selectedOrchestrator === "deepseek" || selectedOrchestrator === "chatgpt") {
+    if (selectedOrchestrator === "gemini" || selectedOrchestrator === "qwen" || selectedOrchestrator === "claude" || selectedOrchestrator === "deepseek" || selectedOrchestrator === "chatgpt" || selectedOrchestrator === "perplexity") {
       return [];
     }
     if (orchCaps?.modes && orchCaps.modes.length > 0) {
@@ -402,6 +444,30 @@ export function AgentConfigScreen({
   const leadModels = useMemo<AgentOption[]>(() => {
     if (selectedLead === "deepseek" || selectedLead === "copilot" || selectedLead === "chatgpt") {
       return [];
+    }
+    if (selectedLead === "perplexity") {
+      const perplexityFallbackModels: AgentOption[] = [
+        { id: "auto", label: "Auto (Tự động - Mặc định)", badge: "Auto", disabled: false },
+        { id: "gpt-6-1-sol", label: "GPT-6.1 Sol", badge: "Pro", disabled: true },
+        { id: "gpt-6-astra", label: "GPT-6 Astra", badge: "Max", disabled: true },
+        { id: "gemini-4-argon", label: "Gemini 4 Argon", badge: "New", disabled: true },
+        { id: "gemini-3-8-flash", label: "Gemini 3.8 Flash", badge: "Pro", disabled: true },
+        { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5", badge: "Pro", disabled: true },
+        { id: "claude-opus-5-5", label: "Claude Opus 5.5", badge: "Max", disabled: true },
+        { id: "claude-fable-5-1", label: "Claude Fable 5.1", badge: "Max", disabled: true },
+        { id: "kimi-k3", label: "Kimi K3", badge: "Pro", disabled: true },
+        { id: "glm-5-3", label: "GLM 5.3", badge: "Pro", disabled: true },
+        { id: "grok-4-7", label: "Grok 4.7", badge: "Pro", disabled: true },
+        { id: "nemotron-3-ultra", label: "Nemotron 3 Ultra", badge: "Pro", disabled: true },
+      ];
+      if (leadCaps?.available_models && leadCaps.available_models.length > 0 && !leadCaps.available_models.some((m) => m.id === "default")) {
+        return leadCaps.available_models.map((m) => ({
+          ...m,
+          disabled: m.id !== "auto",
+          badge: m.id === "auto" ? "Auto" : (m.badge || "Pro"),
+        }));
+      }
+      return perplexityFallbackModels;
     }
     if (selectedLead === "claude") {
       const base: AgentOption[] = leadCaps?.available_models && leadCaps.available_models.length > 0
@@ -451,7 +517,7 @@ export function AgentConfigScreen({
 
   // Computed thinking levels for Lead Provider
   const leadThinkingLevels = useMemo<AgentOption[]>(() => {
-    if (selectedLead === "deepseek" || selectedLead === "copilot" || selectedLead === "chatgpt") {
+    if (selectedLead === "deepseek" || selectedLead === "copilot" || selectedLead === "chatgpt" || selectedLead === "perplexity") {
       return [];
     }
     if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0) {
@@ -485,7 +551,7 @@ export function AgentConfigScreen({
 
   // Computed modes for Lead Provider
   const leadModes = useMemo<AgentOption[]>(() => {
-    if (selectedLead === "gemini" || selectedLead === "qwen" || selectedLead === "claude" || selectedLead === "deepseek" || selectedLead === "chatgpt") {
+    if (selectedLead === "gemini" || selectedLead === "qwen" || selectedLead === "claude" || selectedLead === "deepseek" || selectedLead === "chatgpt" || selectedLead === "perplexity") {
       return [];
     }
     if (leadCaps?.modes && leadCaps.modes.length > 0) {
@@ -619,6 +685,14 @@ export function AgentConfigScreen({
       orchConfig.thinking_level_id = "";
       orchConfig.mode = "";
       orchConfig.mode_id = "";
+    } else if (selectedOrchestrator === "perplexity") {
+      orchConfig.model = "auto";
+      orchConfig.model_id = "auto";
+      orchConfig.thinking = false;
+      orchConfig.deep_thinking = false;
+      orchConfig.web_search = true;
+      orchConfig.mode = "";
+      orchConfig.mode_id = "";
     } else if (selectedOrchestrator === "zhipu") {
       orchConfig.model = orchModel || "glm-5.3";
       orchConfig.mode = orchMode || "high";
@@ -661,6 +735,14 @@ export function AgentConfigScreen({
       leadConfig.model_id = "";
       leadConfig.thinking = "";
       leadConfig.thinking_level_id = "";
+      leadConfig.mode = "";
+      leadConfig.mode_id = "";
+    } else if (selectedLead === "perplexity") {
+      leadConfig.model = "auto";
+      leadConfig.model_id = "auto";
+      leadConfig.thinking = false;
+      leadConfig.deep_thinking = false;
+      leadConfig.web_search = true;
       leadConfig.mode = "";
       leadConfig.mode_id = "";
     }
@@ -1086,7 +1168,42 @@ export function AgentConfigScreen({
                           ))}
                         </select>
                       </label>
-                    ) : selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt" ? null : (
+                    ) : selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt" ? null : selectedOrchestrator === "perplexity" ? (
+                      <button
+                        type="button"
+                        disabled
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-sm, 6px)",
+                          border: "1.5px solid var(--border-default, #cbd5e1)",
+                          backgroundColor: "#f8fafc",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: "var(--text-muted, #94a3b8)",
+                          cursor: "not-allowed",
+                          opacity: 0.7,
+                        }}
+                        title="Tính năng Thinking bị khóa trên tài khoản Perplexity miễn phí"
+                      >
+                        <BrainIcon size={14} color="#94a3b8" />
+                        <span>Thinking</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 10,
+                            backgroundColor: "#e2e8f0",
+                            color: "#94a3b8",
+                          }}
+                        >
+                          TẮT (KHÓA)
+                        </span>
+                      </button>
+                    ) : (
                       <label className="agent-checkbox-inline">
                         <input
                           type="checkbox"
@@ -1572,7 +1689,42 @@ export function AgentConfigScreen({
                           ))}
                         </select>
                       </label>
-                    ) : selectedLead === "copilot" || selectedLead === "chatgpt" ? null : (
+                    ) : selectedLead === "copilot" || selectedLead === "chatgpt" ? null : selectedLead === "perplexity" ? (
+                      <button
+                        type="button"
+                        disabled
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-sm, 6px)",
+                          border: "1.5px solid var(--border-default, #cbd5e1)",
+                          backgroundColor: "#f8fafc",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: "var(--text-muted, #94a3b8)",
+                          cursor: "not-allowed",
+                          opacity: 0.7,
+                        }}
+                        title="Tính năng Thinking bị khóa trên tài khoản Perplexity miễn phí"
+                      >
+                        <BrainIcon size={14} color="#94a3b8" />
+                        <span>Thinking</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 10,
+                            backgroundColor: "#e2e8f0",
+                            color: "#94a3b8",
+                          }}
+                        >
+                          TẮT (KHÓA)
+                        </span>
+                      </button>
+                    ) : (
                       <label className="agent-checkbox-inline">
                         <input
                           type="checkbox"

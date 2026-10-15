@@ -112,9 +112,15 @@ export function resolveProviderOptions(
     raw.thinking_level_id = "auto";
   }
 
+  // For Perplexity: lock Model to auto and Reasoning to Tắt
+  if (norm === "perplexity") {
+    raw.model_id = "auto";
+    raw.thinking_level_id = "none";
+  }
+
   // 2. Model Label
-  let modelLabel = (norm === "copilot" || (norm === "chatgpt" && isFreeAccount)) ? "Auto (Mặc định)" : "Auto (Tự động)";
-  if (!isFreeAccount && norm !== "copilot") {
+  let modelLabel = (norm === "copilot" || norm === "perplexity" || (norm === "chatgpt" && isFreeAccount)) ? "Auto (Tự động)" : "Auto (Tự động)";
+  if (!isFreeAccount && norm !== "copilot" && norm !== "perplexity") {
     const modelId = raw.model_id;
     if (modelId) {
       const matched = activeCaps?.available_models?.find((m) => m.id === modelId);
@@ -143,8 +149,8 @@ export function resolveProviderOptions(
   }
 
   // 3. Reasoning Label
-  let reasoningLabel = "Auto (Tự động)";
-  if (!isFreeAccount && norm !== "copilot") {
+  let reasoningLabel = norm === "perplexity" ? "Tắt (Khóa)" : "Auto (Tự động)";
+  if (!isFreeAccount && norm !== "copilot" && norm !== "perplexity") {
     const reasoningId = raw.thinking_level_id;
     if (reasoningId) {
       const matched = activeCaps?.thinking_levels?.find((t) => t.id === reasoningId);
@@ -166,7 +172,7 @@ export function resolveProviderOptions(
 
   // 4. Mode Label
   let modeLabel = "";
-  const hasModes = (activeCaps?.modes && activeCaps.modes.length > 0) || norm === "copilot" || norm === "chatgpt";
+  const hasModes = (activeCaps?.modes && activeCaps.modes.length > 0) || norm === "copilot";
   if (hasModes) {
     modeLabel = norm === "copilot" ? "Auto" : "Tiêu chuẩn (Standard)";
     const modeId = raw.mode_id;

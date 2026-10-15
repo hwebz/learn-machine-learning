@@ -244,6 +244,7 @@ export function ProviderModal({
               const isCopilot = p.id === "copilot";
               const isClaude = p.id === "claude";
               const isDeepSeek = p.id === "deepseek";
+              const isPerplexity = p.id === "perplexity";
 
               // 1. Models: Empty for ChatGPT, Copilot, and DeepSeek
               const claudeFallbackModels = [
@@ -251,6 +252,21 @@ export function ProviderModal({
                 { id: "claude-haiku-5.5", label: "Haiku 5.5", description: "Phản hồi nhanh nhất cho tác vụ ngắn gọn", selected: false, badge: "Haiku", disabled: false },
                 { id: "claude-opus-5.5", label: "Opus 5.5", description: "Dành cho tài khoản Pro (Yêu cầu nâng cấp gói)", selected: false, badge: "Upgrade", disabled: true },
                 { id: "claude-fable-5.1", label: "Fable 5.1", description: "Dành cho các thử thách khó khăn nhất (Yêu cầu nâng cấp gói)", selected: false, badge: "Upgrade", disabled: true },
+              ];
+
+              const perplexityFallbackModels = [
+                { id: "auto", label: "Auto (Tự động)", description: "Mô hình mặc định của Perplexity (Tối ưu tự động theo ngữ cảnh)", selected: true, disabled: false, badge: "Auto" },
+                { id: "gpt-6-1-sol", label: "GPT-6.1 Sol", description: "Mô hình GPT-6.1 Sol trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
+                { id: "gpt-6-astra", label: "GPT-6 Astra", description: "Mô hình GPT-6 Astra trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Max" },
+                { id: "gemini-4-argon", label: "Gemini 4 Argon", description: "Mô hình Gemini 4 Argon trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "New" },
+                { id: "gemini-3-8-flash", label: "Gemini 3.8 Flash", description: "Mô hình Gemini 3.8 Flash trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
+                { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5", description: "Mô hình Claude Sonnet 5.5 trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
+                { id: "claude-opus-5-5", label: "Claude Opus 5.5", description: "Mô hình Claude Opus 5.5 trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Max" },
+                { id: "claude-fable-5-1", label: "Claude Fable 5.1", description: "Mô hình Claude Fable 5.1 trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Max" },
+                { id: "kimi-k3", label: "Kimi K3", description: "Mô hình Kimi K3 trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
+                { id: "glm-5-3", label: "GLM 5.3", description: "Mô hình GLM 5.3 trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
+                { id: "grok-4-7", label: "Grok 4.7", description: "Mô hình Grok 4.7 trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
+                { id: "nemotron-3-ultra", label: "Nemotron 3 Ultra", description: "Mô hình Nemotron 3 Ultra trên Perplexity (Yêu cầu Pro)", selected: false, disabled: true, badge: "Pro" },
               ];
 
               const models = isChatGPT || isCopilot || isDeepSeek
@@ -266,32 +282,40 @@ export function ProviderModal({
                       };
                     })
                     : claudeFallbackModels)
-                  : caps?.available_models && caps.available_models.length > 0
-                    ? caps.available_models
-                    : p.id === "gemini"
-                      ? [
-                        { id: "gemini-3.8-flash", label: "3.8 Flash", description: "Trợ giúp toàn diện", selected: true, badge: "Flash" },
-                        { id: "gemini-3.5-flash-lite", label: "3.5 Flash-Lite", description: "Câu trả lời nhanh nhất", selected: false, badge: "Lite" },
-                        { id: "gemini-3.1-pro", label: "3.1 Pro", description: "Suy luận nâng cao", selected: false, badge: "Pro" },
-                        { id: "gemini-4-argon", label: "4 Argon", description: "Nhiệm vụ phức tạp", selected: false, badge: "Argon" },
-                      ]
-                      : p.id === "qwen"
+                  : isPerplexity
+                    ? (caps?.available_models && caps.available_models.length > 0 && !caps.available_models.some((m) => m.id === "default")
+                      ? caps.available_models.map((m) => ({
+                        ...m,
+                        disabled: m.id !== "auto",
+                        badge: m.id === "auto" ? "Auto" : (m.badge || "Pro"),
+                      }))
+                      : perplexityFallbackModels)
+                    : caps?.available_models && caps.available_models.length > 0
+                      ? caps.available_models
+                      : p.id === "gemini"
                         ? [
-                          { id: "qwen-3.8-max", label: "Qwen3.8-Max (Flagship)", description: "Mô hình cờ đầu thế hệ mới nhất", selected: true, badge: "Max" },
-                          { id: "qwen-3.7-plus", label: "Qwen3.7-Plus (High Performance)", description: "Mô hình hiệu năng cao", selected: false, badge: "Plus" },
-                          { id: "qwen-3.8-omni-flash", label: "Qwen3.8-Omni-Flash (Multimodal)", description: "Mô hình đa phương tiện tự nhiên", selected: false, badge: "Omni" },
+                          { id: "gemini-3.8-flash", label: "3.8 Flash", description: "Trợ giúp toàn diện", selected: true, badge: "Flash" },
+                          { id: "gemini-3.5-flash-lite", label: "3.5 Flash-Lite", description: "Câu trả lời nhanh nhất", selected: false, badge: "Lite" },
+                          { id: "gemini-3.1-pro", label: "3.1 Pro", description: "Suy luận nâng cao", selected: false, badge: "Pro" },
+                          { id: "gemini-4-argon", label: "4 Argon", description: "Nhiệm vụ phức tạp", selected: false, badge: "Argon" },
                         ]
-                        : [
-                          {
-                            id: "auto",
-                            label: "Auto (Tự động)",
-                            description: "Tự động chọn mô hình phù hợp",
-                            selected: true,
-                          },
-                        ];
+                        : p.id === "qwen"
+                          ? [
+                            { id: "qwen-3.8-max", label: "Qwen3.8-Max (Flagship)", description: "Mô hình cờ đầu thế hệ mới nhất", selected: true, badge: "Max" },
+                            { id: "qwen-3.7-plus", label: "Qwen3.7-Plus (High Performance)", description: "Mô hình hiệu năng cao", selected: false, badge: "Plus" },
+                            { id: "qwen-3.8-omni-flash", label: "Qwen3.8-Omni-Flash (Multimodal)", description: "Mô hình đa phương tiện tự nhiên", selected: false, badge: "Omni" },
+                          ]
+                          : [
+                            {
+                              id: "auto",
+                              label: "Auto (Tự động)",
+                              description: "Tự động chọn mô hình phù hợp",
+                              selected: true,
+                            },
+                          ];
 
-              // 2. Reasoning: Empty for ChatGPT, Copilot, and DeepSeek
-              const thinkingLevels = isChatGPT || isCopilot || isDeepSeek
+              // 2. Reasoning: Empty for ChatGPT, Copilot, DeepSeek, and Perplexity
+              const thinkingLevels = isChatGPT || isCopilot || isDeepSeek || isPerplexity
                 ? []
                 : isClaude
                   ? (caps?.thinking_levels && caps.thinking_levels.length > 0 && !caps.thinking_levels.some((t) => t.id === "auto")
@@ -319,9 +343,9 @@ export function ProviderModal({
                         ]
                         : [];
 
-              // 3. Modes: Copilot (All 5 options). Gemini, Qwen, Claude, DeepSeek, and ChatGPT have no modes.
+              // 3. Modes: Copilot (All 5 options). Gemini, Qwen, Claude, DeepSeek, ChatGPT, and Perplexity have no modes.
               const modes =
-                p.id === "gemini" || p.id === "qwen" || isClaude || isDeepSeek || isChatGPT
+                p.id === "gemini" || p.id === "qwen" || isClaude || isDeepSeek || isChatGPT || isPerplexity
                   ? []
                   : isCopilot && (!caps?.modes || caps.modes.length === 0)
                     ? [
@@ -369,20 +393,24 @@ export function ProviderModal({
               const selectableModels = models.filter((m) => !m.disabled);
               const currentModelId = isCopilot || isChatGPT
                 ? ""
-                : isClaude
-                  ? (sel.model_id && models.some((m) => m.id === sel.model_id && !m.disabled)
-                    ? sel.model_id
-                    : caps?.selected_model_id && models.some((m) => m.id === caps.selected_model_id && !m.disabled)
-                      ? caps.selected_model_id
-                      : "claude-sonnet-5.5")
-                  : sel.model_id && models.some((m) => m.id === sel.model_id && !m.disabled)
-                    ? sel.model_id
-                    : caps?.selected_model_id && models.some((m) => m.id === caps.selected_model_id && !m.disabled)
-                      ? caps.selected_model_id
-                      : selectableModels[0]?.id || models[0]?.id || "";
-              const currentModel = models.find((m) => m.id === currentModelId) || selectableModels[0] || models[0];
+                : isPerplexity
+                  ? "auto"
+                  : isClaude
+                    ? (sel.model_id && models.some((m) => m.id === sel.model_id && !m.disabled)
+                      ? sel.model_id
+                      : caps?.selected_model_id && models.some((m) => m.id === caps.selected_model_id && !m.disabled)
+                        ? caps.selected_model_id
+                        : "claude-sonnet-5.5")
+                    : sel.model_id && models.some((m) => m.id === sel.model_id && !m.disabled)
+                      ? sel.model_id
+                      : caps?.selected_model_id && models.some((m) => m.id === caps.selected_model_id && !m.disabled)
+                        ? caps.selected_model_id
+                        : selectableModels[0]?.id || models[0]?.id || "";
+              const currentModel = isPerplexity
+                ? (models.find((m) => m.id === "auto") || models[0])
+                : (models.find((m) => m.id === currentModelId) || selectableModels[0] || models[0]);
 
-              const currentThinkingId = isCopilot || isChatGPT
+              const currentThinkingId = isCopilot || isChatGPT || isPerplexity
                 ? ""
                 : isClaude
                   ? (sel.thinking_level_id && sel.thinking_level_id !== "auto" && thinkingLevels.some((t) => t.id === sel.thinking_level_id)
@@ -845,6 +873,131 @@ export function ProviderModal({
                             Copilot tự động chọn chế độ tối ưu
                           </div>
                         )}
+                      </div>
+                    ) : isPerplexity ? (
+                      /* Perplexity: Column 1 = Model list (Auto selected, Pro models disabled), Column 2 = Disabled Thinking Toggle */
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: 10,
+                          flexGrow: 1,
+                        }}
+                      >
+                        {/* 1. Model Selector */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <label
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: "var(--text-secondary)",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.4px",
+                              }}
+                            >
+                              Mô hình AI (Model)
+                            </label>
+                            <span
+                              style={{
+                                fontSize: 9.5,
+                                padding: "1px 5px",
+                                borderRadius: 3,
+                                backgroundColor: "var(--brand-blue)",
+                                color: "#ffffff",
+                                fontWeight: 700,
+                              }}
+                            >
+                              Auto
+                            </span>
+                          </div>
+                          <select
+                            value="auto"
+                            onChange={() => {
+                              // Always Auto for free accounts
+                            }}
+                            style={{
+                              width: "100%",
+                              padding: "6px 8px",
+                              borderRadius: 6,
+                              border: "1px solid var(--border-default, #cbd5e1)",
+                              backgroundColor: "#ffffff",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: "var(--text-primary, #0f172a)",
+                              cursor: "default",
+                              outline: "none",
+                            }}
+                          >
+                            {models.map((m) => (
+                              <option key={m.id} value={m.id} disabled={m.disabled}>
+                                {m.label}{m.disabled ? " (Pro - Khóa)" : " (Mặc định)"}
+                              </option>
+                            ))}
+                          </select>
+                          <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
+                            Tài khoản miễn phí cố định ở Auto. Mô hình Pro được đồng bộ từ DOM nhưng bị khóa.
+                          </span>
+                        </div>
+
+                        {/* 2. Disabled Thinking Toggle */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <span
+                              style={{
+                                fontSize: 9.5,
+                                padding: "1px 5px",
+                                borderRadius: 3,
+                                backgroundColor: "#f1f5f9",
+                                color: "#64748b",
+                                fontWeight: 700,
+                              }}
+                            >
+                              Locked
+                            </span>
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "7px 10px",
+                              borderRadius: 6,
+                              border: "1.5px solid var(--border-default, #cbd5e1)",
+                              backgroundColor: "#f8fafc",
+                              cursor: "not-allowed",
+                              opacity: 0.7,
+                            }}
+                            title="Tính năng Thinking bị khóa trên tài khoản Perplexity miễn phí"
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <BrainIcon size={14} color="#94a3b8" />
+                              <div>
+                                <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-muted, #64748b)" }}>
+                                  Thinking
+                                </div>
+                                <div style={{ fontSize: 9.5, color: "var(--text-muted, #94a3b8)" }}>
+                                  Suy luận đa bước
+                                </div>
+                              </div>
+                            </div>
+                            <span
+                              style={{
+                                fontSize: 9.5,
+                                fontWeight: 700,
+                                padding: "2px 6px",
+                                borderRadius: 10,
+                                backgroundColor: "#e2e8f0",
+                                color: "#94a3b8",
+                              }}
+                            >
+                              TẮT (KHÓA)
+                            </span>
+                          </div>
+                          <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
+                            Chế độ Thinking yêu cầu tài khoản Perplexity Pro
+                          </span>
+                        </div>
                       </div>
                     ) : (
                       /* Other AI Providers (Claude, Gemini, Qwen): Row 1 = Model & Reasoning, Row 2 = Mode */
