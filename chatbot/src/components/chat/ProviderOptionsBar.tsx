@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { ProviderLiveCapabilities, ProviderSelectionConfig, OptionItem } from "../../types/capabilities";
-import { BrainIcon, RefreshIcon, ChevronRightIcon, ModelBadgeLogo } from "../icons/Icons";
+import { BrainIcon, RefreshIcon, ChevronRightIcon, ModelBadgeLogo, SearchIcon } from "../icons/Icons";
 
 interface ProviderOptionsBarProps {
   providerName: string;
@@ -53,7 +53,11 @@ export function ProviderOptionsBar({
   }, []);
 
   const isCopilot = providerId === "copilot";
-  const models = capabilities?.available_models && capabilities.available_models.length > 0
+  const isDeepSeek = providerId === "deepseek";
+
+  const models = isDeepSeek
+    ? []
+    : capabilities?.available_models && capabilities.available_models.length > 0
     ? capabilities.available_models
     : providerId === "gemini"
     ? [
@@ -68,9 +72,18 @@ export function ProviderOptionsBar({
         { id: "qwen-3.7-plus", label: "Qwen3.7-Plus (High Performance)", description: "Mô hình hiệu năng cao", selected: false, badge: "Plus" },
         { id: "qwen-3.8-omni-flash", label: "Qwen3.8-Omni-Flash (Multimodal)", description: "Mô hình đa phương tiện tự nhiên", selected: false, badge: "Omni" },
       ]
+    : providerId === "claude"
+    ? [
+        { id: "claude-sonnet-5.5", label: "Sonnet 5.5", description: "Cân bằng hoàn hảo giữa trí tuệ và tốc độ", selected: true, badge: "Sonnet" },
+        { id: "claude-haiku-5.5", label: "Haiku 5.5", description: "Phản hồi nhanh nhất cho tác vụ ngắn gọn", selected: false, badge: "Haiku" },
+        { id: "claude-opus-5.5", label: "Opus 5.5", description: "Mô hình chuyên sâu cho bài toán phức tạp", selected: false, badge: "Opus" },
+        { id: "claude-fable-5.1", label: "Fable 5.1", description: "Dành cho các thử thách khó khăn nhất", selected: false, badge: "Fable" },
+      ]
     : [];
 
-  const thinkingLevels = capabilities?.thinking_levels && capabilities.thinking_levels.length > 0
+  const thinkingLevels = isDeepSeek
+    ? []
+    : capabilities?.thinking_levels && capabilities.thinking_levels.length > 0
     ? capabilities.thinking_levels
     : providerId === "gemini"
     ? [
@@ -83,6 +96,14 @@ export function ProviderOptionsBar({
         { id: "auto", label: "Auto (Tự động cân bằng)", description: "Tự động điều chỉnh mức độ suy luận", selected: true, badge: "Auto" },
         { id: "thinking", label: "Thinking (Suy luận sâu đa bước)", description: "Kích hoạt chuỗi tư duy mở rộng", selected: false, badge: "Think" },
         { id: "fast", label: "Fast (Phản hồi nhanh)", description: "Bỏ qua tư duy đa bước", selected: false, badge: "Fast" },
+      ]
+    : providerId === "claude"
+    ? [
+        { id: "medium", label: "Medium (Recommended)", description: "Khuyên dùng - Cân bằng độ sâu và giới hạn sử dụng", selected: true, badge: "Med" },
+        { id: "low", label: "Low", description: "Thấp - Phản hồi nhanh và tiết kiệm giới hạn", selected: false, badge: "Low" },
+        { id: "high", label: "High", description: "Cao - Phân tích đa bước kỹ lưỡng cho bài toán hóc búa", selected: false, badge: "High" },
+        { id: "extra", label: "Extra", description: "Rất cao - Suy luận chuyên sâu cho nghiên cứu phức tạp", selected: false, badge: "Extra" },
+        { id: "max", label: "Max", description: "Tối đa - 8x hoặc nhiều hơn mức sử dụng giới hạn", selected: false, badge: "Max" },
       ]
     : [];
 
@@ -124,7 +145,7 @@ export function ProviderOptionsBar({
     },
   ];
 
-  const modes = (providerId === "gemini" || providerId === "qwen")
+  const modes = (providerId === "gemini" || providerId === "qwen" || providerId === "claude" || providerId === "deepseek")
     ? []
     : capabilities?.modes && capabilities.modes.length > 0
     ? capabilities.modes
@@ -137,6 +158,9 @@ export function ProviderOptionsBar({
   const currentModel = models.find((m) => m.id === selection.model_id) || models[0];
   const currentThinking = thinkingLevels.find((t) => t.id === selection.thinking_level_id) || thinkingLevels[0];
   const currentMode = modes.find((m) => m.id === selection.mode_id) || modes[0];
+
+  const isDeepThinking = selection.deep_thinking ?? capabilities?.deep_thinking ?? false;
+  const isWebSearch = selection.web_search ?? capabilities?.web_search ?? true;
 
   const formatSyncTime = (ts?: string) => {
     if (!ts) return "Chưa đồng bộ";
@@ -165,7 +189,7 @@ export function ProviderOptionsBar({
         boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
       }}
     >
-      {/* Left controls: Model, Thinking, Mode */}
+      {/* Left controls: Model, Thinking, Mode, or DeepSeek Toggles */}
       <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginRight: 4 }}>
           <span
@@ -213,6 +237,83 @@ export function ProviderOptionsBar({
             </span>
           )}
         </div>
+
+        {/* DeepSeek 2 Toggles: DeepThink (R1) and Web Search */}
+        {isDeepSeek && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {/* 1. DeepThink Toggle */}
+            <button
+              type="button"
+              onClick={() => onUpdateSelection({ deep_thinking: !isDeepThinking })}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "4px 9px",
+                borderRadius: "var(--radius-sm, 6px)",
+                border: `1px solid ${isDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--border-subtle, #cbd5e1)"}`,
+                backgroundColor: isDeepThinking ? "var(--brand-blue-light, #eff6ff)" : "#ffffff",
+                fontSize: 12,
+                fontWeight: 600,
+                color: isDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--text-secondary, #475569)",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+              title="Bật/Tắt mô hình suy luận sâu DeepSeek-R1 (Chain of Thought)"
+            >
+              <BrainIcon size={13} color={isDeepThinking ? "var(--brand-blue, #2563eb)" : "#64748b"} />
+              <span>DeepThink (R1)</span>
+              <span
+                style={{
+                  fontSize: 9.5,
+                  padding: "1px 4px",
+                  borderRadius: 3,
+                  backgroundColor: isDeepThinking ? "var(--brand-blue, #2563eb)" : "#f1f5f9",
+                  color: isDeepThinking ? "#ffffff" : "#64748b",
+                  fontWeight: 700,
+                }}
+              >
+                {isDeepThinking ? "ON" : "OFF"}
+              </span>
+            </button>
+
+            {/* 2. Web Search Toggle */}
+            <button
+              type="button"
+              onClick={() => onUpdateSelection({ web_search: !isWebSearch })}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "4px 9px",
+                borderRadius: "var(--radius-sm, 6px)",
+                border: `1px solid ${isWebSearch ? "#059669" : "var(--border-subtle, #cbd5e1)"}`,
+                backgroundColor: isWebSearch ? "#ecfdf5" : "#ffffff",
+                fontSize: 12,
+                fontWeight: 600,
+                color: isWebSearch ? "#059669" : "var(--text-secondary, #475569)",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+              title="Bật/Tắt tính năng tìm kiếm Web thời gian thực của DeepSeek"
+            >
+              <SearchIcon size={12} color={isWebSearch ? "#059669" : "#64748b"} />
+              <span>Search (Web)</span>
+              <span
+                style={{
+                  fontSize: 9.5,
+                  padding: "1px 4px",
+                  borderRadius: 3,
+                  backgroundColor: isWebSearch ? "#059669" : "#f1f5f9",
+                  color: isWebSearch ? "#ffffff" : "#64748b",
+                  fontWeight: 700,
+                }}
+              >
+                {isWebSearch ? "ON" : "OFF"}
+              </span>
+            </button>
+          </div>
+        )}
 
         {/* 1. Model Selector Dropdown */}
         {models.length > 0 && (
@@ -281,7 +382,15 @@ export function ProviderOptionsBar({
                     <div
                       key={m.id}
                       onClick={() => {
-                        onUpdateSelection({ model_id: m.id });
+                        if (providerId === "deepseek") {
+                          if (m.id === "deepseek-r1") {
+                            onUpdateSelection({ model_id: m.id, thinking_level_id: "deepthink" });
+                          } else {
+                            onUpdateSelection({ model_id: m.id, thinking_level_id: "standard" });
+                          }
+                        } else {
+                          onUpdateSelection({ model_id: m.id });
+                        }
                         setIsModelOpen(false);
                       }}
                       style={{
@@ -373,7 +482,15 @@ export function ProviderOptionsBar({
                     <div
                       key={t.id}
                       onClick={() => {
-                        onUpdateSelection({ thinking_level_id: t.id });
+                        if (providerId === "deepseek") {
+                          if (t.id === "deepthink") {
+                            onUpdateSelection({ thinking_level_id: t.id, model_id: "deepseek-r1" });
+                          } else {
+                            onUpdateSelection({ thinking_level_id: t.id, model_id: "deepseek-v3" });
+                          }
+                        } else {
+                          onUpdateSelection({ thinking_level_id: t.id });
+                        }
                         setIsThinkingOpen(false);
                       }}
                       style={{

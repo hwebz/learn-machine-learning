@@ -15,29 +15,39 @@ class DeepSeekUIAdapter(BrowserProviderAdapter):
 
     name = "deepseek"
 
-    async def _select_mode(self, page: Any, mode: str) -> None:
-        """Switch DeepSeek mode (DeepThink R1 toggle)."""
-        is_deep = mode in {"deep", "deep_research", "research"}
-        chain = (self._cfg.get("mode_selectors") or {}).get("deep_think")
-        if not chain:
-            return
-        locator, _ = await resolve_locator(page, chain)
-        if locator is None:
-            logger.info("deepseek_mode_skipped", mode=mode)
-            return
-        try:
-            aria_pressed = await locator.get_attribute("aria-pressed")
-            cls = await locator.get_attribute("class") or ""
-            is_active = aria_pressed == "true" or "selected" in cls
+    async def _select_mode(self, page: Any, mode: str, *, timeout_s: float = 8.0) -> None:
+        """Configure DeepSeek model (DeepSeek-R1 vs DeepSeek-V3) and thinking effort (DeepThink vs Tiêu chuẩn)."""
+        from app.adapters.capabilities.deepseek import DeepSeekCapabilitiesStrategy
+        from app.adapters.capabilities.models import ProviderSelectionRequest
 
-            if is_deep and not is_active:
-                await locator.click(timeout=3000)
-                logger.info("deepseek_mode_selected", mode=mode, action="deepthink_enabled")
-            elif not is_deep and is_active:
-                await locator.click(timeout=3000)
-                logger.info("deepseek_mode_selected", mode=mode, action="deepthink_disabled")
-            else:
-                logger.info("deepseek_mode_already_set", mode=mode, is_active=is_active)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("deepseek_mode_click_failed", error=str(exc))
+        strategy = DeepSeekCapabilitiesStrategy()
+
+        if mode and mode.startswith("{") and mode.endswith("}"):
+            try:
+                import json
+                parsed = json.loads(mode)
+                if isinstance(parsed, dict):
+                    config = ProviderSelectionRequest(
+                        model_id=parsed.get("model_id"),
+                        thinking_level_id=parsed.get("thinking_level_id"),
+                        mode_id=parsed.get("mode_id"),
+                        deep_thinking=parsed.get("deep_thinking"),
+                        web_search=parsed.get("web_search"),
+                    )
+                    await strategy.apply_selection(page, config)
+                    return
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("deepseek_selection_parse_failed", error=str(exc))
+
+        # Fallback string mode
+        is_deep = mode in {"deep", "deep_research", "research", "thinking", "r1"}
+        config = ProviderSelectionRequest(
+            model_id="",
+            thinking_level_id="",
+            mode_id=mode,
+            deep_thinking=is_deep,
+            web_search=True,
+        )
+        await strategy.apply_selection(page, config)
+
 

@@ -19,6 +19,8 @@ from app.adapters.capabilities.chatgpt import ChatGPTCapabilitiesStrategy
 from app.adapters.capabilities.copilot import CopilotCapabilitiesStrategy
 from app.adapters.capabilities.gemini import GeminiCapabilitiesStrategy
 from app.adapters.capabilities.qwen import QwenCapabilitiesStrategy
+from app.adapters.capabilities.claude import ClaudeCapabilitiesStrategy
+from app.adapters.capabilities.deepseek import DeepSeekCapabilitiesStrategy
 
 __all__ = [
     "OptionItem",
@@ -36,5 +38,7 @@ __all__ = [
     "CopilotCapabilitiesStrategy",
     "GeminiCapabilitiesStrategy",
     "QwenCapabilitiesStrategy",
+    "ClaudeCapabilitiesStrategy",
+    "DeepSeekCapabilitiesStrategy",
 ]
 

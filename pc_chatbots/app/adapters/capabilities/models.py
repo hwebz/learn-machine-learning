@@ -49,6 +49,8 @@ class ProviderLiveCapabilities(BaseModel):
     account_type: str | None = None
     supported_data_types: SupportedDataTypes = Field(default_factory=SupportedDataTypes)
     voice_chat: VoiceChatSupport = Field(default_factory=VoiceChatSupport)
+    deep_thinking: bool = False
+    web_search: bool = True
     last_error: str | None = None
 
 
@@ -59,4 +61,6 @@ class ProviderSelectionRequest(BaseModel):
     model_id: str | None = None
     thinking_level_id: str | None = None
     mode_id: str | None = None
+    deep_thinking: bool | None = None
+    web_search: bool | None = None
     custom_params: dict[str, Any] = Field(default_factory=dict)

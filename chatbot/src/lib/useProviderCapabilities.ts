@@ -68,6 +68,38 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
     if (cachedSelections["qwen"]) {
       cachedSelections["qwen"].mode_id = "";
     }
+    if (cachedCaps["claude"]) {
+      cachedCaps["claude"].modes = [];
+      cachedCaps["claude"].selected_mode_id = undefined;
+    }
+    if (cachedSelections["claude"]) {
+      cachedSelections["claude"].mode_id = "";
+    }
+    if (cachedCaps["deepseek"]) {
+      cachedCaps["deepseek"].available_models = [];
+      cachedCaps["deepseek"].selected_model_id = undefined;
+      cachedCaps["deepseek"].thinking_levels = [];
+      cachedCaps["deepseek"].selected_thinking_level_id = undefined;
+      cachedCaps["deepseek"].modes = [];
+      cachedCaps["deepseek"].selected_mode_id = undefined;
+      if (cachedCaps["deepseek"].deep_thinking === undefined) {
+        cachedCaps["deepseek"].deep_thinking = false;
+      }
+      if (cachedCaps["deepseek"].web_search === undefined) {
+        cachedCaps["deepseek"].web_search = true;
+      }
+    }
+    if (cachedSelections["deepseek"]) {
+      cachedSelections["deepseek"].model_id = "";
+      cachedSelections["deepseek"].thinking_level_id = "";
+      cachedSelections["deepseek"].mode_id = "";
+      if (cachedSelections["deepseek"].deep_thinking === undefined) {
+        cachedSelections["deepseek"].deep_thinking = false;
+      }
+      if (cachedSelections["deepseek"].web_search === undefined) {
+        cachedSelections["deepseek"].web_search = true;
+      }
+    }
     setCapabilitiesMap(cachedCaps);
     setSelectionsMap(cachedSelections);
   }, []);
@@ -92,15 +124,20 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           const existing = prev[p] || {};
           const isCopilot = p === "copilot";
           const isFree = p === "chatgpt" && caps.account_type === "free";
+          const isDeepSeek = p === "deepseek";
           const updated = {
             ...prev,
             [p]: {
-              model_id: isCopilot
+              model_id: isDeepSeek
+                ? ""
+                : isCopilot
                 ? "auto"
                 : isFree
                 ? "none"
                 : (existing.model_id || caps.selected_model_id || caps.available_models[0]?.id || "none"),
-              thinking_level_id: isCopilot
+              thinking_level_id: isDeepSeek
+                ? ""
+                : isCopilot
                 ? "auto"
                 : (
                     existing.thinking_level_id ||
@@ -108,7 +145,15 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
                     caps.thinking_levels[0]?.id ||
                     "auto"
                   ),
-              mode_id: existing.mode_id || caps.selected_mode_id || caps.modes[0]?.id || (isCopilot ? "auto" : (caps.modes && caps.modes.length > 0 ? "standard" : "")),
+              mode_id: isDeepSeek
+                ? ""
+                : existing.mode_id || caps.selected_mode_id || caps.modes[0]?.id || (isCopilot ? "auto" : (caps.modes && caps.modes.length > 0 ? "standard" : "")),
+              deep_thinking: isDeepSeek
+                ? (existing.deep_thinking !== undefined ? existing.deep_thinking : (caps.deep_thinking ?? false))
+                : existing.deep_thinking,
+              web_search: isDeepSeek
+                ? (existing.web_search !== undefined ? existing.web_search : (caps.web_search ?? true))
+                : existing.web_search,
             },
           };
           saveStorage(SELECTIONS_STORAGE_KEY, updated);

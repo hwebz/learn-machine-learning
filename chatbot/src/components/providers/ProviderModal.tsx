@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { ProviderInfo } from "../../types/chat";
 import { checkBackendHealth, openProviderBrowser } from "../../lib/api";
-import { BrainIcon, ModelBadgeLogo, RefreshIcon } from "../icons/Icons";
+import { BrainIcon, ModelBadgeLogo, RefreshIcon, SearchIcon } from "../icons/Icons";
 import { ProviderLiveCapabilities, ProviderSelectionConfig } from "../../types/capabilities";
 
 interface ProviderModalProps {
@@ -280,6 +280,15 @@ export function ProviderModal({
                         { id: "qwen-3.7-plus", label: "Qwen3.7-Plus (High Performance)", description: "Mô hình hiệu năng cao", selected: false, badge: "Plus" },
                         { id: "qwen-3.8-omni-flash", label: "Qwen3.8-Omni-Flash (Multimodal)", description: "Mô hình đa phương tiện tự nhiên", selected: false, badge: "Omni" },
                       ]
+                    : p.id === "claude"
+                      ? [
+                        { id: "claude-sonnet-5.5", label: "Sonnet 5.5", description: "Cân bằng hoàn hảo giữa trí tuệ và tốc độ", selected: true, badge: "Sonnet" },
+                        { id: "claude-haiku-5.5", label: "Haiku 5.5", description: "Phản hồi nhanh nhất cho tác vụ ngắn gọn", selected: false, badge: "Haiku" },
+                        { id: "claude-opus-5.5", label: "Opus 5.5", description: "Mô hình chuyên sâu cho bài toán phức tạp", selected: false, badge: "Opus" },
+                        { id: "claude-fable-5.1", label: "Fable 5.1", description: "Dành cho các thử thách khó khăn nhất", selected: false, badge: "Fable" },
+                      ]
+                    : p.id === "deepseek"
+                      ? []
                     : [
                       {
                         id: "auto",
@@ -316,11 +325,21 @@ export function ProviderModal({
                       { id: "thinking", label: "Thinking (Suy luận sâu đa bước)", description: "Kích hoạt chuỗi tư duy mở rộng", selected: false, badge: "Think" },
                       { id: "fast", label: "Fast (Phản hồi nhanh)", description: "Bỏ qua tư duy đa bước", selected: false, badge: "Fast" },
                     ]
+                  : p.id === "claude"
+                    ? [
+                      { id: "medium", label: "Medium (Recommended)", description: "Khuyên dùng - Cân bằng độ sâu và giới hạn sử dụng", selected: true, badge: "Med" },
+                      { id: "low", label: "Low", description: "Thấp - Phản hồi nhanh và tiết kiệm giới hạn", selected: false, badge: "Low" },
+                      { id: "high", label: "High", description: "Cao - Phân tích đa bước kỹ lưỡng cho bài toán hóc búa", selected: false, badge: "High" },
+                      { id: "extra", label: "Extra", description: "Rất cao - Suy luận chuyên sâu cho nghiên cứu phức tạp", selected: false, badge: "Extra" },
+                      { id: "max", label: "Max", description: "Tối đa - 8x hoặc nhiều hơn mức sử dụng giới hạn", selected: false, badge: "Max" },
+                    ]
+                  : p.id === "deepseek"
+                    ? []
                   : [];
 
-              // 3. Modes: For ChatGPT, standard or thinking. For Copilot, all 5 options. Gemini and Qwen have no modes.
+              // 3. Modes: For ChatGPT, standard or thinking. For Copilot, all 5 options. Gemini, Qwen, Claude and DeepSeek have no modes.
               const modes =
-                p.id === "gemini" || p.id === "qwen"
+                p.id === "gemini" || p.id === "qwen" || p.id === "claude" || p.id === "deepseek"
                   ? []
                   : p.id === "chatgpt"
                     ? [
@@ -396,6 +415,10 @@ export function ProviderModal({
 
               const currentModeId = modes.length > 0 ? (sel.mode_id || caps?.selected_mode_id || modes[0]?.id || (isCopilot ? "auto" : "standard")) : "";
               const currentMode = modes.length > 0 ? (modes.find((m) => m.id === currentModeId) || modes[0]) : undefined;
+
+              const isDeepSeek = p.id === "deepseek";
+              const isDeepThinking = sel.deep_thinking !== undefined ? sel.deep_thinking : (caps?.deep_thinking ?? false);
+              const isWebSearch = sel.web_search !== undefined ? sel.web_search : (caps?.web_search ?? true);
 
               return (
                 <div
@@ -537,226 +560,324 @@ export function ProviderModal({
                       flexGrow: 1
                     }}
                   >
-                    {/* Grid of Options: Row 1 = Model & Reasoning, Row 2 = Mode */}
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: thinkingLevels.length > 0 ? "1fr 1fr" : "1fr",
-                        gap: 10,
-                        flexGrow: 1
-                      }}
-                    >
-                      {/* 1. Model Selector */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <label
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 700,
-                              color: isCopilot ? "var(--text-muted)" : "var(--text-secondary)",
-                              textTransform: "uppercase",
-                              letterSpacing: "0.4px",
-                            }}
-                          >
-                            Mô hình AI (Model)
-                          </label>
+                    {/* DeepSeek: Exactly 2 toggles: DeepThink (R1) and Web Search */}
+                    {isDeepSeek ? (
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: 10,
+                          flexGrow: 1,
+                        }}
+                      >
+                        {/* 1. DeepThink (R1) Toggle */}
+                        <div
+                          onClick={() => onUpdateSelection?.(p.id, { deep_thinking: !isDeepThinking })}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "8px 12px",
+                            borderRadius: 6,
+                            border: `1.5px solid ${isDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--border-default, #cbd5e1)"}`,
+                            backgroundColor: isDeepThinking ? "#eff6ff" : "#ffffff",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                          }}
+                          title="Bật/Tắt mô hình suy luận sâu DeepSeek-R1 (Chain of Thought)"
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <BrainIcon size={16} color={isDeepThinking ? "var(--brand-blue, #2563eb)" : "#64748b"} />
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: isDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--text-primary, #0f172a)" }}>
+                                DeepThink (R1)
+                              </div>
+                              <div style={{ fontSize: 10.5, color: "var(--text-muted, #64748b)" }}>
+                                Suy luận chuyên sâu
+                              </div>
+                            </div>
+                          </div>
                           <span
                             style={{
-                              fontSize: 9.5,
-                              padding: "1px 5px",
-                              borderRadius: 3,
-                              backgroundColor: (isFreeChatGPT || isCopilot) ? "#f1f5f9" : "var(--brand-blue)",
-                              color: (isFreeChatGPT || isCopilot) ? "#64748b" : "#ffffff",
+                              fontSize: 10,
                               fontWeight: 700,
+                              padding: "2px 8px",
+                              borderRadius: 10,
+                              backgroundColor: isDeepThinking ? "var(--brand-blue, #2563eb)" : "#e2e8f0",
+                              color: isDeepThinking ? "#ffffff" : "#64748b",
                             }}
                           >
-                            {isCopilot ? "Auto" : isFreeChatGPT ? "Free (Auto)" : (currentModel?.badge || "Active")}
+                            {isDeepThinking ? "BẬT" : "TẮT"}
                           </span>
                         </div>
-                        <select
-                          disabled={isFreeChatGPT || isCopilot}
-                          value={isCopilot ? "auto" : (isFreeChatGPT ? "none" : currentModelId || "none")}
-                          onChange={(e) => onUpdateSelection?.(p.id, { model_id: e.target.value })}
-                          style={{
-                            width: "100%",
-                            padding: "6px 8px",
-                            borderRadius: 6,
-                            border: "1px solid var(--border-default, #cbd5e1)",
-                            backgroundColor: (isFreeChatGPT || isCopilot) ? "#f8fafc" : "#ffffff",
-                            fontSize: 12,
-                            fontWeight: 600,
-                            color: (isFreeChatGPT || isCopilot) ? "#64748b" : "var(--text-primary, #0f172a)",
-                            cursor: (isFreeChatGPT || isCopilot) ? "not-allowed" : "pointer",
-                            outline: "none",
-                          }}
-                          title={
-                            isCopilot
-                              ? "Copilot: Chọn mô hình qua Chế độ (Mode) bên dưới"
-                              : isFreeChatGPT
-                                ? "Mặc định hệ thống tự chọn (Tài khoản Free)"
-                                : "Chọn mô hình AI"
-                          }
-                        >
-                          {isCopilot ? (
-                            <option value="auto">Auto (Mặc định)</option>
-                          ) : isFreeChatGPT ? (
-                            <option value="none">Auto (Mặc định)</option>
-                          ) : (
-                            models.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.label}
-                              </option>
-                            ))
-                          )}
-                        </select>
-                        <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
-                          {isCopilot
-                            ? "Mô hình được điều khiển qua Chế độ (Mode) bên dưới"
-                            : isFreeChatGPT
-                              ? "Mặc định hệ thống tự chọn (Tài khoản Free)"
-                              : (currentModel?.description || "")}
-                        </span>
-                      </div>
 
-                      {/* 2. Reasoning Picker */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <label
+                        {/* 2. Web Search Toggle */}
+                        <div
+                          onClick={() => onUpdateSelection?.(p.id, { web_search: !isWebSearch })}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "8px 12px",
+                            borderRadius: 6,
+                            border: `1.5px solid ${isWebSearch ? "#059669" : "var(--border-default, #cbd5e1)"}`,
+                            backgroundColor: isWebSearch ? "#ecfdf5" : "#ffffff",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                          }}
+                          title="Bật/Tắt tính năng tìm kiếm Web thời gian thực của DeepSeek"
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <SearchIcon size={14} color={isWebSearch ? "#059669" : "#64748b"} />
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: isWebSearch ? "#059669" : "var(--text-primary, #0f172a)" }}>
+                                Tìm kiếm Web
+                              </div>
+                              <div style={{ fontSize: 10.5, color: "var(--text-muted, #64748b)" }}>
+                                Tra cứu trực tuyến
+                              </div>
+                            </div>
+                          </div>
+                          <span
                             style={{
-                              fontSize: 11,
+                              fontSize: 10,
                               fontWeight: 700,
-                              color: isCopilot ? "var(--text-muted)" : "var(--text-secondary)",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 4,
+                              padding: "2px 8px",
+                              borderRadius: 10,
+                              backgroundColor: isWebSearch ? "#059669" : "#e2e8f0",
+                              color: isWebSearch ? "#ffffff" : "#64748b",
                             }}
                           >
-                            <BrainIcon size={12} color={isCopilot ? "#94a3b8" : "var(--brand-blue)"} />
-                            <span>Mức suy luận (Reasoning)</span>
-                          </label>
-                          {(isFreeChatGPT || isCopilot) && (
-                            <span
-                              style={{
-                                fontSize: 9.5,
-                                padding: "1px 5px",
-                                borderRadius: 3,
-                                backgroundColor: "#f1f5f9",
-                                color: "#64748b",
-                                fontWeight: 700,
-                              }}
-                            >
-                              Auto
-                            </span>
-                          )}
+                            {isWebSearch ? "BẬT" : "TẮT"}
+                          </span>
                         </div>
-                        <select
-                          disabled={isFreeChatGPT || isCopilot || thinkingLevels.length <= 1}
-                          value={isCopilot ? "auto" : (currentThinkingId || "auto")}
-                          onChange={(e) => onUpdateSelection?.(p.id, { thinking_level_id: e.target.value })}
-                          style={{
-                            width: "100%",
-                            padding: "6px 8px",
-                            borderRadius: 6,
-                            border: "1px solid var(--border-default, #cbd5e1)",
-                            backgroundColor: (isFreeChatGPT || isCopilot || thinkingLevels.length <= 1) ? "#f8fafc" : "#ffffff",
-                            fontSize: 12,
-                            fontWeight: 600,
-                            color: (isFreeChatGPT || isCopilot || thinkingLevels.length <= 1) ? "#64748b" : "var(--text-primary, #0f172a)",
-                            cursor: (isFreeChatGPT || isCopilot || thinkingLevels.length <= 1) ? "not-allowed" : "pointer",
-                            outline: "none",
-                          }}
-                          title={
-                            isCopilot
-                              ? "Copilot: Mức suy luận được quản lý qua Chế độ (Mode) bên dưới"
-                              : isFreeChatGPT
-                                ? "Tài khoản Free: Mặc định Auto (Tự động)"
-                                : "Chọn mức độ suy luận"
-                          }
-                        >
-                          {isCopilot ? (
-                            <option value="auto">Auto (Tự động)</option>
-                          ) : (
-                            thinkingLevels.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.label}
-                              </option>
-                            ))
-                          )}
-                        </select>
-                        <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
-                          {isCopilot
-                            ? "Mức suy luận được kích hoạt tương ứng khi chọn Chế độ (Mode) bên dưới"
-                            : isFreeChatGPT
-                              ? "Tài khoản Free: Mặc định Auto (Tự động)"
-                              : (currentThinking?.description || "")}
-                        </span>
                       </div>
-
-                      {/* 3. Mode Picker */}
-                      {modes.length > 0 && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 3, gridColumn: thinkingLevels.length > 0 ? "1 / -1" : undefined }}>
+                    ) : (
+                      /* Grid of Options: Row 1 = Model & Reasoning, Row 2 = Mode */
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: thinkingLevels.length > 0 ? "1fr 1fr" : "1fr",
+                          gap: 10,
+                          flexGrow: 1
+                        }}
+                      >
+                        {/* 1. Model Selector */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                             <label
                               style={{
                                 fontSize: 11,
                                 fontWeight: 700,
-                                color: isCopilot ? "var(--brand-blue)" : "var(--text-secondary)",
+                                color: isCopilot ? "var(--text-muted)" : "var(--text-secondary)",
                                 textTransform: "uppercase",
                                 letterSpacing: "0.4px",
                               }}
                             >
-                              {isCopilot ? "Chế độ mô hình Copilot (Mode)" : "Chế độ (Mode)"}
+                              Mô hình AI (Model)
                             </label>
-                            {currentMode?.badge && (
-                              <span
-                                style={{
-                                  fontSize: 9.5,
-                                  padding: "1px 5px",
-                                  borderRadius: 3,
-                                  backgroundColor: "#eff6ff",
-                                  color: "var(--brand-blue)",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                {currentMode.badge}
-                              </span>
-                            )}
+                            <span
+                              style={{
+                                fontSize: 9.5,
+                                padding: "1px 5px",
+                                borderRadius: 3,
+                                backgroundColor: (isFreeChatGPT || isCopilot) ? "#f1f5f9" : "var(--brand-blue)",
+                                color: (isFreeChatGPT || isCopilot) ? "#64748b" : "#ffffff",
+                                fontWeight: 700,
+                              }}
+                            >
+                              {isCopilot ? "Auto" : isFreeChatGPT ? "Free (Auto)" : (currentModel?.badge || "Active")}
+                            </span>
                           </div>
                           <select
-                            value={currentModeId}
+                            disabled={isFreeChatGPT || isCopilot}
+                            value={isCopilot ? "auto" : (isFreeChatGPT ? "none" : currentModelId || "none")}
                             onChange={(e) => {
-                              onUpdateSelection?.(p.id, { mode_id: e.target.value });
+                              onUpdateSelection?.(p.id, { model_id: e.target.value });
                             }}
                             style={{
                               width: "100%",
                               padding: "6px 8px",
                               borderRadius: 6,
                               border: "1px solid var(--border-default, #cbd5e1)",
-                              backgroundColor: "#ffffff",
+                              backgroundColor: (isFreeChatGPT || isCopilot) ? "#f8fafc" : "#ffffff",
                               fontSize: 12,
                               fontWeight: 600,
-                              color: "var(--text-primary, #0f172a)",
-                              cursor: "pointer",
+                              color: (isFreeChatGPT || isCopilot) ? "#64748b" : "var(--text-primary, #0f172a)",
+                              cursor: (isFreeChatGPT || isCopilot) ? "not-allowed" : "pointer",
                               outline: "none",
                             }}
+                            title={
+                              isCopilot
+                                ? "Copilot: Chọn mô hình qua Chế độ (Mode) bên dưới"
+                                : isFreeChatGPT
+                                  ? "Mặc định hệ thống tự chọn (Tài khoản Free)"
+                                  : "Chọn mô hình AI"
+                            }
                           >
-                            {modes.map((m) => (
-                              <option
-                                key={m.id}
-                                value={m.id}
-                              >
-                                {m.label}
-                              </option>
-                            ))}
+                            {isCopilot ? (
+                              <option value="auto">Auto (Mặc định)</option>
+                            ) : isFreeChatGPT ? (
+                              <option value="none">Auto (Mặc định)</option>
+                            ) : (
+                              models.map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.label}
+                                </option>
+                              ))
+                            )}
                           </select>
-                          <span style={{ fontSize: 10.5, color: isCopilot ? "var(--brand-blue)" : "var(--text-muted)", lineHeight: 1.25, fontWeight: isCopilot ? 500 : 400 }}>
+                          <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
                             {isCopilot
-                              ? "Mỗi tùy chọn tương ứng với một tùy chọn trong menu chọn mô hình trên Copilot"
-                              : (currentMode?.description || "Mặc định Tiêu chuẩn (Standard)")}
+                              ? "Mô hình được điều khiển qua Chế độ (Mode) bên dưới"
+                              : isFreeChatGPT
+                                ? "Mặc định hệ thống tự chọn (Tài khoản Free)"
+                                : (currentModel?.description || "")}
                           </span>
                         </div>
-                      )}
-                    </div>
+
+                        {/* 2. Reasoning Picker */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <label
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: isCopilot ? "var(--text-muted)" : "var(--text-secondary)",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                            >
+                              <BrainIcon size={12} color={isCopilot ? "#94a3b8" : "var(--brand-blue)"} />
+                              <span>Mức suy luận (Reasoning)</span>
+                            </label>
+                            {(isFreeChatGPT || isCopilot) && (
+                              <span
+                                style={{
+                                  fontSize: 9.5,
+                                  padding: "1px 5px",
+                                  borderRadius: 3,
+                                  backgroundColor: "#f1f5f9",
+                                  color: "#64748b",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                Auto
+                              </span>
+                            )}
+                          </div>
+                          <select
+                            disabled={isFreeChatGPT || isCopilot || thinkingLevels.length <= 1}
+                            value={isCopilot ? "auto" : (currentThinkingId || "auto")}
+                            onChange={(e) => {
+                              onUpdateSelection?.(p.id, { thinking_level_id: e.target.value });
+                            }}
+                            style={{
+                              width: "100%",
+                              padding: "6px 8px",
+                              borderRadius: 6,
+                              border: "1px solid var(--border-default, #cbd5e1)",
+                              backgroundColor: (isFreeChatGPT || isCopilot || thinkingLevels.length <= 1) ? "#f8fafc" : "#ffffff",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: (isFreeChatGPT || isCopilot || thinkingLevels.length <= 1) ? "#64748b" : "var(--text-primary, #0f172a)",
+                              cursor: (isFreeChatGPT || isCopilot || thinkingLevels.length <= 1) ? "not-allowed" : "pointer",
+                              outline: "none",
+                            }}
+                            title={
+                              isCopilot
+                                ? "Copilot: Mức suy luận được quản lý qua Chế độ (Mode) bên dưới"
+                                : isFreeChatGPT
+                                  ? "Tài khoản Free: Mặc định Auto (Tự động)"
+                                  : "Chọn mức độ suy luận"
+                            }
+                          >
+                            {isCopilot ? (
+                              <option value="auto">Auto (Tự động)</option>
+                            ) : (
+                              thinkingLevels.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.label}
+                                </option>
+                              ))
+                            )}
+                          </select>
+                          <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
+                            {isCopilot
+                              ? "Mức suy luận được kích hoạt tương ứng khi chọn Chế độ (Mode) bên dưới"
+                              : isFreeChatGPT
+                                ? "Tài khoản Free: Mặc định Auto (Tự động)"
+                                : (currentThinking?.description || "")}
+                          </span>
+                        </div>
+
+                        {/* 3. Mode Picker */}
+                        {modes.length > 0 && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 3, gridColumn: thinkingLevels.length > 0 ? "1 / -1" : undefined }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <label
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: isCopilot ? "var(--brand-blue)" : "var(--text-secondary)",
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.4px",
+                                }}
+                              >
+                                {isCopilot ? "Chế độ mô hình Copilot (Mode)" : "Chế độ (Mode)"}
+                              </label>
+                              {currentMode?.badge && (
+                                <span
+                                  style={{
+                                    fontSize: 9.5,
+                                    padding: "1px 5px",
+                                    borderRadius: 3,
+                                    backgroundColor: "#eff6ff",
+                                    color: "var(--brand-blue)",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {currentMode.badge}
+                                </span>
+                              )}
+                            </div>
+                            <select
+                              value={currentModeId}
+                              onChange={(e) => {
+                                onUpdateSelection?.(p.id, { mode_id: e.target.value });
+                              }}
+                              style={{
+                                width: "100%",
+                                padding: "6px 8px",
+                                borderRadius: 6,
+                                border: "1px solid var(--border-default, #cbd5e1)",
+                                backgroundColor: "#ffffff",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: "var(--text-primary, #0f172a)",
+                                cursor: "pointer",
+                                outline: "none",
+                              }}
+                            >
+                              {modes.map((m) => (
+                                <option
+                                  key={m.id}
+                                  value={m.id}
+                                >
+                                  {m.label}
+                                </option>
+                              ))}
+                            </select>
+                            <span style={{ fontSize: 10.5, color: isCopilot ? "var(--brand-blue)" : "var(--text-muted)", lineHeight: 1.25, fontWeight: isCopilot ? 500 : 400 }}>
+                              {isCopilot
+                                ? "Mỗi tùy chọn tương ứng với một tùy chọn trong menu chọn mô hình trên Copilot"
+                                : (currentMode?.description || "Mặc định Tiêu chuẩn (Standard)")}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* 3. Supported Data Types & Sync Time */}
                     <div

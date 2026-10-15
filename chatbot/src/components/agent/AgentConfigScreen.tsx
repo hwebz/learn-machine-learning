@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { PROVIDERS_LIST, TONE_PRESETS } from "../../lib/constants";
 import { ProviderInfo } from "../../types/chat";
 import { ProviderLiveCapabilities, ProviderSelectionConfig } from "../../types/capabilities";
-import { BrainIcon, CloseIcon, ModelBadgeLogo, RefreshIcon } from "../icons/Icons";
+import { BrainIcon, CloseIcon, ModelBadgeLogo, RefreshIcon, SearchIcon } from "../icons/Icons";
 
 interface AgentConfigScreenProps {
   onStartAgentResearch: (config: {
@@ -53,6 +53,8 @@ export function AgentConfigScreen({
   const [orchThinkingLevel, setOrchThinkingLevel] = useState<string>("auto");
   const [orchModel, setOrchModel] = useState<string>("pro");
   const [orchMode, setOrchMode] = useState<string>("high");
+  const [orchDeepThinking, setOrchDeepThinking] = useState<boolean>(false);
+  const [orchWebSearch, setOrchWebSearch] = useState<boolean>(true);
   const [isSyncingOrch, setIsSyncingOrch] = useState(false);
   const [orchSyncMessage, setOrchSyncMessage] = useState<string | null>(null);
 
@@ -65,6 +67,8 @@ export function AgentConfigScreen({
   const [leadThinkingLevel, setLeadThinkingLevel] = useState<string>("auto");
   const [leadModel, setLeadModel] = useState<string>("default");
   const [leadMode, setLeadMode] = useState<string>("standard");
+  const [leadDeepThinking, setLeadDeepThinking] = useState<boolean>(false);
+  const [leadWebSearch, setLeadWebSearch] = useState<boolean>(true);
   const [isSyncingLead, setIsSyncingLead] = useState(false);
   const [leadSyncMessage, setLeadSyncMessage] = useState<string | null>(null);
 
@@ -105,6 +109,23 @@ export function AgentConfigScreen({
 
   // Sync Orchestrator local state when capabilities or selections update
   useEffect(() => {
+    if (selectedOrchestrator === "deepseek") {
+      setOrchModel("");
+      setOrchThinkingLevel("");
+      setOrchMode("");
+      if (orchSel?.deep_thinking !== undefined) {
+        setOrchDeepThinking(orchSel.deep_thinking);
+      } else if (orchCaps?.deep_thinking !== undefined) {
+        setOrchDeepThinking(orchCaps.deep_thinking);
+      }
+      if (orchSel?.web_search !== undefined) {
+        setOrchWebSearch(orchSel.web_search);
+      } else if (orchCaps?.web_search !== undefined) {
+        setOrchWebSearch(orchCaps.web_search);
+      }
+      return;
+    }
+
     if (orchSel?.model_id) {
       setOrchModel(orchSel.model_id);
     } else if (orchCaps?.selected_model_id) {
@@ -115,6 +136,8 @@ export function AgentConfigScreen({
       setOrchModel("pro");
     } else if (selectedOrchestrator === "qwen") {
       setOrchModel("qwen-3.8-max");
+    } else if (selectedOrchestrator === "claude") {
+      setOrchModel("claude-sonnet-5.5");
     }
 
     if (orchSel?.thinking_level_id) {
@@ -138,6 +161,23 @@ export function AgentConfigScreen({
 
   // Sync Lead local state when capabilities or selections update
   useEffect(() => {
+    if (selectedLead === "deepseek") {
+      setLeadModel("");
+      setLeadThinkingLevel("");
+      setLeadMode("");
+      if (leadSel?.deep_thinking !== undefined) {
+        setLeadDeepThinking(leadSel.deep_thinking);
+      } else if (leadCaps?.deep_thinking !== undefined) {
+        setLeadDeepThinking(leadCaps.deep_thinking);
+      }
+      if (leadSel?.web_search !== undefined) {
+        setLeadWebSearch(leadSel.web_search);
+      } else if (leadCaps?.web_search !== undefined) {
+        setLeadWebSearch(leadCaps.web_search);
+      }
+      return;
+    }
+
     if (leadSel?.model_id) {
       setLeadModel(leadSel.model_id);
     } else if (leadCaps?.selected_model_id) {
@@ -148,6 +188,8 @@ export function AgentConfigScreen({
       setLeadModel("gemini-3.1-pro");
     } else if (selectedLead === "qwen") {
       setLeadModel("qwen-3.8-max");
+    } else if (selectedLead === "claude") {
+      setLeadModel("claude-sonnet-5.5");
     }
 
     if (leadSel?.thinking_level_id) {
@@ -204,15 +246,14 @@ export function AgentConfigScreen({
       ];
     }
     if (selectedOrchestrator === "deepseek") {
-      return [
-        { id: "deepseek-r1", label: "DeepSeek R1 (DeepThink)", badge: "R1" },
-        { id: "deepseek-v3", label: "DeepSeek V3", badge: "V3" },
-      ];
+      return [];
     }
     if (selectedOrchestrator === "claude") {
       return [
-        { id: "claude-3-7-sonnet", label: "Claude 3.7 Sonnet (Thinking)", badge: "Thinking" },
-        { id: "claude-3-5-haiku", label: "Claude 3.5 Haiku", badge: "Fast" },
+        { id: "claude-sonnet-5.5", label: "Claude Sonnet 5.5 (Cân bằng & thông minh)", badge: "Sonnet" },
+        { id: "claude-haiku-5.5", label: "Claude Haiku 5.5 (Phản hồi nhanh)", badge: "Haiku" },
+        { id: "claude-opus-5.5", label: "Claude Opus 5.5 (Pro)", badge: "Opus" },
+        { id: "claude-fable-5.1", label: "Claude Fable 5.1 (Max)", badge: "Fable" },
       ];
     }
     if (selectedOrchestrator === "zhipu") {
@@ -228,6 +269,9 @@ export function AgentConfigScreen({
 
   // Computed thinking levels for Orchestrator
   const orchThinkingLevels = useMemo<AgentOption[]>(() => {
+    if (selectedOrchestrator === "deepseek") {
+      return [];
+    }
     if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0) {
       return orchCaps.thinking_levels;
     }
@@ -245,12 +289,21 @@ export function AgentConfigScreen({
         { id: "fast", label: "Fast (Phản hồi nhanh)", badge: "Fast" },
       ];
     }
+    if (selectedOrchestrator === "claude") {
+      return [
+        { id: "medium", label: "Trung bình (Medium - Khuyên dùng)", badge: "Med" },
+        { id: "low", label: "Thấp (Low - Nhanh)", badge: "Low" },
+        { id: "high", label: "Cao (High - Kỹ lưỡng)", badge: "High" },
+        { id: "extra", label: "Rất cao (Extra)", badge: "Extra" },
+        { id: "max", label: "Tối đa (Max)", badge: "Max" },
+      ];
+    }
     return [];
   }, [orchCaps, selectedOrchestrator]);
 
   // Computed modes for Orchestrator
   const orchModes = useMemo<AgentOption[]>(() => {
-    if (selectedOrchestrator === "gemini" || selectedOrchestrator === "qwen") {
+    if (selectedOrchestrator === "gemini" || selectedOrchestrator === "qwen" || selectedOrchestrator === "claude" || selectedOrchestrator === "deepseek") {
       return [];
     }
     if (orchCaps?.modes && orchCaps.modes.length > 0) {
@@ -301,15 +354,14 @@ export function AgentConfigScreen({
       ];
     }
     if (selectedLead === "deepseek") {
-      return [
-        { id: "deepseek-r1", label: "DeepSeek R1 (DeepThink)", badge: "R1" },
-        { id: "deepseek-v3", label: "DeepSeek V3", badge: "V3" },
-      ];
+      return [];
     }
     if (selectedLead === "claude") {
       return [
-        { id: "claude-3-7-sonnet", label: "Claude 3.7 Sonnet (Thinking)", badge: "Thinking" },
-        { id: "claude-3-5-haiku", label: "Claude 3.5 Haiku", badge: "Fast" },
+        { id: "claude-sonnet-5.5", label: "Claude Sonnet 5.5 (Cân bằng & thông minh)", badge: "Sonnet" },
+        { id: "claude-haiku-5.5", label: "Claude Haiku 5.5 (Phản hồi nhanh)", badge: "Haiku" },
+        { id: "claude-opus-5.5", label: "Claude Opus 5.5 (Pro)", badge: "Opus" },
+        { id: "claude-fable-5.1", label: "Claude Fable 5.1 (Max)", badge: "Fable" },
       ];
     }
     if (selectedLead === "zhipu") {
@@ -325,6 +377,9 @@ export function AgentConfigScreen({
 
   // Computed thinking levels for Lead Provider
   const leadThinkingLevels = useMemo<AgentOption[]>(() => {
+    if (selectedLead === "deepseek") {
+      return [];
+    }
     if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0) {
       return leadCaps.thinking_levels;
     }
@@ -342,12 +397,21 @@ export function AgentConfigScreen({
         { id: "fast", label: "Fast (Phản hồi nhanh)", badge: "Fast" },
       ];
     }
+    if (selectedLead === "claude") {
+      return [
+        { id: "medium", label: "Trung bình (Medium - Khuyên dùng)", badge: "Med" },
+        { id: "low", label: "Thấp (Low - Nhanh)", badge: "Low" },
+        { id: "high", label: "Cao (High - Kỹ lưỡng)", badge: "High" },
+        { id: "extra", label: "Rất cao (Extra)", badge: "Extra" },
+        { id: "max", label: "Tối đa (Max)", badge: "Max" },
+      ];
+    }
     return [];
   }, [leadCaps, selectedLead]);
 
   // Computed modes for Lead Provider
   const leadModes = useMemo<AgentOption[]>(() => {
-    if (selectedLead === "gemini" || selectedLead === "qwen") {
+    if (selectedLead === "gemini" || selectedLead === "qwen" || selectedLead === "claude" || selectedLead === "deepseek") {
       return [];
     }
     if (leadCaps?.modes && leadCaps.modes.length > 0) {
@@ -403,6 +467,8 @@ export function AgentConfigScreen({
       if (res?.selected_model_id) setOrchModel(res.selected_model_id);
       if (res?.selected_thinking_level_id) setOrchThinkingLevel(res.selected_thinking_level_id);
       if (res?.selected_mode_id) setOrchMode(res.selected_mode_id);
+      if (res?.deep_thinking !== undefined) setOrchDeepThinking(res.deep_thinking);
+      if (res?.web_search !== undefined) setOrchWebSearch(res.web_search);
     } catch (err: any) {
       setOrchSyncMessage(`Lỗi đồng bộ DOM: ${err?.message || "Không thể kết nối"}`);
     } finally {
@@ -423,6 +489,8 @@ export function AgentConfigScreen({
       if (res?.selected_model_id) setLeadModel(res.selected_model_id);
       if (res?.selected_thinking_level_id) setLeadThinkingLevel(res.selected_thinking_level_id);
       if (res?.selected_mode_id) setLeadMode(res.selected_mode_id);
+      if (res?.deep_thinking !== undefined) setLeadDeepThinking(res.deep_thinking);
+      if (res?.web_search !== undefined) setLeadWebSearch(res.web_search);
     } catch (err: any) {
       setLeadSyncMessage(`Lỗi đồng bộ DOM: ${err?.message || "Không thể kết nối"}`);
     } finally {
@@ -452,6 +520,19 @@ export function AgentConfigScreen({
       orchConfig.model = orchModel || "qwen-3.8-max";
       orchConfig.thinking = orchThinkingLevel || "thinking";
       orchConfig.mode = "";
+    } else if (selectedOrchestrator === "claude") {
+      orchConfig.model = orchModel || "claude-sonnet-5.5";
+      orchConfig.thinking = orchThinkingLevel || "medium";
+      orchConfig.mode = "";
+    } else if (selectedOrchestrator === "deepseek") {
+      orchConfig.deep_thinking = orchDeepThinking;
+      orchConfig.web_search = orchWebSearch;
+      orchConfig.model = "";
+      orchConfig.model_id = "";
+      orchConfig.thinking = "";
+      orchConfig.thinking_level_id = "";
+      orchConfig.mode = "";
+      orchConfig.mode_id = "";
     } else if (selectedOrchestrator === "zhipu") {
       orchConfig.model = orchModel || "glm-5.3";
       orchConfig.mode = orchMode || "high";
@@ -473,6 +554,19 @@ export function AgentConfigScreen({
       leadConfig.model = leadModel || "qwen-3.8-max";
       leadConfig.thinking = leadThinkingLevel || "thinking";
       leadConfig.mode = "";
+    } else if (selectedLead === "claude") {
+      leadConfig.model = leadModel || "claude-sonnet-5.5";
+      leadConfig.thinking = leadThinkingLevel || "medium";
+      leadConfig.mode = "";
+    } else if (selectedLead === "deepseek") {
+      leadConfig.deep_thinking = leadDeepThinking;
+      leadConfig.web_search = leadWebSearch;
+      leadConfig.model = "";
+      leadConfig.model_id = "";
+      leadConfig.thinking = "";
+      leadConfig.thinking_level_id = "";
+      leadConfig.mode = "";
+      leadConfig.mode_id = "";
     }
 
     onStartAgentResearch({
@@ -646,76 +740,164 @@ export function AgentConfigScreen({
               )}
 
               <div className="agent-finetune-options">
-                {/* 1. Model Selector */}
-                {orchModels.length > 0 && (
-                  <label className="agent-option-inline">
-                    <span>Mô hình:</span>
-                    <select
-                      value={orchModel}
-                      onChange={(e) => {
-                        setOrchModel(e.target.value);
-                        onUpdateSelection?.(selectedOrchestrator, { model_id: e.target.value });
+                {selectedOrchestrator === "deepseek" ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", width: "100%" }}>
+                    {/* DeepThink (R1) Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextVal = !orchDeepThinking;
+                        setOrchDeepThinking(nextVal);
+                        onUpdateSelection?.(selectedOrchestrator, { deep_thinking: nextVal });
                       }}
-                      className="agent-select"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "6px 12px",
+                        borderRadius: "var(--radius-sm, 6px)",
+                        border: `1.5px solid ${orchDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--border-default, #cbd5e1)"}`,
+                        backgroundColor: orchDeepThinking ? "var(--brand-blue-light, #eff6ff)" : "#ffffff",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: orchDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--text-secondary, #475569)",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                      title="Bật/Tắt mô hình suy luận sâu DeepSeek-R1 (Chain of Thought)"
                     >
-                      {orchModels.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.label} {m.badge ? `[${m.badge}]` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
+                      <BrainIcon size={14} color={orchDeepThinking ? "var(--brand-blue, #2563eb)" : "#64748b"} />
+                      <span>DeepThink (R1)</span>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: "1px 6px",
+                          borderRadius: 10,
+                          backgroundColor: orchDeepThinking ? "var(--brand-blue, #2563eb)" : "#e2e8f0",
+                          color: orchDeepThinking ? "#ffffff" : "#64748b",
+                        }}
+                      >
+                        {orchDeepThinking ? "BẬT" : "TẮT"}
+                      </span>
+                    </button>
 
-                {/* 2. Reasoning Effort or Thinking Toggle */}
-                {orchThinkingLevels.length > 0 ? (
-                  <label className="agent-option-inline">
-                    <span>Reasoning Effort:</span>
-                    <select
-                      value={orchThinkingLevel}
-                      onChange={(e) => {
-                        setOrchThinkingLevel(e.target.value);
-                        onUpdateSelection?.(selectedOrchestrator, { thinking_level_id: e.target.value });
+                    {/* Web Search Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextVal = !orchWebSearch;
+                        setOrchWebSearch(nextVal);
+                        onUpdateSelection?.(selectedOrchestrator, { web_search: nextVal });
                       }}
-                      className="agent-select"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "6px 12px",
+                        borderRadius: "var(--radius-sm, 6px)",
+                        border: `1.5px solid ${orchWebSearch ? "#059669" : "var(--border-default, #cbd5e1)"}`,
+                        backgroundColor: orchWebSearch ? "#ecfdf5" : "#ffffff",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: orchWebSearch ? "#059669" : "var(--text-secondary, #475569)",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                      title="Bật/Tắt tính năng tìm kiếm Web thời gian thực của DeepSeek"
                     >
-                      {orchThinkingLevels.map((lvl) => (
-                        <option key={lvl.id} value={lvl.id}>
-                          {lvl.label} {lvl.badge ? `[${lvl.badge}]` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                      <SearchIcon size={14} color={orchWebSearch ? "#059669" : "#64748b"} />
+                      <span>Tìm kiếm Web</span>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: "1px 6px",
+                          borderRadius: 10,
+                          backgroundColor: orchWebSearch ? "#059669" : "#e2e8f0",
+                          color: orchWebSearch ? "#ffffff" : "#64748b",
+                        }}
+                      >
+                        {orchWebSearch ? "BẬT" : "TẮT"}
+                      </span>
+                    </button>
+                  </div>
                 ) : (
-                  <label className="agent-checkbox-inline">
-                    <input
-                      type="checkbox"
-                      checked={orchThinking}
-                      onChange={(e) => setOrchThinking(e.target.checked)}
-                    />
-                    <span>Kích hoạt Thinking / Deep Reasoning Mode</span>
-                  </label>
-                )}
+                  <>
+                    {/* 1. Model Selector */}
+                    {orchModels.length > 0 && (
+                      <label className="agent-option-inline">
+                        <span>Mô hình:</span>
+                        <select
+                          value={orchModel}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setOrchModel(val);
+                            onUpdateSelection?.(selectedOrchestrator, { model_id: val });
+                          }}
+                          className="agent-select"
+                        >
+                          {orchModels.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.label} {m.badge ? `[${m.badge}]` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
 
-                {/* 3. Mode Selector */}
-                {orchModes.length > 0 && (
-                  <label className="agent-option-inline">
-                    <span>Chế độ (Mode):</span>
-                    <select
-                      value={orchMode}
-                      onChange={(e) => {
-                        setOrchMode(e.target.value);
-                        onUpdateSelection?.(selectedOrchestrator, { mode_id: e.target.value });
-                      }}
-                      className="agent-select"
-                    >
-                      {orchModes.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.label} {m.badge ? `[${m.badge}]` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                    {/* 2. Reasoning Effort or Thinking Toggle */}
+                    {orchThinkingLevels.length > 0 ? (
+                      <label className="agent-option-inline">
+                        <span>Reasoning Effort:</span>
+                        <select
+                          value={orchThinkingLevel}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setOrchThinkingLevel(val);
+                            onUpdateSelection?.(selectedOrchestrator, { thinking_level_id: val });
+                          }}
+                          className="agent-select"
+                        >
+                          {orchThinkingLevels.map((lvl) => (
+                            <option key={lvl.id} value={lvl.id}>
+                              {lvl.label} {lvl.badge ? `[${lvl.badge}]` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : (
+                      <label className="agent-checkbox-inline">
+                        <input
+                          type="checkbox"
+                          checked={orchThinking}
+                          onChange={(e) => setOrchThinking(e.target.checked)}
+                        />
+                        <span>Kích hoạt Thinking / Deep Reasoning Mode</span>
+                      </label>
+                    )}
+
+                    {/* 3. Mode Selector */}
+                    {orchModes.length > 0 && (
+                      <label className="agent-option-inline">
+                        <span>Chế độ (Mode):</span>
+                        <select
+                          value={orchMode}
+                          onChange={(e) => {
+                            setOrchMode(e.target.value);
+                            onUpdateSelection?.(selectedOrchestrator, { mode_id: e.target.value });
+                          }}
+                          className="agent-select"
+                        >
+                          {orchModes.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.label} {m.badge ? `[${m.badge}]` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -920,76 +1102,164 @@ export function AgentConfigScreen({
               )}
 
               <div className="agent-finetune-options">
-                {/* 1. Model Selector */}
-                {leadModels.length > 0 && (
-                  <label className="agent-option-inline">
-                    <span>Mô hình:</span>
-                    <select
-                      value={leadModel}
-                      onChange={(e) => {
-                        setLeadModel(e.target.value);
-                        onUpdateSelection?.(selectedLead, { model_id: e.target.value });
+                {selectedLead === "deepseek" ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", width: "100%" }}>
+                    {/* DeepThink (R1) Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextVal = !leadDeepThinking;
+                        setLeadDeepThinking(nextVal);
+                        onUpdateSelection?.(selectedLead, { deep_thinking: nextVal });
                       }}
-                      className="agent-select"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "6px 12px",
+                        borderRadius: "var(--radius-sm, 6px)",
+                        border: `1.5px solid ${leadDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--border-default, #cbd5e1)"}`,
+                        backgroundColor: leadDeepThinking ? "var(--brand-blue-light, #eff6ff)" : "#ffffff",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: leadDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--text-secondary, #475569)",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                      title="Bật/Tắt mô hình suy luận sâu DeepSeek-R1 (Chain of Thought)"
                     >
-                      {leadModels.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.label} {m.badge ? `[${m.badge}]` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
+                      <BrainIcon size={14} color={leadDeepThinking ? "var(--brand-blue, #2563eb)" : "#64748b"} />
+                      <span>DeepThink (R1)</span>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: "1px 6px",
+                          borderRadius: 10,
+                          backgroundColor: leadDeepThinking ? "var(--brand-blue, #2563eb)" : "#e2e8f0",
+                          color: leadDeepThinking ? "#ffffff" : "#64748b",
+                        }}
+                      >
+                        {leadDeepThinking ? "BẬT" : "TẮT"}
+                      </span>
+                    </button>
 
-                {/* 2. Reasoning Effort or Thinking Toggle */}
-                {leadThinkingLevels.length > 0 ? (
-                  <label className="agent-option-inline">
-                    <span>Reasoning Effort:</span>
-                    <select
-                      value={leadThinkingLevel}
-                      onChange={(e) => {
-                        setLeadThinkingLevel(e.target.value);
-                        onUpdateSelection?.(selectedLead, { thinking_level_id: e.target.value });
+                    {/* Web Search Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextVal = !leadWebSearch;
+                        setLeadWebSearch(nextVal);
+                        onUpdateSelection?.(selectedLead, { web_search: nextVal });
                       }}
-                      className="agent-select"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        padding: "6px 12px",
+                        borderRadius: "var(--radius-sm, 6px)",
+                        border: `1.5px solid ${leadWebSearch ? "#059669" : "var(--border-default, #cbd5e1)"}`,
+                        backgroundColor: leadWebSearch ? "#ecfdf5" : "#ffffff",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: leadWebSearch ? "#059669" : "var(--text-secondary, #475569)",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                      title="Bật/Tắt tính năng tìm kiếm Web thời gian thực của DeepSeek"
                     >
-                      {leadThinkingLevels.map((lvl) => (
-                        <option key={lvl.id} value={lvl.id}>
-                          {lvl.label} {lvl.badge ? `[${lvl.badge}]` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                      <SearchIcon size={14} color={leadWebSearch ? "#059669" : "#64748b"} />
+                      <span>Tìm kiếm Web</span>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: "1px 6px",
+                          borderRadius: 10,
+                          backgroundColor: leadWebSearch ? "#059669" : "#e2e8f0",
+                          color: leadWebSearch ? "#ffffff" : "#64748b",
+                        }}
+                      >
+                        {leadWebSearch ? "BẬT" : "TẮT"}
+                      </span>
+                    </button>
+                  </div>
                 ) : (
-                  <label className="agent-checkbox-inline">
-                    <input
-                      type="checkbox"
-                      checked={leadThinking}
-                      onChange={(e) => setLeadThinking(e.target.checked)}
-                    />
-                    <span>Kích hoạt Suy luận sâu (Thinking / Deep Research) cho Lead Provider</span>
-                  </label>
-                )}
+                  <>
+                    {/* 1. Model Selector */}
+                    {leadModels.length > 0 && (
+                      <label className="agent-option-inline">
+                        <span>Mô hình:</span>
+                        <select
+                          value={leadModel}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setLeadModel(val);
+                            onUpdateSelection?.(selectedLead, { model_id: val });
+                          }}
+                          className="agent-select"
+                        >
+                          {leadModels.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.label} {m.badge ? `[${m.badge}]` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
 
-                {/* 3. Mode Selector */}
-                {leadModes.length > 0 && (
-                  <label className="agent-option-inline">
-                    <span>Chế độ (Mode):</span>
-                    <select
-                      value={leadMode}
-                      onChange={(e) => {
-                        setLeadMode(e.target.value);
-                        onUpdateSelection?.(selectedLead, { mode_id: e.target.value });
-                      }}
-                      className="agent-select"
-                    >
-                      {leadModes.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.label} {m.badge ? `[${m.badge}]` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                    {/* 2. Reasoning Effort or Thinking Toggle */}
+                    {leadThinkingLevels.length > 0 ? (
+                      <label className="agent-option-inline">
+                        <span>Reasoning Effort:</span>
+                        <select
+                          value={leadThinkingLevel}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setLeadThinkingLevel(val);
+                            onUpdateSelection?.(selectedLead, { thinking_level_id: val });
+                          }}
+                          className="agent-select"
+                        >
+                          {leadThinkingLevels.map((lvl) => (
+                            <option key={lvl.id} value={lvl.id}>
+                              {lvl.label} {lvl.badge ? `[${lvl.badge}]` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : (
+                      <label className="agent-checkbox-inline">
+                        <input
+                          type="checkbox"
+                          checked={leadThinking}
+                          onChange={(e) => setLeadThinking(e.target.checked)}
+                        />
+                        <span>Kích hoạt Suy luận sâu (Thinking / Deep Research) cho Lead Provider</span>
+                      </label>
+                    )}
+
+                    {/* 3. Mode Selector */}
+                    {leadModes.length > 0 && (
+                      <label className="agent-option-inline">
+                        <span>Chế độ (Mode):</span>
+                        <select
+                          value={leadMode}
+                          onChange={(e) => {
+                            setLeadMode(e.target.value);
+                            onUpdateSelection?.(selectedLead, { mode_id: e.target.value });
+                          }}
+                          className="agent-select"
+                        >
+                          {leadModes.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.label} {m.badge ? `[${m.badge}]` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </>
                 )}
               </div>
             </div>

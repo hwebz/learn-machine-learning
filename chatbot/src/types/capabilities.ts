@@ -36,6 +36,8 @@ export interface ProviderLiveCapabilities {
   account_type?: string;
   supported_data_types: SupportedDataTypes;
   voice_chat: VoiceChatSupport;
+  deep_thinking?: boolean;
+  web_search?: boolean;
   last_error?: string | null;
 }
 
@@ -43,4 +45,6 @@ export interface ProviderSelectionConfig {
   model_id?: string;
   thinking_level_id?: string;
   mode_id?: string;
+  deep_thinking?: boolean;
+  web_search?: boolean;
 }
