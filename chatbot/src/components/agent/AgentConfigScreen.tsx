@@ -171,16 +171,34 @@ export function AgentConfigScreen({
       } else {
         setOrchModel(chosenModel || "instant");
       }
-      if (isDr) {
-        setOrchThinkingLevel("auto");
-      } else if (orchSel?.thinking_level_id && orchSel.thinking_level_id !== "auto") {
+      if (orchSel?.thinking_level_id) {
         setOrchThinkingLevel(orchSel.thinking_level_id);
-      } else if (orchCaps?.selected_thinking_level_id && orchCaps.selected_thinking_level_id !== "auto") {
+      } else if (orchCaps?.selected_thinking_level_id) {
         setOrchThinkingLevel(orchCaps.selected_thinking_level_id);
-      } else if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0 && !orchCaps.thinking_levels.some((t) => t.id === "auto")) {
+      } else if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0) {
         setOrchThinkingLevel(orchCaps.thinking_levels[0].id);
       } else {
         setOrchThinkingLevel("high");
+      }
+      return;
+    }
+
+    if (selectedOrchestrator === "qwen") {
+      setOrchMode("");
+      const isDr = orchSel?.deep_research !== undefined ? orchSel.deep_research : (orchCaps?.deep_research ?? false);
+      setOrchDeepResearch(isDr);
+      const chosenModel = orchSel?.model_id || orchCaps?.selected_model_id || (orchCaps?.available_models && orchCaps.available_models.length > 0 ? orchCaps.available_models[0].id : "qwen-3.8-max");
+      setOrchModel(chosenModel);
+      if (isDr) {
+        setOrchThinkingLevel("auto");
+      } else if (orchSel?.thinking_level_id) {
+        setOrchThinkingLevel(orchSel.thinking_level_id);
+      } else if (orchCaps?.selected_thinking_level_id) {
+        setOrchThinkingLevel(orchCaps.selected_thinking_level_id);
+      } else if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0) {
+        setOrchThinkingLevel(orchCaps.thinking_levels[0].id);
+      } else {
+        setOrchThinkingLevel("auto");
       }
       setOrchWebSearch(orchSel?.web_search !== undefined ? orchSel.web_search : (orchCaps?.web_search ?? true));
       setOrchResearchMode(orchSel?.research_mode || orchCaps?.research_mode || "normal");
@@ -297,16 +315,34 @@ export function AgentConfigScreen({
       } else {
         setLeadModel(chosenModel || "instant");
       }
-      if (isDr) {
-        setLeadThinkingLevel("auto");
-      } else if (leadSel?.thinking_level_id && leadSel.thinking_level_id !== "auto") {
+      if (leadSel?.thinking_level_id) {
         setLeadThinkingLevel(leadSel.thinking_level_id);
-      } else if (leadCaps?.selected_thinking_level_id && leadCaps.selected_thinking_level_id !== "auto") {
+      } else if (leadCaps?.selected_thinking_level_id) {
         setLeadThinkingLevel(leadCaps.selected_thinking_level_id);
-      } else if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0 && !leadCaps.thinking_levels.some((t) => t.id === "auto")) {
+      } else if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0) {
         setLeadThinkingLevel(leadCaps.thinking_levels[0].id);
       } else {
         setLeadThinkingLevel("high");
+      }
+      return;
+    }
+
+    if (selectedLead === "qwen") {
+      setLeadMode("");
+      const isDr = leadSel?.deep_research !== undefined ? leadSel.deep_research : (leadCaps?.deep_research ?? false);
+      setLeadDeepResearch(isDr);
+      const chosenModel = leadSel?.model_id || leadCaps?.selected_model_id || (leadCaps?.available_models && leadCaps.available_models.length > 0 ? leadCaps.available_models[0].id : "qwen-3.8-max");
+      setLeadModel(chosenModel);
+      if (isDr) {
+        setLeadThinkingLevel("auto");
+      } else if (leadSel?.thinking_level_id) {
+        setLeadThinkingLevel(leadSel.thinking_level_id);
+      } else if (leadCaps?.selected_thinking_level_id) {
+        setLeadThinkingLevel(leadCaps.selected_thinking_level_id);
+      } else if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0) {
+        setLeadThinkingLevel(leadCaps.thinking_levels[0].id);
+      } else {
+        setLeadThinkingLevel("auto");
       }
       setLeadWebSearch(leadSel?.web_search !== undefined ? leadSel.web_search : (leadCaps?.web_search ?? true));
       setLeadResearchMode(leadSel?.research_mode || leadCaps?.research_mode || "normal");
@@ -770,8 +806,13 @@ export function AgentConfigScreen({
       orchConfig.mode = orchMode || "high";
     } else if (selectedOrchestrator === "qwen") {
       orchConfig.model = orchModel || "qwen-3.8-max";
-      orchConfig.thinking = orchThinkingLevel || "thinking";
+      orchConfig.thinking_level_id = orchDeepResearch ? "auto" : (orchThinkingLevel || "auto");
+      orchConfig.thinking = orchDeepResearch ? "auto" : (orchThinkingLevel || "auto");
+      orchConfig.deep_research = orchDeepResearch;
+      orchConfig.web_search = orchWebSearch;
+      orchConfig.research_mode = orchResearchMode;
       orchConfig.mode = "";
+      orchConfig.mode_id = "";
     } else if (selectedOrchestrator === "claude") {
       orchConfig.model = orchModel || "claude-sonnet-5.5";
       orchConfig.thinking = orchThinkingLevel || "medium";
@@ -804,13 +845,11 @@ export function AgentConfigScreen({
       orchConfig.mode = "";
       orchConfig.mode_id = "";
     } else if (selectedOrchestrator === "kimi") {
-      orchConfig.model = orchModel || "k3";
-      orchConfig.model_id = orchModel || "k3";
-      orchConfig.thinking_level_id = orchDeepResearch ? "auto" : (orchThinkingLevel || "high");
-      orchConfig.thinking = orchDeepResearch ? "auto" : (orchThinkingLevel || "high");
+      orchConfig.model = orchModel || (orchDeepResearch ? "k3" : "instant");
+      orchConfig.model_id = orchModel || (orchDeepResearch ? "k3" : "instant");
+      orchConfig.thinking_level_id = orchThinkingLevel || "high";
+      orchConfig.thinking = orchThinkingLevel || "high";
       orchConfig.deep_research = orchDeepResearch;
-      orchConfig.web_search = orchWebSearch;
-      orchConfig.research_mode = orchResearchMode;
       orchConfig.mode = "";
       orchConfig.mode_id = "";
     } else if (selectedOrchestrator === "zhipu") {
@@ -832,8 +871,13 @@ export function AgentConfigScreen({
       leadConfig.mode = leadMode || "high";
     } else if (selectedLead === "qwen") {
       leadConfig.model = leadModel || "qwen-3.8-max";
-      leadConfig.thinking = leadThinkingLevel || "thinking";
+      leadConfig.thinking_level_id = leadDeepResearch ? "auto" : (leadThinkingLevel || "auto");
+      leadConfig.thinking = leadDeepResearch ? "auto" : (leadThinkingLevel || "auto");
+      leadConfig.deep_research = leadDeepResearch;
+      leadConfig.web_search = leadWebSearch;
+      leadConfig.research_mode = leadResearchMode;
       leadConfig.mode = "";
+      leadConfig.mode_id = "";
     } else if (selectedLead === "claude") {
       leadConfig.model = leadModel || "claude-sonnet-5.5";
       leadConfig.thinking = leadThinkingLevel || "medium";
@@ -866,13 +910,11 @@ export function AgentConfigScreen({
       leadConfig.mode = "";
       leadConfig.mode_id = "";
     } else if (selectedLead === "kimi") {
-      leadConfig.model = leadModel || "k3";
-      leadConfig.model_id = leadModel || "k3";
-      leadConfig.thinking_level_id = leadDeepResearch ? "auto" : (leadThinkingLevel || "high");
-      leadConfig.thinking = leadDeepResearch ? "auto" : (leadThinkingLevel || "high");
+      leadConfig.model = leadModel || (leadDeepResearch ? "k3" : "instant");
+      leadConfig.model_id = leadModel || (leadDeepResearch ? "k3" : "instant");
+      leadConfig.thinking_level_id = leadThinkingLevel || "high";
+      leadConfig.thinking = leadThinkingLevel || "high";
       leadConfig.deep_research = leadDeepResearch;
-      leadConfig.web_search = leadWebSearch;
-      leadConfig.research_mode = leadResearchMode;
       leadConfig.mode = "";
       leadConfig.mode_id = "";
     }
@@ -1283,18 +1325,18 @@ export function AgentConfigScreen({
                       <label className="agent-option-inline">
                         <span>Reasoning Effort:</span>
                         <select
-                          disabled={selectedOrchestrator === "kimi" && orchDeepResearch}
-                          value={selectedOrchestrator === "kimi" && orchDeepResearch ? "auto" : orchThinkingLevel}
+                          disabled={selectedOrchestrator === "qwen" && orchDeepResearch}
+                          value={selectedOrchestrator === "qwen" && orchDeepResearch ? "auto" : orchThinkingLevel}
                           onChange={(e) => {
-                            if (selectedOrchestrator === "kimi" && orchDeepResearch) return;
+                            if (selectedOrchestrator === "qwen" && orchDeepResearch) return;
                             const val = e.target.value;
                             setOrchThinkingLevel(val);
                             onUpdateSelection?.(selectedOrchestrator, { thinking_level_id: val });
                           }}
                           className="agent-select"
-                          style={selectedOrchestrator === "kimi" && orchDeepResearch ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
+                          style={selectedOrchestrator === "qwen" && orchDeepResearch ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
                         >
-                          {selectedOrchestrator === "kimi" && orchDeepResearch ? (
+                          {selectedOrchestrator === "qwen" && orchDeepResearch ? (
                             <option value="auto">Auto</option>
                           ) : (
                             orchThinkingLevels.map((lvl) => (
@@ -1351,48 +1393,6 @@ export function AgentConfigScreen({
                       </label>
                     )}
 
-                    {/* Kimi Web Search Toggle */}
-                    {selectedOrchestrator === "kimi" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextVal = !orchWebSearch;
-                          setOrchWebSearch(nextVal);
-                          onUpdateSelection?.(selectedOrchestrator, { web_search: nextVal });
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-sm, 6px)",
-                          border: `1.5px solid ${orchWebSearch ? "#059669" : "var(--border-default, #cbd5e1)"}`,
-                          backgroundColor: orchWebSearch ? "#ecfdf5" : "#ffffff",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: orchWebSearch ? "#059669" : "var(--text-secondary, #475569)",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                        title="Bật/Tắt tính năng tìm kiếm Web trên Kimi (+ Web search)"
-                      >
-                        <SearchIcon size={14} color={orchWebSearch ? "#059669" : "#64748b"} />
-                        <span>Web Search</span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: "1px 6px",
-                            borderRadius: 10,
-                            backgroundColor: orchWebSearch ? "#059669" : "#e2e8f0",
-                            color: orchWebSearch ? "#ffffff" : "#64748b",
-                          }}
-                        >
-                          {orchWebSearch ? "BẬT" : "TẮT"}
-                        </span>
-                      </button>
-                    )}
-
                     {/* Kimi Deep Research Toggle */}
                     {selectedOrchestrator === "kimi" && (
                       <button
@@ -1400,19 +1400,12 @@ export function AgentConfigScreen({
                         onClick={() => {
                           const nextVal = !orchDeepResearch;
                           setOrchDeepResearch(nextVal);
-                          const updates: Partial<ProviderSelectionConfig> = { deep_research: nextVal };
-                          if (nextVal) {
-                            setOrchThinkingLevel("auto");
-                            updates.thinking_level_id = "auto";
-                            if (orchModel === "instant" || !orchModel || orchModel === "default") {
-                              setOrchModel("k3");
-                              updates.model_id = "k3";
-                            }
+                          if (nextVal && (orchModel === "instant" || !orchModel || orchModel === "default")) {
+                            setOrchModel("k3");
+                            onUpdateSelection?.(selectedOrchestrator, { deep_research: nextVal, model_id: "k3" });
                           } else {
-                            setOrchThinkingLevel("high");
-                            updates.thinking_level_id = "high";
+                            onUpdateSelection?.(selectedOrchestrator, { deep_research: nextVal });
                           }
-                          onUpdateSelection?.(selectedOrchestrator, updates);
                         }}
                         style={{
                           display: "flex",
@@ -1447,8 +1440,97 @@ export function AgentConfigScreen({
                       </button>
                     )}
 
-                    {/* Kimi Research Mode Toggle (when Deep Research is ON) */}
-                    {selectedOrchestrator === "kimi" && orchDeepResearch && (
+                    {/* Qwen Web Search Toggle */}
+                    {selectedOrchestrator === "qwen" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = !orchWebSearch;
+                          setOrchWebSearch(nextVal);
+                          onUpdateSelection?.(selectedOrchestrator, { web_search: nextVal });
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-sm, 6px)",
+                          border: `1.5px solid ${orchWebSearch ? "#059669" : "var(--border-default, #cbd5e1)"}`,
+                          backgroundColor: orchWebSearch ? "#ecfdf5" : "#ffffff",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: orchWebSearch ? "#059669" : "var(--text-secondary, #475569)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Bật/Tắt tính năng tìm kiếm Web trên Qwen (+ Web search)"
+                      >
+                        <SearchIcon size={14} color={orchWebSearch ? "#059669" : "#64748b"} />
+                        <span>Web Search</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 10,
+                            backgroundColor: orchWebSearch ? "#059669" : "#e2e8f0",
+                            color: orchWebSearch ? "#ffffff" : "#64748b",
+                          }}
+                        >
+                          {orchWebSearch ? "BẬT" : "TẮT"}
+                        </span>
+                      </button>
+                    )}
+
+                    {/* Qwen Deep Research Toggle */}
+                    {selectedOrchestrator === "qwen" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = !orchDeepResearch;
+                          setOrchDeepResearch(nextVal);
+                          const updates: Partial<ProviderSelectionConfig> = { deep_research: nextVal };
+                          if (nextVal) {
+                            setOrchThinkingLevel("auto");
+                            updates.thinking_level_id = "auto";
+                          }
+                          onUpdateSelection?.(selectedOrchestrator, updates);
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-sm, 6px)",
+                          border: `1.5px solid ${orchDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
+                          backgroundColor: orchDeepResearch ? "#f5f3ff" : "#ffffff",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: orchDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Bật/Tắt chế độ Deep Research của Qwen (+ Deep Research)"
+                      >
+                        <SparklesIcon size={14} color={orchDeepResearch ? "#7c3aed" : "#64748b"} />
+                        <span>Deep Research</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 10,
+                            backgroundColor: orchDeepResearch ? "#7c3aed" : "#e2e8f0",
+                            color: orchDeepResearch ? "#ffffff" : "#64748b",
+                          }}
+                        >
+                          {orchDeepResearch ? "BẬT" : "TẮT"}
+                        </span>
+                      </button>
+                    )}
+
+                    {/* Qwen Research Mode Toggle (when Deep Research is ON) */}
+                    {selectedOrchestrator === "qwen" && orchDeepResearch && (
                       <button
                         type="button"
                         onClick={() => {
@@ -1951,18 +2033,18 @@ export function AgentConfigScreen({
                       <label className="agent-option-inline">
                         <span>Reasoning Effort:</span>
                         <select
-                          disabled={selectedLead === "kimi" && leadDeepResearch}
-                          value={selectedLead === "kimi" && leadDeepResearch ? "auto" : leadThinkingLevel}
+                          disabled={selectedLead === "qwen" && leadDeepResearch}
+                          value={selectedLead === "qwen" && leadDeepResearch ? "auto" : leadThinkingLevel}
                           onChange={(e) => {
-                            if (selectedLead === "kimi" && leadDeepResearch) return;
+                            if (selectedLead === "qwen" && leadDeepResearch) return;
                             const val = e.target.value;
                             setLeadThinkingLevel(val);
                             onUpdateSelection?.(selectedLead, { thinking_level_id: val });
                           }}
                           className="agent-select"
-                          style={selectedLead === "kimi" && leadDeepResearch ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
+                          style={selectedLead === "qwen" && leadDeepResearch ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
                         >
-                          {selectedLead === "kimi" && leadDeepResearch ? (
+                          {selectedLead === "qwen" && leadDeepResearch ? (
                             <option value="auto">Auto</option>
                           ) : (
                             leadThinkingLevels.map((lvl) => (
@@ -2019,48 +2101,6 @@ export function AgentConfigScreen({
                       </label>
                     )}
 
-                    {/* Kimi Web Search Toggle */}
-                    {selectedLead === "kimi" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextVal = !leadWebSearch;
-                          setLeadWebSearch(nextVal);
-                          onUpdateSelection?.(selectedLead, { web_search: nextVal });
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-sm, 6px)",
-                          border: `1.5px solid ${leadWebSearch ? "#059669" : "var(--border-default, #cbd5e1)"}`,
-                          backgroundColor: leadWebSearch ? "#ecfdf5" : "#ffffff",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: leadWebSearch ? "#059669" : "var(--text-secondary, #475569)",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                        title="Bật/Tắt tính năng tìm kiếm Web trên Kimi (+ Web search)"
-                      >
-                        <SearchIcon size={14} color={leadWebSearch ? "#059669" : "#64748b"} />
-                        <span>Web Search</span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: "1px 6px",
-                            borderRadius: 10,
-                            backgroundColor: leadWebSearch ? "#059669" : "#e2e8f0",
-                            color: leadWebSearch ? "#ffffff" : "#64748b",
-                          }}
-                        >
-                          {leadWebSearch ? "BẬT" : "TẮT"}
-                        </span>
-                      </button>
-                    )}
-
                     {/* Kimi Deep Research Toggle */}
                     {selectedLead === "kimi" && (
                       <button
@@ -2068,19 +2108,12 @@ export function AgentConfigScreen({
                         onClick={() => {
                           const nextVal = !leadDeepResearch;
                           setLeadDeepResearch(nextVal);
-                          const updates: Partial<ProviderSelectionConfig> = { deep_research: nextVal };
-                          if (nextVal) {
-                            setLeadThinkingLevel("auto");
-                            updates.thinking_level_id = "auto";
-                            if (leadModel === "instant" || !leadModel || leadModel === "default") {
-                              setLeadModel("k3");
-                              updates.model_id = "k3";
-                            }
+                          if (nextVal && (leadModel === "instant" || !leadModel || leadModel === "default")) {
+                            setLeadModel("k3");
+                            onUpdateSelection?.(selectedLead, { deep_research: nextVal, model_id: "k3" });
                           } else {
-                            setLeadThinkingLevel("high");
-                            updates.thinking_level_id = "high";
+                            onUpdateSelection?.(selectedLead, { deep_research: nextVal });
                           }
-                          onUpdateSelection?.(selectedLead, updates);
                         }}
                         style={{
                           display: "flex",
@@ -2115,8 +2148,97 @@ export function AgentConfigScreen({
                       </button>
                     )}
 
-                    {/* Kimi Research Mode Toggle (when Deep Research is ON) */}
-                    {selectedLead === "kimi" && leadDeepResearch && (
+                    {/* Qwen Web Search Toggle */}
+                    {selectedLead === "qwen" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = !leadWebSearch;
+                          setLeadWebSearch(nextVal);
+                          onUpdateSelection?.(selectedLead, { web_search: nextVal });
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-sm, 6px)",
+                          border: `1.5px solid ${leadWebSearch ? "#059669" : "var(--border-default, #cbd5e1)"}`,
+                          backgroundColor: leadWebSearch ? "#ecfdf5" : "#ffffff",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: leadWebSearch ? "#059669" : "var(--text-secondary, #475569)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Bật/Tắt tính năng tìm kiếm Web trên Qwen (+ Web search)"
+                      >
+                        <SearchIcon size={14} color={leadWebSearch ? "#059669" : "#64748b"} />
+                        <span>Web Search</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 10,
+                            backgroundColor: leadWebSearch ? "#059669" : "#e2e8f0",
+                            color: leadWebSearch ? "#ffffff" : "#64748b",
+                          }}
+                        >
+                          {leadWebSearch ? "BẬT" : "TẮT"}
+                        </span>
+                      </button>
+                    )}
+
+                    {/* Qwen Deep Research Toggle */}
+                    {selectedLead === "qwen" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = !leadDeepResearch;
+                          setLeadDeepResearch(nextVal);
+                          const updates: Partial<ProviderSelectionConfig> = { deep_research: nextVal };
+                          if (nextVal) {
+                            setLeadThinkingLevel("auto");
+                            updates.thinking_level_id = "auto";
+                          }
+                          onUpdateSelection?.(selectedLead, updates);
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-sm, 6px)",
+                          border: `1.5px solid ${leadDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
+                          backgroundColor: leadDeepResearch ? "#f5f3ff" : "#ffffff",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: leadDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Bật/Tắt chế độ Deep Research của Qwen (+ Deep Research)"
+                      >
+                        <SparklesIcon size={14} color={leadDeepResearch ? "#7c3aed" : "#64748b"} />
+                        <span>Deep Research</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 10,
+                            backgroundColor: leadDeepResearch ? "#7c3aed" : "#e2e8f0",
+                            color: leadDeepResearch ? "#ffffff" : "#64748b",
+                          }}
+                        >
+                          {leadDeepResearch ? "BẬT" : "TẮT"}
+                        </span>
+                      </button>
+                    )}
+
+                    {/* Qwen Research Mode Toggle (when Deep Research is ON) */}
+                    {selectedLead === "qwen" && leadDeepResearch && (
                       <button
                         type="button"
                         onClick={() => {

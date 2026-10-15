@@ -117,6 +117,9 @@ class QwenCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             account_type="free",
             supported_data_types=data_types,
             voice_chat=voice,
+            web_search=True,
+            deep_research=False,
+            research_mode="normal",
         )
 
     async def _find_model_button(self, page: Any, timeout_s: float = 6.0) -> Any | None:
@@ -168,6 +171,37 @@ class QwenCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             await asyncio.sleep(0.3)
         return None
 
+    async def _find_plus_button(self, page: Any, timeout_s: float = 4.0) -> Any | None:
+        """Locate the '+' menu button nearby the textbox area."""
+        import time
+
+        candidates = [
+            "button:has([data-icon='plus'])",
+            "button:has-text('+')",
+            "[data-icon='plus']",
+            "button[aria-label*='Add']",
+            "button[aria-label*='plus']",
+            "button[aria-label*='Tool']",
+            "button[aria-label*='Attachment']",
+            ".chat-input-tools button",
+            "[class*='input-tool'] button",
+            "[class*='chat-input'] button:has(svg)",
+        ]
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            for sel in candidates:
+                try:
+                    loc = page.locator(sel)
+                    cnt = await loc.count()
+                    for i in range(cnt):
+                        b = loc.nth(i)
+                        if await b.is_visible(timeout=200):
+                            return b
+                except Exception:
+                    continue
+            await asyncio.sleep(0.3)
+        return None
+
     async def inspect_dom(self, page: Any) -> ProviderLiveCapabilities:
         """Inspect Qwen's live web DOM to extract active and available models & thinking levels."""
         caps = self.get_default_capabilities()
@@ -182,6 +216,37 @@ class QwenCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
                 caps.account_type = "free"
             elif "Pro" in body_text or "VIP" in body_text:
                 caps.account_type = "pro"
+        except Exception:
+            pass
+
+        # Detect Deep Research state & Research Mode
+        try:
+            dr_chip = page.locator(":is(div, span, button):text-matches('Deep Research', 'i')").first
+            if await dr_chip.count() > 0 and await dr_chip.is_visible(timeout=500):
+                cls = (await dr_chip.get_attribute("class") or "").lower()
+                aria_chk = (await dr_chip.get_attribute("aria-checked") or "").lower()
+                aria_prs = (await dr_chip.get_attribute("aria-pressed") or "").lower()
+                is_active = "active" in cls or "checked" in cls or "selected" in cls or aria_chk == "true" or aria_prs == "true"
+                if is_active:
+                    caps.deep_research = True
+                    caps.selected_thinking_level_id = "auto"
+                    # Check research mode
+                    adv_chip = page.locator(":is(div, span, button):text-matches('Advanced', 'i')").first
+                    if await adv_chip.count() > 0 and await adv_chip.is_visible(timeout=500):
+                        caps.research_mode = "advanced"
+                    else:
+                        caps.research_mode = "normal"
+        except Exception:
+            pass
+
+        # Detect Web Search state
+        try:
+            ws_btn = page.locator("button:has-text('Web search'), button:has-text('Search'), [data-testid*='search']").first
+            if await ws_btn.count() > 0 and await ws_btn.is_visible(timeout=500):
+                cls = (await ws_btn.get_attribute("class") or "").lower()
+                aria_chk = (await ws_btn.get_attribute("aria-checked") or "").lower()
+                aria_prs = (await ws_btn.get_attribute("aria-pressed") or "").lower()
+                caps.web_search = "active" in cls or "checked" in cls or aria_chk == "true" or aria_prs == "true"
         except Exception:
             pass
 
@@ -335,6 +400,10 @@ class QwenCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
                 except Exception:
                     pass
 
+        # If Deep Research is active, thinking is locked to Auto
+        if caps.deep_research:
+            caps.selected_thinking_level_id = "auto"
+
         caps.is_live_dom = True
         logger.info(
             "qwen_dom_inspected_successfully",
@@ -342,18 +411,23 @@ class QwenCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             selected_model=caps.selected_model_id,
             thinking_levels_count=len(caps.thinking_levels),
             selected_thinking=caps.selected_thinking_level_id,
+            deep_research=caps.deep_research,
+            web_search=caps.web_search,
+            research_mode=caps.research_mode,
         )
         return caps
 
     async def apply_selection(self, page: Any, config: ProviderSelectionRequest) -> None:
-        """Apply target model and thinking effort to Qwen's web interface."""
+        """Apply target model, thinking effort, web search, and deep research to Qwen's web interface."""
         target_model = (config.model_id or "").lower().strip()
         target_thinking = (config.thinking_level_id or "").lower().strip()
+        target_dr = config.deep_research
+        target_ws = config.web_search
+        target_rm = (config.research_mode or "").lower().strip()
         mode_val = (config.mode_id or "").lower().strip()
 
         if mode_val in {"deep", "deep_research"}:
-            if not target_thinking:
-                target_thinking = "thinking"
+            target_dr = True
             if not target_model:
                 target_model = "qwen-3.8-max"
 
@@ -361,10 +435,112 @@ class QwenCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             "qwen_applying_selection",
             target_model=target_model,
             target_thinking=target_thinking,
+            deep_research=target_dr,
+            web_search=target_ws,
+            research_mode=target_rm,
         )
 
         try:
-            # 1. Switch Model
+            # 1. Apply Deep Research toggle if specified
+            effective_dr = target_dr is True
+            if target_dr is not None:
+                try:
+                    # Check direct toggle first
+                    dr_btn = page.locator("button:has-text('Deep Research'), [role='button']:has-text('Deep Research')").first
+                    if await dr_btn.count() > 0 and await dr_btn.is_visible(timeout=1000):
+                        cls = (await dr_btn.get_attribute("class") or "").lower()
+                        is_active = "active" in cls or "checked" in cls or (await dr_btn.get_attribute("aria-pressed") or "") == "true"
+                        if is_active != target_dr:
+                            await dr_btn.click(timeout=2000)
+                            await asyncio.sleep(0.6)
+                            effective_dr = target_dr
+                    else:
+                        # Open '+' menu nearby textbox area
+                        plus_btn = await self._find_plus_button(page)
+                        if plus_btn is not None:
+                            await plus_btn.click(timeout=1500)
+                            await asyncio.sleep(0.5)
+                            dr_opt = page.locator(":is(button, div, span, [role='menuitem']):text-matches('Deep Research', 'i')").first
+                            if await dr_opt.count() > 0 and await dr_opt.is_visible(timeout=1500):
+                                cls = (await dr_opt.get_attribute("class") or "").lower()
+                                is_active = "active" in cls or "checked" in cls or (await dr_opt.get_attribute("aria-checked") or "") == "true"
+                                if is_active != target_dr:
+                                    await dr_opt.click(timeout=2000)
+                                    await asyncio.sleep(0.6)
+                                    effective_dr = target_dr
+                                else:
+                                    await page.keyboard.press("Escape")
+                            else:
+                                await page.keyboard.press("Escape")
+                except Exception as dr_err:
+                    logger.warning("qwen_deep_research_toggle_failed", error=str(dr_err))
+                    try:
+                        await page.keyboard.press("Escape")
+                    except Exception:
+                        pass
+
+            # 2. Apply Research Mode (Advanced vs Normal) when Deep Research is ON
+            if effective_dr and target_rm:
+                mode_label = "Advanced" if target_rm == "advanced" else "Normal"
+                logger.info("qwen_applying_research_mode", mode=mode_label)
+                try:
+                    mode_btn = page.locator(f"button:has-text('{mode_label}'), [role='button']:has-text('{mode_label}')").first
+                    if await mode_btn.count() > 0 and await mode_btn.is_visible(timeout=1000):
+                        await mode_btn.click(timeout=2000)
+                        await asyncio.sleep(0.5)
+                    else:
+                        plus_btn = await self._find_plus_button(page)
+                        if plus_btn is not None:
+                            await plus_btn.click(timeout=1500)
+                            await asyncio.sleep(0.5)
+                            opt_btn = page.locator(f":is(button, div, span, [role='menuitem']):has-text('{mode_label}')").first
+                            if await opt_btn.count() > 0 and await opt_btn.is_visible(timeout=1500):
+                                await opt_btn.click(timeout=2000)
+                                await asyncio.sleep(0.5)
+                            else:
+                                await page.keyboard.press("Escape")
+                except Exception as rm_err:
+                    logger.warning("qwen_research_mode_toggle_failed", error=str(rm_err))
+                    try:
+                        await page.keyboard.press("Escape")
+                    except Exception:
+                        pass
+
+            # 3. Apply Web Search Toggle if specified
+            if target_ws is not None:
+                logger.info("qwen_applying_web_search", web_search=target_ws)
+                try:
+                    ws_btn = page.locator("button:has-text('Web search'), button:has-text('Search'), [data-testid*='search']").first
+                    if await ws_btn.count() > 0 and await ws_btn.is_visible(timeout=1000):
+                        cls = (await ws_btn.get_attribute("class") or "").lower()
+                        is_active = "active" in cls or "checked" in cls or (await ws_btn.get_attribute("aria-pressed") or "") == "true"
+                        if is_active != target_ws:
+                            await ws_btn.click(timeout=2000)
+                            await asyncio.sleep(0.5)
+                    else:
+                        plus_btn = await self._find_plus_button(page)
+                        if plus_btn is not None:
+                            await plus_btn.click(timeout=1500)
+                            await asyncio.sleep(0.5)
+                            ws_opt = page.locator(":is(button, div, span, [role='menuitem']):text-matches('Web search|Search', 'i')").first
+                            if await ws_opt.count() > 0 and await ws_opt.is_visible(timeout=1500):
+                                cls = (await ws_opt.get_attribute("class") or "").lower()
+                                is_active = "active" in cls or "checked" in cls or (await ws_opt.get_attribute("aria-checked") or "") == "true"
+                                if is_active != target_ws:
+                                    await ws_opt.click(timeout=2000)
+                                    await asyncio.sleep(0.5)
+                                else:
+                                    await page.keyboard.press("Escape")
+                            else:
+                                await page.keyboard.press("Escape")
+                except Exception as ws_err:
+                    logger.warning("qwen_web_search_toggle_failed", error=str(ws_err))
+                    try:
+                        await page.keyboard.press("Escape")
+                    except Exception:
+                        pass
+
+            # 4. Switch Model
             if target_model and target_model != "auto" and target_model != "default":
                 model_btn = await self._find_model_button(page)
                 if model_btn is not None:
@@ -393,8 +569,28 @@ class QwenCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
                         else:
                             await page.keyboard.press("Escape")
 
-            # 2. Switch Thinking
-            if target_thinking:
+            # 5. Switch Thinking (Deep Research does NOT allow changing reasoning; locks to Auto)
+            if effective_dr:
+                logger.info("qwen_deep_research_active_reasoning_locked_to_auto")
+                think_btn = await self._find_thinking_button(page)
+                if think_btn is not None:
+                    curr_t_text = (await think_btn.inner_text()).strip().lower()
+                    if "auto" not in curr_t_text:
+                        try:
+                            await think_btn.click(timeout=2000)
+                            await asyncio.sleep(0.5)
+                            auto_opt = page.locator(".ant-dropdown, [class*='dropdown']").locator(".qwen-chat-v2-dropdown-menu-item, [role='menuitem'], [class*='item'], div").filter(has_text="Auto").first
+                            if await auto_opt.count() > 0 and await auto_opt.is_visible(timeout=1500):
+                                await auto_opt.click(timeout=2000)
+                                await asyncio.sleep(0.8)
+                            else:
+                                await page.keyboard.press("Escape")
+                        except Exception:
+                            try:
+                                await page.keyboard.press("Escape")
+                            except Exception:
+                                pass
+            elif target_thinking:
                 think_btn = await self._find_thinking_button(page)
                 if think_btn is not None:
                     curr_t_text = (await think_btn.inner_text()).strip().lower()
@@ -427,3 +623,4 @@ class QwenCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
                 await page.keyboard.press("Escape")
             except Exception:
                 pass
+

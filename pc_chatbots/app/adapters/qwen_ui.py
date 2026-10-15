@@ -31,6 +31,9 @@ class QwenUIAdapter(BrowserProviderAdapter):
                         model_id=parsed.get("model_id"),
                         thinking_level_id=parsed.get("thinking_level_id"),
                         mode_id=parsed.get("mode_id"),
+                        deep_research=parsed.get("deep_research", False),
+                        web_search=parsed.get("web_search", True),
+                        research_mode=parsed.get("research_mode", "normal"),
                     )
                     await strategy.apply_selection(page, config)
                     return
@@ -41,8 +44,11 @@ class QwenUIAdapter(BrowserProviderAdapter):
         is_deep = mode in {"deep", "deep_research", "research", "thinking"}
         config = ProviderSelectionRequest(
             model_id="qwen-3.8-max" if is_deep else "qwen-3.7-plus",
-            thinking_level_id="thinking" if is_deep else "auto",
+            thinking_level_id="auto" if is_deep else "auto",
             mode_id=mode,
+            deep_research=is_deep,
+            web_search=True,
+            research_mode="normal",
         )
         await strategy.apply_selection(page, config)
 

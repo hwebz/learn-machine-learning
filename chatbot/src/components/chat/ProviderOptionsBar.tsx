@@ -231,8 +231,9 @@ export function ProviderOptionsBar({
   const currentModel = isPerplexity
     ? (models.find((m) => m.id === "auto") || models[0])
     : (models.find((m) => m.id === selection.model_id && !m.disabled) || selectableModels[0] || models[0]);
-  const currentThinking = (isKimi && isDeepResearch)
-    ? { id: "auto", label: "Auto", badge: "Khóa", description: "Deep Research tự động điều chỉnh mức độ suy luận" }
+  const isQwen = providerId === "qwen";
+  const currentThinking = (isQwen && isDeepResearch)
+    ? { id: "auto", label: "Auto", badge: "Khóa", description: "Deep Research tự động điều chỉnh mức độ suy luận (mặc định Auto)" }
     : isClaude
       ? (thinkingLevels.find((t) => t.id === selection.thinking_level_id && t.id !== "auto") || thinkingLevels.find((t) => t.id === "medium") || thinkingLevels[0])
       : (thinkingLevels.find((t) => t.id === selection.thinking_level_id) || thinkingLevels[0]);
@@ -670,8 +671,8 @@ export function ProviderOptionsBar({
           <div ref={thinkingRef} style={{ position: "relative" }}>
             <button
               type="button"
-              disabled={isCopilot || (isKimi && isDeepResearch)}
-              onClick={() => !isCopilot && !(isKimi && isDeepResearch) && setIsThinkingOpen(!isThinkingOpen)}
+              disabled={isCopilot || (isQwen && isDeepResearch)}
+              onClick={() => !isCopilot && !(isQwen && isDeepResearch) && setIsThinkingOpen(!isThinkingOpen)}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -679,21 +680,21 @@ export function ProviderOptionsBar({
                 padding: "4px 8px",
                 borderRadius: "var(--radius-sm, 6px)",
                 border: "1px solid var(--border-subtle, #cbd5e1)",
-                backgroundColor: (isCopilot || (isKimi && isDeepResearch)) ? "#f8fafc" : (isThinkingOpen ? "var(--brand-blue-light, #eff6ff)" : "transparent"),
+                backgroundColor: (isCopilot || (isQwen && isDeepResearch)) ? "#f8fafc" : (isThinkingOpen ? "var(--brand-blue-light, #eff6ff)" : "transparent"),
                 fontSize: 12,
                 fontWeight: 600,
-                color: (isCopilot || (isKimi && isDeepResearch)) ? "#64748b" : "var(--text-primary, #0f172a)",
-                cursor: (isCopilot || (isKimi && isDeepResearch)) ? "not-allowed" : "pointer",
-                opacity: (isKimi && isDeepResearch) ? 0.75 : 1,
+                color: (isCopilot || (isQwen && isDeepResearch)) ? "#64748b" : "var(--text-primary, #0f172a)",
+                cursor: (isCopilot || (isQwen && isDeepResearch)) ? "not-allowed" : "pointer",
+                opacity: (isQwen && isDeepResearch) ? 0.75 : 1,
               }}
-              title={isCopilot ? "Copilot: Mức suy luận được quản lý qua menu Chế độ (Mode)" : (isKimi && isDeepResearch) ? "Deep Research tự động điều chỉnh mức độ suy luận (không thể thay đổi)" : "Mức độ suy luận (Thinking Level)"}
+              title={isCopilot ? "Copilot: Mức suy luận được quản lý qua menu Chế độ (Mode)" : (isQwen && isDeepResearch) ? "Deep Research không cho phép chỉnh mức độ suy luận (mặc định Auto)" : "Mức độ suy luận (Thinking Level)"}
             >
-              <BrainIcon size={13} color={(isCopilot || (isKimi && isDeepResearch)) ? "#94a3b8" : "var(--brand-blue, #2563eb)"} />
-              <span>{isCopilot ? "Auto" : (isKimi && isDeepResearch) ? "Auto" : (currentThinking?.label || "Suy luận")}</span>
-              {!(isCopilot || (isKimi && isDeepResearch)) && <span style={{ fontSize: 10, color: "var(--text-muted, #94a3b8)" }}>▼</span>}
+              <BrainIcon size={13} color={(isCopilot || (isQwen && isDeepResearch)) ? "#94a3b8" : "var(--brand-blue, #2563eb)"} />
+              <span>{isCopilot ? "Auto" : (isQwen && isDeepResearch) ? "Auto" : (currentThinking?.label || "Suy luận")}</span>
+              {!(isCopilot || (isQwen && isDeepResearch)) && <span style={{ fontSize: 10, color: "var(--text-muted, #94a3b8)" }}>▼</span>}
             </button>
 
-            {!isCopilot && !(isKimi && isDeepResearch) && isThinkingOpen && (
+            {!isCopilot && !(isQwen && isDeepResearch) && isThinkingOpen && (
               <div
                 style={{
                   position: "absolute",
@@ -758,8 +759,53 @@ export function ProviderOptionsBar({
           </div>
         )}
 
-        {/* Kimi Web Search, Deep Research & Research Mode Toggles */}
+        {/* Kimi Deep Research Toggle Button */}
         {isKimi && (
+          <button
+            type="button"
+            onClick={() => {
+              const nextDr = !isDeepResearch;
+              const updates: Partial<ProviderSelectionConfig> = { deep_research: nextDr };
+              if (nextDr && (currentModel?.id === "instant" || !currentModel?.id || currentModel?.id === "default")) {
+                updates.model_id = "k3";
+              }
+              onUpdateSelection(updates);
+            }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "4px 9px",
+              borderRadius: "var(--radius-sm, 6px)",
+              border: `1px solid ${isDeepResearch ? "#7c3aed" : "var(--border-subtle, #cbd5e1)"}`,
+              backgroundColor: isDeepResearch ? "#f5f3ff" : "#ffffff",
+              fontSize: 12,
+              fontWeight: 600,
+              color: isDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+            title="Bật/Tắt chế độ Deep Research trên Kimi"
+          >
+            <SparklesIcon size={13} color={isDeepResearch ? "#7c3aed" : "#64748b"} />
+            <span>Deep Research</span>
+            <span
+              style={{
+                fontSize: 9.5,
+                padding: "1px 4px",
+                borderRadius: 3,
+                backgroundColor: isDeepResearch ? "#7c3aed" : "#f1f5f9",
+                color: isDeepResearch ? "#ffffff" : "#64748b",
+                fontWeight: 700,
+              }}
+            >
+              {isDeepResearch ? "ON" : "OFF"}
+            </span>
+          </button>
+        )}
+
+        {/* Qwen Web Search, Deep Research & Research Mode Toggles */}
+        {isQwen && (
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             {/* 1. Web Search Toggle */}
             <button
@@ -779,7 +825,7 @@ export function ProviderOptionsBar({
                 cursor: "pointer",
                 transition: "all 0.15s ease",
               }}
-              title="Bật/Tắt tính năng tìm kiếm Web trên Kimi (+ Web search)"
+              title="Bật/Tắt tính năng tìm kiếm Web trên Qwen (+ Web search)"
             >
               <SearchIcon size={12} color={isWebSearch ? "#059669" : "#64748b"} />
               <span>Web Search</span>
@@ -804,12 +850,7 @@ export function ProviderOptionsBar({
                 const nextDr = !isDeepResearch;
                 const updates: Partial<ProviderSelectionConfig> = {
                   deep_research: nextDr,
-                  ...(nextDr
-                    ? {
-                      thinking_level_id: "auto",
-                      ...(currentModel?.id === "instant" || !currentModel?.id || currentModel?.id === "default" ? { model_id: "k3" } : {}),
-                    }
-                    : { thinking_level_id: "high" }),
+                  ...(nextDr ? { thinking_level_id: "auto" } : {}),
                 };
                 onUpdateSelection(updates);
               }}
@@ -827,7 +868,7 @@ export function ProviderOptionsBar({
                 cursor: "pointer",
                 transition: "all 0.15s ease",
               }}
-              title="Bật/Tắt chế độ Deep Research trên Kimi"
+              title="Bật/Tắt chế độ Deep Research trên Qwen (+ Deep Research)"
             >
               <SparklesIcon size={13} color={isDeepResearch ? "#7c3aed" : "#64748b"} />
               <span>Deep Research</span>

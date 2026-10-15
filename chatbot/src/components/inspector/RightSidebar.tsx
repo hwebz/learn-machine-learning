@@ -131,8 +131,8 @@ export function resolveProviderOptions(
     raw.thinking_level_id = "none";
   }
 
-  // For Kimi with Deep Research: lock Reasoning to Auto
-  if (norm === "kimi" && raw.deep_research) {
+  // For Qwen with Deep Research: lock Reasoning to Auto
+  if (norm === "qwen" && raw.deep_research) {
     raw.thinking_level_id = "auto";
   }
 
@@ -188,10 +188,14 @@ export function resolveProviderOptions(
       } else if (reasoningId === "high") {
         reasoningLabel = "Cao (High)";
       } else if (norm === "kimi") {
-        if (raw.deep_research) reasoningLabel = "Auto (Khóa bởi Deep Research)";
-        else if (reasoningId === "standard") reasoningLabel = "Standard (Tiêu chuẩn)";
+        if (reasoningId === "standard") reasoningLabel = "Standard (Tiêu chuẩn)";
         else if (reasoningId === "high") reasoningLabel = "High (Chuyên sâu)";
         else reasoningLabel = reasoningId;
+      } else if (norm === "qwen") {
+        if (raw.deep_research) reasoningLabel = "Auto (Khóa bởi Deep Research)";
+        else if (reasoningId === "thinking") reasoningLabel = "Thinking (Suy luận sâu)";
+        else if (reasoningId === "fast") reasoningLabel = "Fast (Nhanh)";
+        else reasoningLabel = "Auto (Tự động)";
       } else {
         reasoningLabel = reasoningId;
       }

@@ -246,6 +246,7 @@ export function ProviderModal({
               const isDeepSeek = p.id === "deepseek";
               const isPerplexity = p.id === "perplexity";
               const isKimi = p.id === "kimi";
+              const isQwen = p.id === "qwen";
 
               const isDeepThinking = sel.deep_thinking !== undefined ? sel.deep_thinking : (caps?.deep_thinking ?? false);
               const isWebSearch = sel.web_search !== undefined ? sel.web_search : (caps?.web_search ?? true);
@@ -1027,16 +1028,16 @@ export function ProviderModal({
                         </div>
                       </div>
                     ) : isKimi ? (
-                      /* Kimi: Row 1 = Model & Thinking Effort dropdowns, Row 2 = Deep Research toggle */
+                      /* Kimi: Row 1 = Model & Reasoning, Row 2 = Deep Research Toggle */
                       <div
                         style={{
                           display: "flex",
                           flexDirection: "column",
-                          gap: 8,
+                          gap: 10,
                           flexGrow: 1,
                         }}
                       >
-                        {/* Row 1: Model & Thinking Effort */}
+                        {/* Row 1: Model & Reasoning */}
                         <div
                           style={{
                             display: "grid",
@@ -1055,24 +1056,216 @@ export function ProviderModal({
                                   letterSpacing: "0.4px",
                                 }}
                               >
-                                Mô hình AI (Model)
+                                Mô hình Kimi
                               </label>
-                              {currentModel?.badge && (
+                              <span
+                                style={{
+                                  fontSize: 9.5,
+                                  padding: "1px 5px",
+                                  borderRadius: 3,
+                                  backgroundColor: isDeepResearch && currentModelId === "instant" ? "#fef3c7" : "var(--brand-blue)",
+                                  color: isDeepResearch && currentModelId === "instant" ? "#b45309" : "#ffffff",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {isDeepResearch && currentModelId === "instant" ? "Disabled" : (currentModel?.badge || "Active")}
+                              </span>
+                            </div>
+                            <select
+                              disabled={models.length <= 1}
+                              value={currentModelId}
+                              onChange={(e) => {
+                                const targetM = models.find((m) => m.id === e.target.value);
+                                if (targetM?.disabled || (isDeepResearch && e.target.value === "instant")) return;
+                                onUpdateSelection?.(p.id, { model_id: e.target.value });
+                              }}
+                              style={{
+                                width: "100%",
+                                padding: "6px 8px",
+                                borderRadius: 6,
+                                border: "1px solid var(--border-default, #cbd5e1)",
+                                backgroundColor: "#ffffff",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: "var(--text-primary, #0f172a)",
+                                cursor: "pointer",
+                                outline: "none",
+                              }}
+                              title="Chọn mô hình Kimi"
+                            >
+                              {models.map((m) => {
+                                const isInstantDisabled = isDeepResearch && m.id === "instant";
+                                return (
+                                  <option key={m.id} value={m.id} disabled={m.disabled || isInstantDisabled}>
+                                    {m.label} {isInstantDisabled ? "— (Deep Research không hỗ trợ)" : m.badge ? `[${m.badge}]` : ""}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                            <span style={{ fontSize: 10.5, color: isDeepResearch && currentModelId === "instant" ? "#b45309" : "var(--text-muted)", lineHeight: 1.25 }}>
+                              {isDeepResearch && currentModelId === "instant"
+                                ? "Deep Research không hỗ trợ Instant (chuyển sang K3 hoặc K2.8)"
+                                : (currentModel?.description || "Mô hình Kimi")}
+                            </span>
+                          </div>
+
+                          {/* 2. Reasoning Picker */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <label
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: "var(--text-secondary)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                }}
+                              >
+                                <BrainIcon size={12} color="var(--brand-blue)" />
+                                <span>Thinking effort</span>
+                              </label>
+                              {currentThinking?.badge && (
                                 <span
                                   style={{
                                     fontSize: 9.5,
                                     padding: "1px 5px",
                                     borderRadius: 3,
-                                    backgroundColor: "var(--brand-blue)",
-                                    color: "#ffffff",
+                                    backgroundColor: "#eff6ff",
+                                    color: "var(--brand-blue)",
                                     fontWeight: 700,
                                   }}
                                 >
-                                  {currentModel.badge}
+                                  {currentThinking.badge}
                                 </span>
                               )}
                             </div>
                             <select
+                              disabled={thinkingLevels.length <= 1}
+                              value={currentThinkingId}
+                              onChange={(e) => {
+                                onUpdateSelection?.(p.id, { thinking_level_id: e.target.value });
+                              }}
+                              style={{
+                                width: "100%",
+                                padding: "6px 8px",
+                                borderRadius: 6,
+                                border: "1px solid var(--border-default, #cbd5e1)",
+                                backgroundColor: thinkingLevels.length <= 1 ? "#f8fafc" : "#ffffff",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: thinkingLevels.length <= 1 ? "#64748b" : "var(--text-primary, #0f172a)",
+                                cursor: thinkingLevels.length <= 1 ? "not-allowed" : "pointer",
+                                outline: "none",
+                              }}
+                            >
+                              {thinkingLevels.map((t) => (
+                                <option key={t.id} value={t.id} disabled={t.disabled}>
+                                  {t.label}
+                                </option>
+                              ))}
+                            </select>
+                            <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
+                              {currentThinking?.description || "2 mức suy luận trong menu mô hình"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Row 2: Deep Research Toggle */}
+                        <div
+                          onClick={() => {
+                            const nextDr = !isDeepResearch;
+                            const updates: Partial<ProviderSelectionConfig> = {
+                              deep_research: nextDr,
+                              ...(nextDr && (currentModelId === "instant" || !currentModelId || currentModelId === "default") ? { model_id: "k3" } : {}),
+                            };
+                            onUpdateSelection?.(p.id, updates);
+                          }}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "8px 12px",
+                            borderRadius: 6,
+                            border: `1.5px solid ${isDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
+                            backgroundColor: isDeepResearch ? "#f5f3ff" : "#ffffff",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                          }}
+                          title="Bật/Tắt tính năng Deep Research của Kimi"
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <SparklesIcon size={16} color={isDeepResearch ? "#7c3aed" : "#64748b"} />
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: isDeepResearch ? "#7c3aed" : "var(--text-primary, #0f172a)" }}>
+                                Deep Research
+                              </div>
+                              <div style={{ fontSize: 10.5, color: "var(--text-muted, #64748b)" }}>
+                                Nghiên cứu và tìm kiếm thông tin chuyên sâu (Không hỗ trợ Instant, chuyển sang K3)
+                              </div>
+                            </div>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: "2px 8px",
+                              borderRadius: 10,
+                              backgroundColor: isDeepResearch ? "#7c3aed" : "#e2e8f0",
+                              color: isDeepResearch ? "#ffffff" : "#64748b",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {isDeepResearch ? "BẬT" : "TẮT"}
+                          </span>
+                        </div>
+                      </div>
+                    ) : isQwen ? (
+                      /* Qwen: Row 1 = Model & Reasoning (Reasoning disabled & locked to Auto when Deep Research is ON), Row 2 = Web Search, Deep Research & Research Mode */
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 10,
+                          flexGrow: 1,
+                        }}
+                      >
+                        {/* Row 1: Model & Reasoning */}
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: 10,
+                          }}
+                        >
+                          {/* 1. Model Selector */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <label
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  color: "var(--text-secondary)",
+                                  letterSpacing: "0.4px",
+                                }}
+                              >
+                                Mô hình Qwen
+                              </label>
+                              <span
+                                style={{
+                                  fontSize: 9.5,
+                                  padding: "1px 5px",
+                                  borderRadius: 3,
+                                  backgroundColor: "var(--brand-blue)",
+                                  color: "#ffffff",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {currentModel?.badge || "Active"}
+                              </span>
+                            </div>
+                            <select
+                              disabled={models.length <= 1}
                               value={currentModelId}
                               onChange={(e) => {
                                 const targetM = models.find((m) => m.id === e.target.value);
@@ -1091,46 +1284,50 @@ export function ProviderModal({
                                 cursor: "pointer",
                                 outline: "none",
                               }}
+                              title="Chọn mô hình Qwen"
                             >
                               {models.map((m) => (
                                 <option key={m.id} value={m.id} disabled={m.disabled}>
-                                  {m.label}
+                                  {m.label} {m.disabled ? "— (Upgrade)" : m.badge ? `[${m.badge}]` : ""}
                                 </option>
                               ))}
                             </select>
                             <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
-                              {currentModel?.description || "Menu mô hình cạnh nút Gửi"}
+                              {currentModel?.description || "Mô hình Qwen"}
                             </span>
                           </div>
 
-                          {/* 2. Thinking Effort Selector */}
+                          {/* 2. Reasoning Picker */}
                           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                               <label
                                 style={{
                                   fontSize: 11,
                                   fontWeight: 700,
-                                  color: "var(--text-secondary)",
-                                  letterSpacing: "0.4px",
+                                  color: isDeepResearch ? "#7c3aed" : "var(--text-secondary)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 4,
                                 }}
                               >
-                                Mức suy luận (Reasoning)
+                                <BrainIcon size={12} color={isDeepResearch ? "#7c3aed" : "var(--brand-blue)"} />
+                                <span>Mức suy luận (Reasoning)</span>
                               </label>
                               <span
                                 style={{
                                   fontSize: 9.5,
                                   padding: "1px 5px",
                                   borderRadius: 3,
-                                  backgroundColor: isDeepResearch ? "#f1f5f9" : "#dbeafe",
-                                  color: isDeepResearch ? "#64748b" : "var(--brand-blue)",
+                                  backgroundColor: isDeepResearch ? "#f5f3ff" : "#eff6ff",
+                                  color: isDeepResearch ? "#7c3aed" : "var(--brand-blue)",
                                   fontWeight: 700,
                                 }}
                               >
-                                {isDeepResearch ? "Auto" : (currentThinking?.badge || "High")}
+                                {isDeepResearch ? "Auto" : (currentThinking?.badge || "Auto")}
                               </span>
                             </div>
                             <select
-                              disabled={isDeepResearch}
+                              disabled={isDeepResearch || thinkingLevels.length <= 1}
                               value={isDeepResearch ? "auto" : currentThinkingId}
                               onChange={(e) => {
                                 if (isDeepResearch) return;
@@ -1140,15 +1337,16 @@ export function ProviderModal({
                                 width: "100%",
                                 padding: "6px 8px",
                                 borderRadius: 6,
-                                border: "1px solid var(--border-default, #cbd5e1)",
-                                backgroundColor: isDeepResearch ? "#f1f5f9" : "#ffffff",
+                                border: `1px solid ${isDeepResearch ? "#c4b5fd" : "var(--border-default, #cbd5e1)"}`,
+                                backgroundColor: isDeepResearch ? "#f5f3ff" : "#ffffff",
                                 fontSize: 12,
                                 fontWeight: 600,
-                                color: isDeepResearch ? "#64748b" : "var(--text-primary, #0f172a)",
+                                color: isDeepResearch ? "#7c3aed" : "var(--text-primary, #0f172a)",
                                 cursor: isDeepResearch ? "not-allowed" : "pointer",
                                 outline: "none",
                                 opacity: isDeepResearch ? 0.75 : 1,
                               }}
+                              title={isDeepResearch ? "Deep Research không cho phép thay đổi mức suy luận (khóa về Auto)" : "Chọn mức độ suy luận"}
                             >
                               {isDeepResearch ? (
                                 <option value="auto">Auto</option>
@@ -1160,8 +1358,8 @@ export function ProviderModal({
                                 ))
                               )}
                             </select>
-                            <span style={{ fontSize: 10.5, color: isDeepResearch ? "var(--accent-purple, #7c3aed)" : "var(--text-muted)", lineHeight: 1.25 }}>
-                              {isDeepResearch ? "Deep Research tự động điều chỉnh mức độ suy luận (không thể thay đổi)" : (currentThinking?.description || "2 mức suy luận trong menu mô hình")}
+                            <span style={{ fontSize: 10.5, color: isDeepResearch ? "#7c3aed" : "var(--text-muted)", lineHeight: 1.25 }}>
+                              {isDeepResearch ? "Deep Research không cho phép chỉnh mức độ suy luận (mặc định Auto)" : (currentThinking?.description || "3 mức suy luận Qwen")}
                             </span>
                           </div>
                         </div>
@@ -1171,7 +1369,7 @@ export function ProviderModal({
                           style={{
                             display: "grid",
                             gridTemplateColumns: "repeat(2, 1fr)",
-                            gridTemplateRows: "2 1fr",
+                            gridAutoRows: "repeat(2, 1fr)",
                             gap: 8,
                           }}
                         >
@@ -1189,7 +1387,7 @@ export function ProviderModal({
                               cursor: "pointer",
                               transition: "all 0.15s ease",
                             }}
-                            title="Bật/Tắt tính năng tìm kiếm Web trên Kimi (+ Web search)"
+                            title="Bật/Tắt tìm kiếm Web trên Qwen (+ menu)"
                           >
                             <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden" }}>
                               <SearchIcon size={14} color={isWebSearch ? "#059669" : "#64748b"} />
@@ -1227,9 +1425,8 @@ export function ProviderModal({
                                 ...(nextDr
                                   ? {
                                     thinking_level_id: "auto",
-                                    ...(currentModelId === "instant" || !currentModelId || currentModelId === "default" ? { model_id: "k3" } : {}),
                                   }
-                                  : { thinking_level_id: "high" }),
+                                  : {}),
                               };
                               onUpdateSelection?.(p.id, updates);
                             }}
@@ -1244,7 +1441,7 @@ export function ProviderModal({
                               cursor: "pointer",
                               transition: "all 0.15s ease",
                             }}
-                            title="Bật/Tắt tính năng Deep Research của Kimi (+ Deep research)"
+                            title="Bật/Tắt tính năng Deep Research của Qwen (+ menu)"
                           >
                             <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden" }}>
                               <SparklesIcon size={14} color={isDeepResearch ? "#7c3aed" : "#64748b"} />
