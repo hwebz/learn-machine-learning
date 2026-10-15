@@ -56,7 +56,7 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
     }
     if (cachedCaps["gemini"]) {
       cachedCaps["gemini"].modes = [];
-      cachedCaps["gemini"].selected_mode_id = null;
+      cachedCaps["gemini"].selected_mode_id = undefined;
     }
     if (cachedSelections["gemini"]) {
       cachedSelections["gemini"].mode_id = "";

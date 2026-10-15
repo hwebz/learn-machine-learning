@@ -89,9 +89,9 @@ export function LeftSidebar({
     }
   };
 
-  const filteredSessions = sessions.filter((s) =>
-    s.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredSessions = sessions
+    .filter((s) => s.messages && s.messages.length > 0)
+    .filter((s) => s.title.toLowerCase().includes(searchQuery.toLowerCase()));
 
   // Grouping logic: Today, Yesterday, 7 days ago
   const getSessionTimeGroup = (session: ChatSession): "today" | "yesterday" | "last7days" => {

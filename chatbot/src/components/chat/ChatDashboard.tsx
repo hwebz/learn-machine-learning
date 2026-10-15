@@ -55,8 +55,8 @@ const FALLBACK_SESSION: ChatSession = {
   pinned: false,
   createdAt: "Vừa xong",
   createdTimestamp: 0,
-  selectedProviders: [],
-  selectedProvider: "",
+  selectedProviders: DEFAULT_SELECTED_PROVIDERS,
+  selectedProvider: DEFAULT_SELECTED_PROVIDERS[0] || "copilot",
   messages: [],
 };
 
@@ -71,6 +71,16 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
   const [mounted, setMounted] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>(routeChatId || "");
+  const [draftSession, setDraftSession] = useState<ChatSession>(() => ({
+    id: "session-draft",
+    title: "Phiên nghiên cứu mới",
+    pinned: false,
+    createdAt: "Vừa xong",
+    createdTimestamp: Date.now(),
+    selectedProviders: DEFAULT_SELECTED_PROVIDERS,
+    selectedProvider: DEFAULT_SELECTED_PROVIDERS[0] || "copilot",
+    messages: [],
+  }));
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [activeSteps, setActiveSteps] = useState<StepLog[]>([]);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(false);
@@ -254,47 +264,36 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       setSessions((prev) => {
         const existingJobIds = new Set(newSessions.map((s) => s.id));
         const keptPrev = prev.filter((s) => !existingJobIds.has(s.id) && !existingJobIds.has(s.jobId || ""));
-        const combined = [...newSessions, ...keptPrev];
+        const validCombined = [...newSessions, ...keptPrev].filter(
+          (s) => (s.messages && s.messages.length > 0) || s.jobId
+        );
 
         if (!targetId) {
-          const emptySession = combined.find((session) =>
-            session.id.startsWith("session-") && session.messages.length === 0
-          );
-          const selectedSession = emptySession || {
-            ...FALLBACK_SESSION,
-            id: `session-${Date.now()}`,
-            createdTimestamp: Date.now(),
-          };
-          setActiveSessionId(selectedSession.id);
+          const freshId = `session-${Date.now()}`;
+          setActiveSessionId(freshId);
           setActiveSteps([]);
           setInspectedMessage(undefined);
           setInspectedProvider(undefined);
           setIsRightSidebarOpen(false);
-          return emptySession ? combined : [selectedSession, ...combined];
+          return validCombined;
         }
 
-        if (combined.length > 0) {
+        if (validCombined.length > 0) {
           setActiveSessionId((curr) => {
-            if (combined.some((s) => s.id === targetId || s.jobId === targetId)) {
+            if (validCombined.some((s) => s.id === targetId || s.jobId === targetId)) {
               return targetId;
             }
-            if (curr && combined.some((s) => s.id === curr || s.jobId === curr)) {
+            if (curr && validCombined.some((s) => s.id === curr || s.jobId === curr)) {
               return curr;
             }
-            return combined[0].id;
+            return validCombined[0].id;
           });
-          return combined;
+          return validCombined;
         }
 
         const freshId = `session-${Date.now()}`;
         setActiveSessionId(freshId);
-        return [
-          {
-            ...FALLBACK_SESSION,
-            id: freshId,
-            createdTimestamp: Date.now(),
-          },
-        ];
+        return [];
       });
     } catch (err) {
       console.warn("Could not fetch research history from backend:", err);
@@ -319,22 +318,12 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       if (match && match[1]) {
         handleSelectSession(match[1], false);
       } else if (window.location.pathname === "/") {
-        setSessions((prev) => {
-          const emptySession = prev.find((session) =>
-            session.id.startsWith("session-") && session.messages.length === 0
-          );
-          const selectedSession = emptySession || {
-            ...FALLBACK_SESSION,
-            id: `session-${Date.now()}`,
-            createdTimestamp: Date.now(),
-          };
-          setActiveSessionId(selectedSession.id);
-          setActiveSteps([]);
-          setInspectedMessage(undefined);
-          setInspectedProvider(undefined);
-          setIsRightSidebarOpen(false);
-          return emptySession ? prev : [selectedSession, ...prev];
-        });
+        const freshDraftId = `session-${Date.now()}`;
+        setActiveSessionId(freshDraftId);
+        setActiveSteps([]);
+        setInspectedMessage(undefined);
+        setInspectedProvider(undefined);
+        setIsRightSidebarOpen(false);
         setIsProvidersModalOpen(false);
         setIsGenerating(false);
       }
@@ -353,7 +342,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
   const activeSession: ChatSession =
     sessions.find((s) => s.id === activeSessionId || s.jobId === activeSessionId) ||
-    FALLBACK_SESSION;
+    draftSession;
 
   // Convert selected provider ids to ProviderInfo objects
   const activeProviderIds = Array.isArray(activeSession.selectedProviders)
@@ -489,23 +478,24 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       handleStopResearch();
     }
     const newId = `session-${Date.now()}`;
-    const newSession: ChatSession = {
+    const cleanDraft: ChatSession = {
       id: newId,
       title: "Phiên nghiên cứu mới",
       pinned: false,
       createdAt: "Vừa xong",
       createdTimestamp: Date.now(),
-      selectedProviders: [],
-      selectedProvider: "",
+      selectedProviders: (sessions[0]?.selectedProviders && sessions[0].selectedProviders.length > 0)
+        ? sessions[0].selectedProviders
+        : DEFAULT_SELECTED_PROVIDERS,
+      selectedProvider: sessions[0]?.selectedProvider || DEFAULT_SELECTED_PROVIDERS[0] || "copilot",
       messages: [],
     };
-    setSessions([newSession, ...sessions]);
+    setDraftSession(cleanDraft);
     setActiveSessionId(newId);
     setActiveSteps([]);
     setInspectedMessage(undefined);
     setInspectedProvider(undefined);
     setIsRightSidebarOpen(false);
-    setIsProvidersModalOpen(true);
 
     // Update URL back to root
     if (typeof window !== "undefined" && window.location.pathname !== "/") {
@@ -777,29 +767,32 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     if (targetJobId) {
       await deleteResearchJob(targetJobId);
     }
-    setSessions((prev) => {
-      const remaining = prev.filter((s) => s.id !== id && s.jobId !== id);
-      return remaining;
-    });
-    // Deleted the conversation currently being viewed: return to the New Chat
-    // screen at "/" so the user can start over; otherwise stay where we are.
+    const remaining = sessions.filter((s) => s.id !== id && s.jobId !== id);
+    setSessions(remaining);
+
+    // Deleted the conversation currently being viewed: return to the clean draft
+    // screen at "/" so the user can start over; do NOT save any empty session!
     if (activeSessionId === id || activeSessionId === targetJobId) {
-      const emptySession: ChatSession = {
-        id: `session-${Date.now()}`,
-        title: "Phiên nghiên cứu mới",
-        pinned: false,
-        createdAt: "Vừa xong",
-        createdTimestamp: Date.now(),
-        selectedProviders: [],
-        selectedProvider: "",
-        messages: [],
-      };
-      setActiveSessionId(emptySession.id);
+      const freshDraftId = `session-${Date.now()}`;
+      setActiveSessionId(freshDraftId);
       setActiveSteps([]);
       setInspectedMessage(undefined);
       setInspectedProvider(undefined);
       setIsRightSidebarOpen(false);
-      setSessions((prev) => [emptySession, ...prev]);
+
+      setDraftSession({
+        id: freshDraftId,
+        title: "Phiên nghiên cứu mới",
+        pinned: false,
+        createdAt: "Vừa xong",
+        createdTimestamp: Date.now(),
+        selectedProviders: (remaining[0]?.selectedProviders && remaining[0].selectedProviders.length > 0)
+          ? remaining[0].selectedProviders
+          : DEFAULT_SELECTED_PROVIDERS,
+        selectedProvider: remaining[0]?.selectedProvider || DEFAULT_SELECTED_PROVIDERS[0] || "copilot",
+        messages: [],
+      });
+
       if (typeof window !== "undefined" && window.location.pathname !== "/") {
         window.history.pushState(null, "", "/");
       }
@@ -807,6 +800,28 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
   };
 
   const handleToggleProvider = (providerId: string) => {
+    const isSavedSession = sessions.some(
+      (s) => s.id === activeSessionId || s.jobId === activeSessionId
+    );
+    if (!isSavedSession) {
+      setDraftSession((prev) => {
+        const currentIds = Array.isArray(prev.selectedProviders)
+          ? prev.selectedProviders
+          : (prev.selectedProvider ? [prev.selectedProvider] : []);
+        let updatedIds: string[];
+        if (currentIds.includes(providerId)) {
+          updatedIds = currentIds.filter((id) => id !== providerId);
+        } else {
+          updatedIds = [...currentIds, providerId];
+        }
+        return {
+          ...prev,
+          selectedProviders: updatedIds,
+          selectedProvider: updatedIds[0] || "",
+        };
+      });
+      return;
+    }
     setSessions((prev) =>
       prev.map((s) => {
         if (s.id !== activeSessionId && s.jobId !== activeSessionId) return s;
@@ -830,6 +845,17 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
   const handleSelectMultipleProviders = (providerIds: string[]) => {
     if (providerIds.length === 0) return;
+    const isSavedSession = sessions.some(
+      (s) => s.id === activeSessionId || s.jobId === activeSessionId
+    );
+    if (!isSavedSession) {
+      setDraftSession((prev) => ({
+        ...prev,
+        selectedProviders: providerIds,
+        selectedProvider: providerIds[0] || "",
+      }));
+      return;
+    }
     setSessions((prev) =>
       prev.map((s) =>
         s.id === activeSessionId || s.jobId === activeSessionId
@@ -941,18 +967,36 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         ? content.slice(0, 36) + (content.length > 36 ? "..." : "")
         : activeSession.title;
 
-    setSessions((prev) =>
-      prev.map((s) =>
-        s.id === activeSessionId || s.jobId === activeSessionId
-          ? {
-            ...s,
-            title: updatedTitle,
-            messages: [...s.messages, userMessage],
-            status: "running",
-          }
-          : s
-      )
+    const isSavedSession = sessions.some(
+      (s) => s.id === activeSessionId || s.jobId === activeSessionId
     );
+
+    if (!isSavedSession) {
+      // First question sent: save conversation into sessions now using the question as title!
+      const newSavedSession: ChatSession = {
+        ...activeSession,
+        id: activeSessionId || `session-${Date.now()}`,
+        title: updatedTitle,
+        messages: [userMessage],
+        status: "running",
+        createdAt: "Vừa xong",
+        createdTimestamp: Date.now(),
+      };
+      setSessions((prev) => [newSavedSession, ...prev]);
+    } else {
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === activeSessionId || s.jobId === activeSessionId
+            ? {
+              ...s,
+              title: updatedTitle,
+              messages: [...s.messages, userMessage],
+              status: "running",
+            }
+            : s
+        )
+      );
+    }
 
     setIsGenerating(true);
     setActiveSteps([]);
