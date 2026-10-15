@@ -507,12 +507,16 @@ providers:
   grok:
     new_chat_url: "https://grok.com/"
     question_input:
-      - { css: "div.tiptap.ProseMirror[contenteditable='true'][role='textbox'][aria-label='Ask Grok anything']" }
-      - { css: "[contenteditable='true'][role='textbox'][aria-label*='Ask' i]" }
+      - { css: "div.tiptap.ProseMirror[contenteditable='true']" }
+      - { css: "[contenteditable='true'][aria-label*='Ask' i]" }
+      - { css: "div.ProseMirror[contenteditable='true']" }
+      - { css: "[contenteditable='true'][role='combobox']" }
+      - { role: combobox, name: "Ask Grok anything" }
       - { role: textbox }
-      - { css: "textarea" }
+      - { css: "textarea:not([aria-hidden='true']):not([style*='hidden'])" }
     submit:
       - { testid: chat-submit }
+      - { css: "button[data-testid='chat-submit']" }
       - { css: "button[aria-label='Submit']" }
       - { css: "button[aria-label*='Send' i]" }
       - { role: button, name: "Send" }
@@ -533,12 +537,23 @@ providers:
 
     generating_indicator:
       - { css: "button[aria-label*='Stop' i]" }
+      - { role: button, name: "Stop model response" }
       - { role: button, name: "Stop" }
     done_indicator:
-      - { css: "button[aria-label*='Copy' i]" }
+      - { css: "button[aria-label='Copy response']" }
+      - { css: "button[aria-label*='Copy response' i]" }
+      - { css: "button[aria-label='Regenerate']" }
+      - { role: button, name: "Copy response" }
+      - { role: button, name: "Regenerate" }
+    completion:
+      done_marker_delay_s: 1.0
     answer_container:
       - { css: "div[class*='message-bubble'] .markdown" }
+      - { css: "div[class*='message-bubble']" }
       - { css: "div[class*='response'] .markdown" }
+      - { css: "div[class*='message'] .markdown" }
+      - { css: "div[class*='message']" }
+      - { css: "div.markdown" }
       - { css: ".markdown" }
     source_links:
       - { css: "a[class*='citation']" }

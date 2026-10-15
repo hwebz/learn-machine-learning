@@ -15,8 +15,39 @@ class GrokUIAdapter(BrowserProviderAdapter):
 
     name = "grok"
 
+    async def _dismiss_modals(self, page: Any) -> None:
+        """Dismiss age confirmation and onboarding dialogs if present."""
+        try:
+            # 1. Age confirmation step 1: Continue button
+            cont_btn = page.locator("button:has-text('Continue'), button:has(span:has-text('Continue'))").first
+            if await cont_btn.count() > 0 and await cont_btn.is_visible():
+                logger.info("grok_dismissing_age_continue")
+                await cont_btn.click(timeout=2000)
+                import asyncio
+                await asyncio.sleep(1.0)
+
+            # 2. Age confirmation step 2: Save birth year button
+            save_btn = page.locator("button:has-text('Save'), button:has(span:has-text('Save'))").first
+            if await save_btn.count() > 0 and await save_btn.is_visible():
+                logger.info("grok_dismissing_age_save")
+                await save_btn.click(timeout=2000)
+                import asyncio
+                await asyncio.sleep(1.0)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("grok_dismiss_modals_failed", error=str(exc))
+
+    async def _prepare_response(self, page: Any) -> None:
+        """Ensure no blocking confirmation dialogs are open before submitting."""
+        await self._dismiss_modals(page)
+
+    async def _response_ready(self, page: Any) -> bool | None:
+        """Handle any dialogs that pop up after clicking submit."""
+        await self._dismiss_modals(page)
+        return None
+
     async def _select_mode(self, page: Any, mode: str) -> None:
         """Switch Grok mode (Expert / Heavy / DeepSearch vs Fast / Auto)."""
+        await self._dismiss_modals(page)
         if not mode or mode in {"default", "auto", "standard", "none"}:
             logger.info("grok_mode_default_noop")
             return
