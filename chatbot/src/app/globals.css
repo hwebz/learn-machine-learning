@@ -2960,6 +2960,12 @@ textarea {
   border: 1px solid #bfdbfe;
 }
 
+.agent-live-badge.normal {
+  background: #f1f1f1;
+  color: #5c5561;
+  border: 1px solid #d3c1e7;
+}
+
 .agent-live-badge.completed {
   background: #ecfdf5;
   color: #059669;

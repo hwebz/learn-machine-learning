@@ -71,3 +71,27 @@ export function formatDuration(val: number | string | undefined | null): string 
 
   return `${m}m ${s}s`;
 }
+
+/**
+ * Resolves the elapsed duration for an orchestrator, lead, or subtask provider from step logs.
+ * Scans in reverse (newest event first) for the latest non-zero elapsed duration.
+ */
+export function getStepElapsedDuration(steps?: Array<any> | null): number | null {
+  if (!Array.isArray(steps) || steps.length === 0) return null;
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const st = steps[i];
+    if (!st) continue;
+    const el_s = st.data?.elapsed_s ?? st.elapsed_s;
+    if (el_s !== undefined && el_s !== null) {
+      const num = Number(el_s);
+      if (!isNaN(num) && num > 0) return num;
+    }
+    const el_ms = st.data?.elapsed_ms ?? st.elapsed_ms;
+    if (el_ms !== undefined && el_ms !== null) {
+      const num = Number(el_ms);
+      if (!isNaN(num) && num > 0) return num / 1000;
+    }
+  }
+  return null;
+}
+

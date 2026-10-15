@@ -15,6 +15,8 @@ import { MarkdownContent, cleanMarkdownCodeBlocks } from "../chat/MarkdownConten
 import { ProviderActionBanner } from "../chat/ProviderActionBanner";
 import { detectProviderActionNeeded } from "../../lib/providerAction";
 import { ProviderLiveCapabilities, ProviderSelectionConfig } from "../../types/capabilities";
+import { DurationBadge } from "../common/DurationBadge";
+import { formatDuration, getStepElapsedDuration } from "../../lib/timeUtils";
 
 function normalizeProvider(name: string): string {
   const s = name.trim().toLowerCase();
@@ -247,6 +249,18 @@ export function RightSidebar({
 }: RightSidebarProps) {
   const [copiedStepIdx, setCopiedStepIdx] = useState<number | null>(null);
   const [responseViewMode, setResponseViewMode] = useState<"preview" | "raw">("preview");
+  const [liveSeconds, setLiveSeconds] = useState<number>(0);
+
+  useEffect(() => {
+    if (!isGenerating) {
+      setLiveSeconds(0);
+      return;
+    }
+    const timer = setInterval(() => {
+      setLiveSeconds((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isGenerating]);
 
   const copyStepText = (text: string, idx: number) => {
     navigator.clipboard.writeText(text);
@@ -535,8 +549,13 @@ export function RightSidebar({
           if (!desc) {
             desc = st.message;
           }
+          let stepTitle = st.message || st.step || "Tiến trình";
+          if (/đang (suy luận|phản hồi|sinh câu trả lời):/i.test(stepTitle) && (!st.data?.thinking_steps || st.data.thinking_steps.length === 0)) {
+            stepTitle = `${detail.displayName || detail.provider} đang sinh câu trả lời: Đang lấy câu trả lời trực tiếp...`;
+            desc = "Đang lấy câu trả lời trực tiếp...";
+          }
           stepMap.set(sKey, {
-            title: st.message || st.step || "Tiến trình",
+            title: stepTitle,
             description: desc,
             status: st.status === "completed" ? "completed" : "running",
             timestamp: st.timestamp,
@@ -560,35 +579,43 @@ export function RightSidebar({
           (r?.branch_index && detail.branchIdx && r.branch_index === detail.branchIdx) ||
           (r?.subtask_id && detail.branchIdx && r.subtask_id.endsWith(`_${detail.branchIdx}`))
         );
-        if (matchedRun?.elapsed_s) {
-          foundTime = `${matchedRun.elapsed_s}s`;
-        } else if (matchedRun?.elapsed_ms) {
-          foundTime = `${(matchedRun.elapsed_ms / 1000).toFixed(1)}s`;
+        if (matchedRun?.elapsed_s !== undefined && Number(matchedRun.elapsed_s) > 0) {
+          foundTime = formatDuration(matchedRun.elapsed_s);
+        } else if (matchedRun?.elapsed_ms !== undefined && Number(matchedRun.elapsed_ms) > 0) {
+          foundTime = formatDuration(Number(matchedRun.elapsed_ms) / 1000);
+        } else {
+          const recordedElapsed = getStepElapsedDuration(pSteps);
+          if (recordedElapsed !== null) {
+            foundTime = formatDuration(recordedElapsed);
+          }
         }
       } else if (detail.role === "orchestrator") {
-        const orchStep = pSteps.find((s) => s.step === "orchestrator_result" || s.data?.role === "orchestrator");
-        if (orchStep?.data?.elapsed_s) {
-          foundTime = `${orchStep.data.elapsed_s}s`;
+        const recordedElapsed = getStepElapsedDuration(pSteps);
+        if (recordedElapsed !== null) {
+          foundTime = formatDuration(recordedElapsed);
         }
       } else if (detail.role === "lead") {
-        const leadStep = [...pSteps].reverse().find((s) => s.data?.role === "lead" && s.data?.elapsed_s);
-        if (leadStep?.data?.elapsed_s) {
-          foundTime = `${leadStep.data.elapsed_s}s`;
+        const recordedElapsed = getStepElapsedDuration(pSteps);
+        if (recordedElapsed !== null) {
+          foundTime = formatDuration(recordedElapsed);
         }
       } else {
         const matchedRun = runs.find((r: any) => normalizeProvider(r?.provider || "") === detail.provider);
-        if (matchedRun?.elapsed_s) {
-          foundTime = `${matchedRun.elapsed_s}s`;
-        } else if (matchedRun?.elapsed_ms) {
-          foundTime = `${(matchedRun.elapsed_ms / 1000).toFixed(1)}s`;
+        if (matchedRun?.elapsed_s !== undefined && Number(matchedRun.elapsed_s) > 0) {
+          foundTime = formatDuration(matchedRun.elapsed_s);
+        } else if (matchedRun?.elapsed_ms !== undefined && Number(matchedRun.elapsed_ms) > 0) {
+          foundTime = formatDuration(Number(matchedRun.elapsed_ms) / 1000);
         }
       }
     }
     if (!foundTime) {
-      const lastWithElapsed = [...pSteps].reverse().find((st) => st.data?.elapsed_s);
-      if (lastWithElapsed?.data?.elapsed_s) {
-        foundTime = `${lastWithElapsed.data.elapsed_s}s`;
+      const recordedElapsed = getStepElapsedDuration(pSteps);
+      if (recordedElapsed !== null) {
+        foundTime = formatDuration(recordedElapsed);
       }
+    }
+    if (!foundTime && isGenerating && liveSeconds > 0) {
+      foundTime = formatDuration(liveSeconds);
     }
     detail.timeTaken = foundTime;
 
@@ -982,9 +1009,11 @@ export function RightSidebar({
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 {activeDetail.timeTaken && (
-                  <span style={{ color: "#2563eb", fontWeight: 600, fontSize: 10.5, background: "#eff6ff", padding: "1px 6px", borderRadius: 4, border: "1px solid #bfdbfe" }}>
-                    ⏱ {activeDetail.timeTaken}
-                  </span>
+                  <DurationBadge
+                    duration={activeDetail.timeTaken}
+                    variant="pill"
+                    title="Thời gian phản hồi của mô hình"
+                  />
                 )}
                 {activeDetail.timestamp && (
                   <span style={{ color: "var(--text-muted)", fontSize: 11 }}>

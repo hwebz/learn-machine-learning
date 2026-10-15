@@ -1187,10 +1187,10 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
 
     if (!thinkingText && !isThinking) {
         try {
-            const allBlocks = document.querySelectorAll("details, blockquote, div[role='region'], div[class*='thought']");
+            const allBlocks = document.querySelectorAll("details[class*='thought'], details[class*='thinking'], div[data-testid*='thought'], div[class*='thinking-process']");
             for (const el of allBlocks) {
                 const txt = (el.innerText || "").trim();
-                if (txt && (/^(thought|thinking|reasoning|suy nghĩ)/i.test(txt) || txt.includes("Thought Process") || txt.includes("Thinking Process"))) {
+                if (txt && (txt.includes("Thought Process") || txt.includes("Thinking Process") || /^(thinking|thought|suy nghĩ)\b/i.test(txt))) {
                     thinkingText = txt;
                     isThinking = true;
                     break;

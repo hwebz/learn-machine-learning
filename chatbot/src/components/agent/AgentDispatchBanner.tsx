@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { AgentDispatchPlanItem, Message, StepLog } from "../../types/chat";
 import { ModelBadgeLogo, BrainIcon, ChevronRightIcon, ExternalLinkIcon } from "../icons/Icons";
+import { DurationBadge } from "../common/DurationBadge";
+import { formatDuration, getStepElapsedDuration } from "../../lib/timeUtils";
 
 export interface AgentDispatchBannerProps {
   orchestratorProvider?: string;
@@ -33,15 +35,7 @@ function normalize(p?: string): string {
   return s;
 }
 
-function formatDuration(sec: number): string {
-  if (sec <= 0) return "0s";
-  if (sec < 60) {
-    return `${sec.toFixed(sec < 10 ? 1 : 0)}s`;
-  }
-  const m = Math.floor(sec / 60);
-  const s = Math.round(sec % 60);
-  return `${m}m ${s}s`;
-}
+
 
 export function AgentDispatchBanner({
   orchestratorProvider = "gemini",
@@ -130,16 +124,12 @@ export function AgentDispatchBanner({
   }, [orchSteps, orchState, dispatchPlan]);
 
   const orchTimeTaken = useMemo(() => {
-    // Check if recorded in dispatch step or last event
-    const lastResultEvent = orchSteps.find((s) => s.step === "orchestrator_result" || s.data?.role === "orchestrator");
-    if (lastResultEvent?.data?.elapsed_s) {
-      return formatDuration(Number(lastResultEvent.data.elapsed_s));
+    const recordedElapsed = getStepElapsedDuration(orchSteps);
+    if (recordedElapsed !== null) {
+      return formatDuration(recordedElapsed);
     }
     if (orchState === "live") {
       return formatDuration(liveSeconds);
-    }
-    if (orchState === "completed") {
-      return "12.4s";
     }
     return "--";
   }, [orchSteps, orchState, liveSeconds]);
@@ -188,15 +178,12 @@ export function AgentDispatchBanner({
   }, [leadSteps, leadState, tone, dispatchPlan, runsArray.length]);
 
   const leadTimeTaken = useMemo(() => {
-    const lastLeadEvent = [...leadSteps].reverse().find((s) => s.data?.role === "lead" && s.data?.elapsed_s);
-    if (lastLeadEvent?.data?.elapsed_s) {
-      return formatDuration(Number(lastLeadEvent.data.elapsed_s));
+    const recordedElapsed = getStepElapsedDuration(leadSteps);
+    if (recordedElapsed !== null) {
+      return formatDuration(recordedElapsed);
     }
     if (leadState === "live") {
       return formatDuration(liveSeconds);
-    }
-    if (leadState === "completed") {
-      return "18.6s";
     }
     return "--";
   }, [leadSteps, leadState, liveSeconds]);
@@ -272,14 +259,17 @@ export function AgentDispatchBanner({
 
     // Time taken
     let timeStr = "--";
-    if (run?.elapsed_s) {
+    if (run?.elapsed_s !== undefined && Number(run.elapsed_s) > 0) {
       timeStr = formatDuration(Number(run.elapsed_s));
-    } else if (run?.elapsed_ms) {
+    } else if (run?.elapsed_ms !== undefined && Number(run.elapsed_ms) > 0) {
       timeStr = formatDuration(Number(run.elapsed_ms) / 1000);
-    } else if (subState === "live") {
-      timeStr = formatDuration(liveSeconds);
-    } else if (subState === "completed") {
-      timeStr = `${14 + (idx * 3)}s`;
+    } else {
+      const recordedElapsed = getStepElapsedDuration(pSteps);
+      if (recordedElapsed !== null) {
+        timeStr = formatDuration(recordedElapsed);
+      } else if (subState === "live") {
+        timeStr = formatDuration(liveSeconds);
+      }
     }
 
     return {
@@ -430,10 +420,10 @@ export function AgentDispatchBanner({
                   </div>
 
                   {/* Time Taken */}
-                  <div className="agent-card-time-badge" title="Thời gian thực thi của Orchestrator">
-                    <span className="time-icon">⏱</span>
-                    <span className="time-value">{orchTimeTaken}</span>
-                  </div>
+                  <DurationBadge
+                    duration={orchTimeTaken}
+                    title="Thời gian thực thi của Orchestrator"
+                  />
                 </div>
               </div>
 
@@ -494,6 +484,11 @@ export function AgentDispatchBanner({
                         </div>
 
                         <div className="agent-subtask-header-right">
+                          {item.config?.thinking && (
+                            <div className="agent-live-badge normal compact">
+                              <BrainIcon size={11} color="rgb(124, 58, 237)" />
+                            </div>
+                          )}
                           {/* Live vs Completed Indicator */}
                           <div className={`agent-live-badge ${subInfo.state} compact`}>
                             {subInfo.state === "live" && (
@@ -523,9 +518,11 @@ export function AgentDispatchBanner({
                           </div>
 
                           {/* Time Taken */}
-                          <span className="agent-card-time-badge compact" title="Thời gian thực thi nhánh này">
-                            {subInfo.timeTaken}
-                          </span>
+                          <DurationBadge
+                            duration={subInfo.timeTaken}
+                            variant="compact"
+                            title="Thời gian thực thi nhánh này"
+                          />
                         </div>
                       </div>
 
@@ -538,7 +535,7 @@ export function AgentDispatchBanner({
                       {/* Active Thinking Step */}
                       <div className="agent-subtask-thinking-box">
                         <div className="subtask-thinking-icon">
-                          <BrainIcon size={11} color="var(--brand-purple)" />
+                          <BrainIcon size={11} color="var(--brand-blue)" />
                         </div>
                         <span className="subtask-thinking-text">{subInfo.thinkingText}</span>
                       </div>
@@ -546,7 +543,7 @@ export function AgentDispatchBanner({
                       {/* Config Tags */}
                       {item.config && Object.keys(item.config).length > 0 && (
                         <div className="agent-subtask-config">
-                          {item.config.thinking ? <span className="config-tag">Thinking Mode</span> : null}
+                          {item.config.thinking && false ? <span className="config-tag"><BrainIcon size={11} color="rgb(124, 58, 237)" /></span> : null}
                           {item.config.model ? <span className="config-tag">Model: {item.config.model}</span> : null}
                           {item.config.mode ? <span className="config-tag">Mode: {item.config.mode}</span> : null}
                         </div>
@@ -625,10 +622,10 @@ export function AgentDispatchBanner({
                   </div>
 
                   {/* Time Taken */}
-                  <div className="agent-card-time-badge" title="Thời gian tổng hợp của Lead Provider">
-                    <span className="time-icon">⏱</span>
-                    <span className="time-value">{leadTimeTaken}</span>
-                  </div>
+                  <DurationBadge
+                    duration={leadTimeTaken}
+                    title="Thời gian tổng hợp của Lead Provider"
+                  />
                 </div>
               </div>
 

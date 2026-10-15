@@ -441,12 +441,22 @@ class BrowserProviderAdapter(ABC):
                                             msg = f"{self.name} đang suy luận: {step_title} — {desc_preview}"
                                         else:
                                             msg = f"{self.name} đang suy luận: {step_title}"
+                                    elif generating or last_text:
+                                        msg = f"{self.name} đang sinh câu trả lời: Đang lấy câu trả lời trực tiếp..."
+                                        if not steps_list:
+                                            steps_list = [{
+                                                "title": f"{self.name} đang sinh câu trả lời: Đang lấy câu trả lời trực tiếp...",
+                                                "description": "Đang lấy câu trả lời trực tiếp...",
+                                                "status": "running" if generating else "completed",
+                                            }]
                                     elif is_thinking and thinking_text:
-                                        text_preview = thinking_text[:140] + "..." if len(thinking_text) > 140 else thinking_text
-                                        msg = f"{self.name} đang suy luận: {text_preview}"
-                                    elif last_text and (generating or not is_thinking):
-                                        preview = last_text[-120:].strip()
-                                        msg = f"{self.name} đang phản hồi: {preview}..." if preview else f"{self.name} đang sinh câu trả lời..."
+                                        msg = f"{self.name} đang sinh câu trả lời: Đang lấy câu trả lời trực tiếp..."
+                                        if not steps_list:
+                                            steps_list = [{
+                                                "title": f"{self.name} đang sinh câu trả lời: Đang lấy câu trả lời trực tiếp...",
+                                                "description": "Đang lấy câu trả lời trực tiếp...",
+                                                "status": "running" if generating else "completed",
+                                            }]
                                     elif steps_list:
                                         active_step = steps_list[-1]
                                         step_title = (active_step.get("title") or "").strip() or "Thinking..."
@@ -459,7 +469,7 @@ class BrowserProviderAdapter(ABC):
                                     elif cits_list:
                                         msg = f"{self.name} đang đối chiếu {len(cits_list)} nguồn tài liệu ({state})..."
                                     elif generating:
-                                        msg = f"{self.name} đang sinh câu trả lời ({state})..."
+                                        msg = f"{self.name} đang sinh câu trả lời: Đang lấy câu trả lời trực tiếp..."
                                     else:
                                         msg = f"{self.name}: {state}"
 
