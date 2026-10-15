@@ -639,6 +639,27 @@ export function ChatArea({
   const [canScrollTop, setCanScrollTop] = useState(false);
   const [canScrollBottom, setCanScrollBottom] = useState(false);
   const [showScrollNav, setShowScrollNav] = useState(false);
+  const [isAutoScrollPaused, setIsAutoScrollPaused] = useState(false);
+  const [activeStreamingTab, setActiveStreamingTab] = useState<string>("");
+
+  const isAutoScrollPausedRef = useRef(false);
+  const isProgrammaticScrollRef = useRef(false);
+  const lastScrollTopRef = useRef<number>(0);
+
+  useEffect(() => {
+    isAutoScrollPausedRef.current = isAutoScrollPaused;
+  }, [isAutoScrollPaused]);
+
+  // When a new generation starts, re-enable auto bottom scrolling and reset active streaming tab
+  useEffect(() => {
+    if (isGenerating) {
+      setIsAutoScrollPaused(false);
+      isAutoScrollPausedRef.current = false;
+      if (selectedProviders.length > 0) {
+        setActiveStreamingTab(selectedProviders[0].id);
+      }
+    }
+  }, [isGenerating, selectedProviders]);
 
   const checkScrollState = useCallback(() => {
     const el = messagesContainerRef.current;
@@ -647,20 +668,63 @@ export function ChatArea({
     const isScrollable = scrollHeight > clientHeight + 30;
     setShowScrollNav(isScrollable);
     setCanScrollTop(scrollTop > 40);
-    setCanScrollBottom(scrollHeight - scrollTop - clientHeight > 40);
+
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    setCanScrollBottom(distanceFromBottom > 40);
+
+    // If user scrolled up manually away from the bottom
+    if (!isProgrammaticScrollRef.current) {
+      if (scrollTop < lastScrollTopRef.current - 5 && distanceFromBottom > 50) {
+        setIsAutoScrollPaused(true);
+        isAutoScrollPausedRef.current = true;
+      } else if (distanceFromBottom <= 25 && isAutoScrollPausedRef.current) {
+        // If user manually scrolled all the way back to the bottom, re-engage auto-scroll
+        setIsAutoScrollPaused(false);
+        isAutoScrollPausedRef.current = false;
+      }
+    }
+    lastScrollTopRef.current = scrollTop;
   }, []);
 
   useEffect(() => {
     const el = messagesContainerRef.current;
     if (!el) return;
     checkScrollState();
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.deltaY < 0) {
+        // User scrolled mouse wheel up -> interrupt auto-scroll
+        setIsAutoScrollPaused(true);
+        isAutoScrollPausedRef.current = true;
+      }
+    };
+
+    let touchStartY = 0;
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartY = e.touches[0].clientY;
+    };
+    const handleTouchMove = (e: TouchEvent) => {
+      const touchY = e.touches[0].clientY;
+      if (touchY > touchStartY + 10) {
+        // User swiped down to see older messages -> interrupt auto-scroll
+        setIsAutoScrollPaused(true);
+        isAutoScrollPausedRef.current = true;
+      }
+    };
+
     el.addEventListener("scroll", checkScrollState, { passive: true });
+    el.addEventListener("wheel", handleWheel, { passive: true });
+    el.addEventListener("touchstart", handleTouchStart, { passive: true });
+    el.addEventListener("touchmove", handleTouchMove, { passive: true });
     window.addEventListener("resize", checkScrollState);
     return () => {
       el.removeEventListener("scroll", checkScrollState);
+      el.removeEventListener("wheel", handleWheel);
+      el.removeEventListener("touchstart", handleTouchStart);
+      el.removeEventListener("touchmove", handleTouchMove);
       window.removeEventListener("resize", checkScrollState);
     };
-  }, [checkScrollState, session.messages, isGenerating, activeSteps]);
+  }, [checkScrollState]);
 
   const scrollToTop = () => {
     if (messagesContainerRef.current) {
@@ -672,6 +736,11 @@ export function ChatArea({
   };
 
   const scrollToBottom = () => {
+    // Unpause auto-scroll and re-bind it
+    setIsAutoScrollPaused(false);
+    isAutoScrollPausedRef.current = false;
+    isProgrammaticScrollRef.current = true;
+
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTo({
         top: messagesContainerRef.current.scrollHeight,
@@ -680,12 +749,26 @@ export function ChatArea({
     } else {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
+
+    setTimeout(() => {
+      isProgrammaticScrollRef.current = false;
+    }, 450);
   };
 
-  // Auto-scroll to bottom on new message or live streaming updates
+  // Auto-scroll to bottom on new message or live streaming updates if not paused by user
   useEffect(() => {
+    if (isAutoScrollPausedRef.current) return;
+    const el = messagesContainerRef.current;
+    if (!el) return;
+
+    isProgrammaticScrollRef.current = true;
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [session.messages, isGenerating, activeSteps.length]);
+
+    const timer = setTimeout(() => {
+      isProgrammaticScrollRef.current = false;
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [session.messages, isGenerating, activeSteps, isAutoScrollPaused]);
 
   // Adjust textarea height automatically
   useEffect(() => {
@@ -713,6 +796,8 @@ export function ChatArea({
       const attachmentsList = attachedFiles.map((f) => `[Tệp đính kèm: ${f.name} (${f.size})]`).join(" ");
       finalPrompt = finalPrompt ? `${finalPrompt}\n\n${attachmentsList}` : attachmentsList;
     }
+    setIsAutoScrollPaused(false);
+    isAutoScrollPausedRef.current = false;
     onSendMessage(finalPrompt);
     setInputText("");
     setAttachedFiles([]);
@@ -1360,43 +1445,200 @@ export function ChatArea({
                 );
               })()}
 
-              {/* Real-time Streaming Response - Directly reusing real response preview with markdown-rendered-content */}
+              {/* Real-time Streaming Response - Reusing real response preview with markdown-rendered-content */}
               {(() => {
-                const liveStreamingByProvider: { provider: string; text: string }[] = [];
-                const seenStreamingProviders = new Set<string>();
+                // Determine candidate providers for this run
+                const candidateProviders: ProviderInfo[] =
+                  selectedProviders.length > 0
+                    ? selectedProviders
+                    : providers.filter((p) =>
+                        activeSteps.some((st) => extractProvider(st) === p.id)
+                      );
 
+                // Collect latest streaming text for each provider
+                const streamingTextByProvider: Record<string, string> = {};
                 for (let i = activeSteps.length - 1; i >= 0; i--) {
                   const st = activeSteps[i];
-                  const p = extractProvider(st) || (selectedProviders.length === 1 ? selectedProviders[0].id : "");
+                  const p = extractProvider(st) || (candidateProviders.length === 1 ? candidateProviders[0].id : "");
                   const text = (st.streamingText || (st.data as any)?.streaming_text || "").trim();
-                  if (text && !seenStreamingProviders.has(p)) {
-                    seenStreamingProviders.add(p);
-                    liveStreamingByProvider.unshift({ provider: p, text });
+                  if (p && text && !streamingTextByProvider[p]) {
+                    streamingTextByProvider[p] = text;
                   }
                 }
 
-                if (liveStreamingByProvider.length === 0) return null;
+                const hasAnyStreamingText = Object.values(streamingTextByProvider).some((t) => t.length > 0);
+                if (!hasAnyStreamingText) return null;
+
+                // Single provider mode: render directly without tabs
+                if (candidateProviders.length <= 1) {
+                  const singleProv = candidateProviders[0] || providers[0];
+                  const singleText =
+                    streamingTextByProvider[singleProv?.id || ""] ||
+                    Object.values(streamingTextByProvider)[0] ||
+                    "";
+                  if (!singleText) return null;
+
+                  return (
+                    <div className="message-content-body">
+                      <MarkdownContent content={singleText} />
+                    </div>
+                  );
+                }
+
+                // Multiple providers mode: render tab selection on top
+                const currentTabProviderId =
+                  activeStreamingTab && candidateProviders.some((p) => p.id === activeStreamingTab)
+                    ? activeStreamingTab
+                    : (candidateProviders.find((p) => streamingTextByProvider[p.id])?.id || candidateProviders[0].id);
+
+                const currentText = streamingTextByProvider[currentTabProviderId] || "";
+                const currentProviderInfo =
+                  candidateProviders.find((p) => p.id === currentTabProviderId) ||
+                  providers.find((p) => p.id === currentTabProviderId);
 
                 return (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                    {liveStreamingByProvider.map((item, idx) => {
-                      const pInfo = providers.find((p) => p.id === item.provider);
-                      return (
-                        <div key={item.provider || idx}>
-                          {liveStreamingByProvider.length > 1 && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                              <ModelBadgeLogo type={pInfo?.iconType || item.provider} size={15} />
-                              <span style={{ fontSize: 13, fontWeight: 700, color: pInfo?.color || "var(--brand-blue)" }}>
-                                {pInfo?.name || item.provider}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {/* Provider Selection Tabs for Real-time Streaming */}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        borderBottom: "1.5px solid #e2e8f0",
+                        paddingBottom: 8,
+                        overflowX: "auto",
+                        scrollbarWidth: "none",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 11.5,
+                          fontWeight: 700,
+                          color: "var(--text-secondary)",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 5,
+                          marginRight: 4,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <span>✦</span> Xem trực tiếp:
+                      </span>
+
+                      {candidateProviders.map((p) => {
+                        const isSelected = p.id === currentTabProviderId;
+                        const streamText = streamingTextByProvider[p.id] || "";
+                        const hasText = streamText.length > 0;
+
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => {
+                              setActiveStreamingTab(p.id);
+                              if (onSelectThinking) {
+                                onSelectThinking(p.id);
+                              }
+                            }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "5px 12px",
+                              borderRadius: "var(--radius-full)",
+                              fontSize: 12,
+                              fontWeight: isSelected ? 700 : 500,
+                              cursor: "pointer",
+                              border: isSelected ? "1.5px solid var(--brand-blue)" : "1px solid #e2e8f0",
+                              backgroundColor: isSelected ? "var(--brand-blue-light)" : "#ffffff",
+                              color: isSelected ? "var(--brand-blue)" : "var(--text-secondary)",
+                              boxShadow: isSelected ? "0 1px 3px rgba(37, 99, 235, 0.12)" : "0 1px 2px rgba(0,0,0,0.03)",
+                              transition: "all 0.15s ease",
+                              whiteSpace: "nowrap",
+                            }}
+                            title={`Xem phản hồi thời gian thực của ${p.name}`}
+                          >
+                            <ModelBadgeLogo type={p.iconType || p.id} size={15} />
+                            <span>{p.name}</span>
+                            {hasText ? (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  fontSize: 10.5,
+                                  fontWeight: 600,
+                                  padding: "1px 6px",
+                                  borderRadius: 10,
+                                  backgroundColor: isSelected ? "rgba(37, 99, 235, 0.15)" : "#f1f5f9",
+                                  color: isSelected ? "var(--brand-blue)" : "#64748b",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: 5,
+                                    height: 5,
+                                    borderRadius: "50%",
+                                    backgroundColor: "#22c55e",
+                                    animation: "pulseGlow 1s infinite",
+                                  }}
+                                />
+                                {streamText.length} ký tự
                               </span>
-                            </div>
-                          )}
-                          <div className="message-content-body">
-                            <MarkdownContent content={item.text} />
-                          </div>
+                            ) : (
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  color: "#94a3b8",
+                                  fontStyle: "italic",
+                                }}
+                              >
+                                (đang suy nghĩ)
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Selected Provider Streaming Response Body */}
+                    {currentText ? (
+                      <div className="message-content-body">
+                        <MarkdownContent content={currentText} />
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          padding: "20px 16px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          backgroundColor: "#f8fafc",
+                          borderRadius: "var(--radius-md)",
+                          border: "1px dashed #cbd5e1",
+                          color: "var(--text-secondary)",
+                          fontSize: 13,
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 16,
+                            height: 16,
+                            border: "2px solid #3b82f6",
+                            borderTopColor: "transparent",
+                            borderRadius: "50%",
+                            animation: "spin 0.8s linear infinite",
+                            flexShrink: 0,
+                          }}
+                        />
+                        <div>
+                          <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>
+                            {currentProviderInfo?.name || currentTabProviderId}
+                          </span>{" "}
+                          đang suy nghĩ và thu thập dữ liệu... Câu trả lời sẽ hiển thị tại đây khi bắt đầu sinh phản hồi.
                         </div>
-                      );
-                    })}
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -1422,13 +1664,33 @@ export function ChatArea({
           </button>
           <button
             type="button"
-            className={`scroll-nav-btn ${!canScrollBottom ? "disabled" : ""}`}
+            className={`scroll-nav-btn ${!canScrollBottom ? "disabled" : ""} ${isGenerating && isAutoScrollPaused ? "resume-auto-scroll" : ""}`}
             onClick={scrollToBottom}
             disabled={!canScrollBottom}
-            title="Cuộn xuống cuối trang (Scroll to bottom)"
+            title={
+              isGenerating && isAutoScrollPaused
+                ? "Cuộn xuống cuối trang và tiếp tục tự động theo dõi câu trả lời"
+                : "Cuộn xuống cuối trang (Scroll to bottom)"
+            }
             aria-label="Scroll to bottom"
+            style={{ position: "relative" }}
           >
             <ArrowDownCircleIcon size={20} />
+            {isGenerating && isAutoScrollPaused && (
+              <span
+                style={{
+                  position: "absolute",
+                  top: -2,
+                  right: -2,
+                  width: 9,
+                  height: 9,
+                  borderRadius: "50%",
+                  backgroundColor: "#22c55e",
+                  border: "2px solid #ffffff",
+                  boxShadow: "0 0 6px rgba(34, 197, 94, 0.6)",
+                }}
+              />
+            )}
           </button>
         </div>
       )}

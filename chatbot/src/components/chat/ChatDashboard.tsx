@@ -341,6 +341,17 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
   const capsHook = useProviderCapabilities(primarySelectedProvider.id);
 
+  // Automatically open the right sidebar when generating starts so user can clearly see the thinking steps
+  useEffect(() => {
+    if (isGenerating) {
+      setIsRightSidebarOpen(true);
+      if (!inspectedProvider) {
+        const first = activeProviderIds[0]?.toLowerCase() || "copilot";
+        setInspectedProvider(first);
+      }
+    }
+  }, [isGenerating, activeProviderIds, inspectedProvider]);
+
   const handleSelectSession = async (id: string, updateUrl: boolean = true) => {
     setActiveSessionId(id);
 
@@ -673,8 +684,12 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     setIsGenerating(true);
     setActiveSteps([]);
     setInspectedMessage(undefined);
+    setIsRightSidebarOpen(true);
 
     const currentProviderIds = activeProviderIds;
+    if (!inspectedProvider) {
+      setInspectedProvider(currentProviderIds[0]?.toLowerCase() || "copilot");
+    }
 
     try {
       // 1. Dispatch research job to backend with all selected providers
@@ -813,6 +828,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       }
 
       setIsGenerating(true);
+      setIsRightSidebarOpen(true);
+      setInspectedProvider(provider.toLowerCase());
       try {
         await retryJobProvider(targetJobId, provider);
 
