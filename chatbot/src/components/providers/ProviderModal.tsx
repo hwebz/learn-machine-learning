@@ -247,16 +247,16 @@ export function ProviderModal({
               // 1. Models: For free account on ChatGPT or Copilot, lock to Auto
               const models = isFreeChatGPT
                 ? [
-                    {
-                      id: "none",
-                      label: "Auto (Mặc định)",
-                      description: "Tài khoản Free: Mặc định Auto (Tự động)",
-                      selected: true,
-                      badge: "Free",
-                    },
-                  ]
+                  {
+                    id: "none",
+                    label: "Auto (Mặc định)",
+                    description: "Tài khoản Free: Mặc định Auto (Tự động)",
+                    selected: true,
+                    badge: "Free",
+                  },
+                ]
                 : isCopilot
-                ? [
+                  ? [
                     {
                       id: "auto",
                       label: "Auto (Mặc định)",
@@ -265,40 +265,65 @@ export function ProviderModal({
                       badge: "Auto",
                     },
                   ]
-                : caps?.available_models && caps.available_models.length > 0
-                ? caps.available_models
-                : [
-                    {
-                      id: "auto",
-                      label: "Auto (Tự động)",
-                      description: "Tự động chọn mô hình phù hợp",
-                      selected: true,
-                    },
-                  ];
+                  : caps?.available_models && caps.available_models.length > 0
+                    ? caps.available_models
+                    : p.id === "gemini"
+                      ? [
+                        { id: "gemini-3.8-flash", label: "3.8 Flash", description: "Trợ giúp toàn diện", selected: true, badge: "Flash" },
+                        { id: "gemini-3.5-flash-lite", label: "3.5 Flash-Lite", description: "Câu trả lời nhanh nhất", selected: false, badge: "Lite" },
+                        { id: "gemini-3.1-pro", label: "3.1 Pro", description: "Suy luận nâng cao", selected: false, badge: "Pro" },
+                        { id: "gemini-4-argon", label: "4 Argon", description: "Nhiệm vụ phức tạp", selected: false, badge: "Argon" },
+                      ]
+                    : p.id === "qwen"
+                      ? [
+                        { id: "qwen-3.8-max", label: "Qwen3.8-Max (Flagship)", description: "Mô hình cờ đầu thế hệ mới nhất", selected: true, badge: "Max" },
+                        { id: "qwen-3.7-plus", label: "Qwen3.7-Plus (High Performance)", description: "Mô hình hiệu năng cao", selected: false, badge: "Plus" },
+                        { id: "qwen-3.8-omni-flash", label: "Qwen3.8-Omni-Flash (Multimodal)", description: "Mô hình đa phương tiện tự nhiên", selected: false, badge: "Omni" },
+                      ]
+                    : [
+                      {
+                        id: "auto",
+                        label: "Auto (Tự động)",
+                        description: "Tự động chọn mô hình phù hợp",
+                        selected: true,
+                      },
+                    ];
 
               // 2. Reasoning: For free account on ChatGPT or Copilot, lock to Auto
               const thinkingLevels = isFreeChatGPT || isCopilot
                 ? [
-                    {
-                      id: "auto",
-                      label: "Auto (Tự động)",
-                      description: isCopilot
-                        ? "Copilot quản lý mức suy luận qua Chế độ (Mode)"
-                        : "Tài khoản Free: Mặc định Auto",
-                      selected: true,
-                      badge: "Auto",
-                    },
-                  ]
+                  {
+                    id: "auto",
+                    label: "Auto (Tự động)",
+                    description: isCopilot
+                      ? "Copilot quản lý mức suy luận qua Chế độ (Mode)"
+                      : "Tài khoản Free: Mặc định Auto",
+                    selected: true,
+                    badge: "Auto",
+                  },
+                ]
                 : caps?.thinking_levels && caps.thinking_levels.length > 0
-                ? caps.thinking_levels
-                : [];
+                  ? caps.thinking_levels
+                  : p.id === "gemini"
+                    ? [
+                      { id: "low", label: "Thấp (Nhanh chóng & hiệu quả)", description: "Nhanh chóng và hiệu quả", selected: true, badge: "Low" },
+                      { id: "medium", label: "Trung bình (Độ sâu cân bằng)", description: "Độ sâu cân bằng", selected: false, badge: "Med" },
+                      { id: "high", label: "Cao (Cực kỳ kỹ lưỡng)", description: "Cực kỳ kỹ lưỡng", selected: false, badge: "High" },
+                    ]
+                  : p.id === "qwen"
+                    ? [
+                      { id: "auto", label: "Auto (Tự động cân bằng)", description: "Tự động điều chỉnh mức độ suy luận", selected: true, badge: "Auto" },
+                      { id: "thinking", label: "Thinking (Suy luận sâu đa bước)", description: "Kích hoạt chuỗi tư duy mở rộng", selected: false, badge: "Think" },
+                      { id: "fast", label: "Fast (Phản hồi nhanh)", description: "Bỏ qua tư duy đa bước", selected: false, badge: "Fast" },
+                    ]
+                  : [];
 
-              // 3. Modes: For ChatGPT, standard or thinking. For Copilot, all 5 options. Gemini has no modes.
+              // 3. Modes: For ChatGPT, standard or thinking. For Copilot, all 5 options. Gemini and Qwen have no modes.
               const modes =
-                p.id === "gemini"
+                p.id === "gemini" || p.id === "qwen"
                   ? []
                   : p.id === "chatgpt"
-                  ? [
+                    ? [
                       {
                         id: "standard",
                         label: "Tiêu chuẩn (Standard)",
@@ -313,45 +338,45 @@ export function ProviderModal({
                         badge: "Think",
                       },
                     ]
-                  : p.id === "copilot" && (!caps?.modes || caps.modes.length === 0)
-                  ? [
-                      {
-                        id: "auto",
-                        label: "Auto",
-                        description: "Tự động cân bằng giữa tốc độ và độ chính xác (Mặc định)",
-                        selected: true,
-                        badge: "Auto",
-                      },
-                      {
-                        id: "quick",
-                        label: "Quick Response",
-                        description: "Ưu tiên tốc độ phản hồi nhanh cho các câu hỏi ngắn gọn",
-                        selected: false,
-                        badge: "Fast",
-                      },
-                      {
-                        id: "think_deeper",
-                        label: "Think Deeper",
-                        description: "Kích hoạt mô hình suy luận đa bước chuyên sâu cho bài toán phức tạp",
-                        selected: false,
-                        badge: "Think",
-                      },
-                      {
-                        id: "gpt_5_6_quick",
-                        label: "GPT > GPT-5.6 Sol Quick Response",
-                        description: "Mô hình GPT-5.6 Sol tối ưu tốc độ phản hồi",
-                        selected: false,
-                        badge: "GPT-5.6",
-                      },
-                      {
-                        id: "gpt_5_6_think",
-                        label: "GPT > GPT-5.6 Sol Think Deeper",
-                        description: "Mô hình GPT-5.6 Sol với khả năng suy luận chuyên sâu",
-                        selected: false,
-                        badge: "GPT-5.6",
-                      },
-                    ]
-                  : caps?.modes || [];
+                    : p.id === "copilot" && (!caps?.modes || caps.modes.length === 0)
+                      ? [
+                        {
+                          id: "auto",
+                          label: "Auto",
+                          description: "Tự động cân bằng giữa tốc độ và độ chính xác (Mặc định)",
+                          selected: true,
+                          badge: "Auto",
+                        },
+                        {
+                          id: "quick",
+                          label: "Quick Response",
+                          description: "Ưu tiên tốc độ phản hồi nhanh cho các câu hỏi ngắn gọn",
+                          selected: false,
+                          badge: "Fast",
+                        },
+                        {
+                          id: "think_deeper",
+                          label: "Think Deeper",
+                          description: "Kích hoạt mô hình suy luận đa bước chuyên sâu cho bài toán phức tạp",
+                          selected: false,
+                          badge: "Think",
+                        },
+                        {
+                          id: "gpt_5_6_quick",
+                          label: "GPT > GPT-5.6 Sol Quick Response",
+                          description: "Mô hình GPT-5.6 Sol tối ưu tốc độ phản hồi",
+                          selected: false,
+                          badge: "GPT-5.6",
+                        },
+                        {
+                          id: "gpt_5_6_think",
+                          label: "GPT > GPT-5.6 Sol Think Deeper",
+                          description: "Mô hình GPT-5.6 Sol với khả năng suy luận chuyên sâu",
+                          selected: false,
+                          badge: "GPT-5.6",
+                        },
+                      ]
+                      : caps?.modes || [];
 
               const dataTypes = caps?.supported_data_types;
               const voice = caps?.voice_chat;
@@ -359,8 +384,8 @@ export function ProviderModal({
               const currentModelId = isCopilot
                 ? "auto"
                 : isFreeChatGPT
-                ? "none"
-                : sel.model_id || caps?.selected_model_id || models[0]?.id;
+                  ? "none"
+                  : sel.model_id || caps?.selected_model_id || models[0]?.id;
               const currentModel = models.find((m) => m.id === currentModelId) || models[0];
 
               const currentThinkingId = isCopilot || isFreeAccount
@@ -509,6 +534,7 @@ export function ProviderModal({
                       display: "flex",
                       flexDirection: "column",
                       gap: 8,
+                      flexGrow: 1
                     }}
                   >
                     {/* Grid of Options: Row 1 = Model & Reasoning, Row 2 = Mode */}
@@ -517,6 +543,7 @@ export function ProviderModal({
                         display: "grid",
                         gridTemplateColumns: thinkingLevels.length > 0 ? "1fr 1fr" : "1fr",
                         gap: 10,
+                        flexGrow: 1
                       }}
                     >
                       {/* 1. Model Selector */}
@@ -566,8 +593,8 @@ export function ProviderModal({
                             isCopilot
                               ? "Copilot: Chọn mô hình qua Chế độ (Mode) bên dưới"
                               : isFreeChatGPT
-                              ? "Mặc định hệ thống tự chọn (Tài khoản Free)"
-                              : "Chọn mô hình AI"
+                                ? "Mặc định hệ thống tự chọn (Tài khoản Free)"
+                                : "Chọn mô hình AI"
                           }
                         >
                           {isCopilot ? (
@@ -586,8 +613,8 @@ export function ProviderModal({
                           {isCopilot
                             ? "Mô hình được điều khiển qua Chế độ (Mode) bên dưới"
                             : isFreeChatGPT
-                            ? "Mặc định hệ thống tự chọn (Tài khoản Free)"
-                            : (currentModel?.description || "")}
+                              ? "Mặc định hệ thống tự chọn (Tài khoản Free)"
+                              : (currentModel?.description || "")}
                         </span>
                       </div>
 
@@ -642,8 +669,8 @@ export function ProviderModal({
                             isCopilot
                               ? "Copilot: Mức suy luận được quản lý qua Chế độ (Mode) bên dưới"
                               : isFreeChatGPT
-                              ? "Tài khoản Free: Mặc định Auto (Tự động)"
-                              : "Chọn mức độ suy luận"
+                                ? "Tài khoản Free: Mặc định Auto (Tự động)"
+                                : "Chọn mức độ suy luận"
                           }
                         >
                           {isCopilot ? (
@@ -660,8 +687,8 @@ export function ProviderModal({
                           {isCopilot
                             ? "Mức suy luận được kích hoạt tương ứng khi chọn Chế độ (Mode) bên dưới"
                             : isFreeChatGPT
-                            ? "Tài khoản Free: Mặc định Auto (Tự động)"
-                            : (currentThinking?.description || "")}
+                              ? "Tài khoản Free: Mặc định Auto (Tự động)"
+                              : (currentThinking?.description || "")}
                         </span>
                       </div>
 

@@ -113,6 +113,8 @@ export function AgentConfigScreen({
       setOrchModel(orchCaps.available_models[0].id);
     } else if (selectedOrchestrator === "gemini") {
       setOrchModel("pro");
+    } else if (selectedOrchestrator === "qwen") {
+      setOrchModel("qwen-3.8-max");
     }
 
     if (orchSel?.thinking_level_id) {
@@ -144,6 +146,8 @@ export function AgentConfigScreen({
       setLeadModel(leadCaps.available_models[0].id);
     } else if (selectedLead === "gemini") {
       setLeadModel("gemini-3.1-pro");
+    } else if (selectedLead === "qwen") {
+      setLeadModel("qwen-3.8-max");
     }
 
     if (leadSel?.thinking_level_id) {
@@ -196,6 +200,7 @@ export function AgentConfigScreen({
       return [
         { id: "qwen-3.8-max", label: "Qwen 3.8 Max (Reasoning)", badge: "Max" },
         { id: "qwen-3.7-plus", label: "Qwen 3.7 Plus", badge: "Plus" },
+        { id: "qwen-3.8-omni-flash", label: "Qwen 3.8 Omni-Flash", badge: "Omni" },
       ];
     }
     if (selectedOrchestrator === "deepseek") {
@@ -233,12 +238,19 @@ export function AgentConfigScreen({
         { id: "low", label: "Thấp (Low)", badge: "Low" },
       ];
     }
+    if (selectedOrchestrator === "qwen") {
+      return [
+        { id: "auto", label: "Auto (Tự động cân bằng)", badge: "Auto" },
+        { id: "thinking", label: "Thinking (Suy luận sâu)", badge: "Think" },
+        { id: "fast", label: "Fast (Phản hồi nhanh)", badge: "Fast" },
+      ];
+    }
     return [];
   }, [orchCaps, selectedOrchestrator]);
 
   // Computed modes for Orchestrator
   const orchModes = useMemo<AgentOption[]>(() => {
-    if (selectedOrchestrator === "gemini") {
+    if (selectedOrchestrator === "gemini" || selectedOrchestrator === "qwen") {
       return [];
     }
     if (orchCaps?.modes && orchCaps.modes.length > 0) {
@@ -285,6 +297,7 @@ export function AgentConfigScreen({
       return [
         { id: "qwen-3.8-max", label: "Qwen 3.8 Max (Reasoning)", badge: "Max" },
         { id: "qwen-3.7-plus", label: "Qwen 3.7 Plus", badge: "Plus" },
+        { id: "qwen-3.8-omni-flash", label: "Qwen 3.8 Omni-Flash", badge: "Omni" },
       ];
     }
     if (selectedLead === "deepseek") {
@@ -322,12 +335,19 @@ export function AgentConfigScreen({
         { id: "low", label: "Thấp (Low)", badge: "Low" },
       ];
     }
+    if (selectedLead === "qwen") {
+      return [
+        { id: "auto", label: "Auto (Tự động cân bằng)", badge: "Auto" },
+        { id: "thinking", label: "Thinking (Suy luận sâu)", badge: "Think" },
+        { id: "fast", label: "Fast (Phản hồi nhanh)", badge: "Fast" },
+      ];
+    }
     return [];
   }, [leadCaps, selectedLead]);
 
   // Computed modes for Lead Provider
   const leadModes = useMemo<AgentOption[]>(() => {
-    if (selectedLead === "gemini") {
+    if (selectedLead === "gemini" || selectedLead === "qwen") {
       return [];
     }
     if (leadCaps?.modes && leadCaps.modes.length > 0) {
@@ -429,8 +449,9 @@ export function AgentConfigScreen({
       orchConfig.model = orchModel || "pro";
       orchConfig.mode = orchMode || "high";
     } else if (selectedOrchestrator === "qwen") {
-      orchConfig.mode = orchMode || "qwen-3.8-max";
-      orchConfig.thinking = orchThinking;
+      orchConfig.model = orchModel || "qwen-3.8-max";
+      orchConfig.thinking = orchThinkingLevel || "thinking";
+      orchConfig.mode = "";
     } else if (selectedOrchestrator === "zhipu") {
       orchConfig.model = orchModel || "glm-5.3";
       orchConfig.mode = orchMode || "high";
@@ -448,6 +469,10 @@ export function AgentConfigScreen({
     if (selectedLead === "gemini") {
       leadConfig.model = leadModel || "pro";
       leadConfig.mode = leadMode || "high";
+    } else if (selectedLead === "qwen") {
+      leadConfig.model = leadModel || "qwen-3.8-max";
+      leadConfig.thinking = leadThinkingLevel || "thinking";
+      leadConfig.mode = "";
     }
 
     onStartAgentResearch({

@@ -53,8 +53,38 @@ export function ProviderOptionsBar({
   }, []);
 
   const isCopilot = providerId === "copilot";
-  const models = capabilities?.available_models || [];
-  const thinkingLevels = capabilities?.thinking_levels || [];
+  const models = capabilities?.available_models && capabilities.available_models.length > 0
+    ? capabilities.available_models
+    : providerId === "gemini"
+    ? [
+        { id: "gemini-3.8-flash", label: "3.8 Flash", description: "Trợ giúp toàn diện", selected: true, badge: "Flash" },
+        { id: "gemini-3.5-flash-lite", label: "3.5 Flash-Lite", description: "Câu trả lời nhanh nhất", selected: false, badge: "Lite" },
+        { id: "gemini-3.1-pro", label: "3.1 Pro", description: "Suy luận nâng cao", selected: false, badge: "Pro" },
+        { id: "gemini-4-argon", label: "4 Argon", description: "Nhiệm vụ phức tạp", selected: false, badge: "Argon" },
+      ]
+    : providerId === "qwen"
+    ? [
+        { id: "qwen-3.8-max", label: "Qwen3.8-Max (Flagship)", description: "Mô hình cờ đầu thế hệ mới nhất", selected: true, badge: "Max" },
+        { id: "qwen-3.7-plus", label: "Qwen3.7-Plus (High Performance)", description: "Mô hình hiệu năng cao", selected: false, badge: "Plus" },
+        { id: "qwen-3.8-omni-flash", label: "Qwen3.8-Omni-Flash (Multimodal)", description: "Mô hình đa phương tiện tự nhiên", selected: false, badge: "Omni" },
+      ]
+    : [];
+
+  const thinkingLevels = capabilities?.thinking_levels && capabilities.thinking_levels.length > 0
+    ? capabilities.thinking_levels
+    : providerId === "gemini"
+    ? [
+        { id: "low", label: "Thấp (Nhanh chóng & hiệu quả)", description: "Nhanh chóng và hiệu quả", selected: true, badge: "Low" },
+        { id: "medium", label: "Trung bình (Độ sâu cân bằng)", description: "Độ sâu cân bằng", selected: false, badge: "Med" },
+        { id: "high", label: "Cao (Cực kỳ kỹ lưỡng)", description: "Cực kỳ kỹ lưỡng", selected: false, badge: "High" },
+      ]
+    : providerId === "qwen"
+    ? [
+        { id: "auto", label: "Auto (Tự động cân bằng)", description: "Tự động điều chỉnh mức độ suy luận", selected: true, badge: "Auto" },
+        { id: "thinking", label: "Thinking (Suy luận sâu đa bước)", description: "Kích hoạt chuỗi tư duy mở rộng", selected: false, badge: "Think" },
+        { id: "fast", label: "Fast (Phản hồi nhanh)", description: "Bỏ qua tư duy đa bước", selected: false, badge: "Fast" },
+      ]
+    : [];
 
   const fallbackCopilotModes: OptionItem[] = [
     {
@@ -94,7 +124,7 @@ export function ProviderOptionsBar({
     },
   ];
 
-  const modes = providerId === "gemini"
+  const modes = (providerId === "gemini" || providerId === "qwen")
     ? []
     : capabilities?.modes && capabilities.modes.length > 0
     ? capabilities.modes

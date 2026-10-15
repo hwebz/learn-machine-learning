@@ -11,6 +11,7 @@ from app.adapters.capabilities.base import BaseProviderCapabilitiesStrategy
 from app.adapters.capabilities.chatgpt import ChatGPTCapabilitiesStrategy
 from app.adapters.capabilities.copilot import CopilotCapabilitiesStrategy
 from app.adapters.capabilities.gemini import GeminiCapabilitiesStrategy
+from app.adapters.capabilities.qwen import QwenCapabilitiesStrategy
 from app.adapters.capabilities.models import (
     OptionItem,
     ProviderLiveCapabilities,
@@ -108,6 +109,8 @@ class CapabilitiesRegistry:
         self.register(copilot_strat)
         gemini_strat = GeminiCapabilitiesStrategy()
         self.register(gemini_strat)
+        qwen_strat = QwenCapabilitiesStrategy()
+        self.register(qwen_strat)
 
     def register(self, strategy: BaseProviderCapabilitiesStrategy) -> None:
         self._strategies[strategy.provider_name.lower()] = strategy

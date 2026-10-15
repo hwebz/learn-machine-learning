@@ -1300,7 +1300,7 @@ export function ChatArea({
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <BrainIcon size={16} color="var(--brand-blue)" />
                   <span style={{ fontSize: 13, fontWeight: 700, color: "var(--brand-blue)" }}>
-                    Đang xử lý đa mô hình song song...
+                    Đang xử lý {selectedProviders.length > 1 ? 'đa mô hình song song' : ''}...
                   </span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

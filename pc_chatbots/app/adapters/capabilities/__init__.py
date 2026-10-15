@@ -18,6 +18,7 @@ from app.adapters.capabilities.voice import VoiceTranscriberService
 from app.adapters.capabilities.chatgpt import ChatGPTCapabilitiesStrategy
 from app.adapters.capabilities.copilot import CopilotCapabilitiesStrategy
 from app.adapters.capabilities.gemini import GeminiCapabilitiesStrategy
+from app.adapters.capabilities.qwen import QwenCapabilitiesStrategy
 
 __all__ = [
     "OptionItem",
@@ -34,4 +35,6 @@ __all__ = [
     "ChatGPTCapabilitiesStrategy",
     "CopilotCapabilitiesStrategy",
     "GeminiCapabilitiesStrategy",
+    "QwenCapabilitiesStrategy",
 ]
+
