@@ -48,11 +48,15 @@ export interface FormattedProviderOptions {
   reasoning: string;
   mode: string;
   deepResearch?: boolean;
+  researchMode?: string;
+  webSearch?: boolean;
   raw: {
     model_id?: string;
     thinking_level_id?: string;
     mode_id?: string;
     deep_research?: boolean;
+    research_mode?: string;
+    web_search?: boolean;
   };
 }
 
@@ -98,11 +102,15 @@ export function resolveProviderOptions(
     thinking_level_id?: string;
     mode_id?: string;
     deep_research?: boolean;
+    research_mode?: string;
+    web_search?: boolean;
   } = {
     model_id: userSelection?.model_id || msgOpts?.model_id || runOpts?.model_id || stepOpts?.model_id || (norm === "kimi" ? "instant" : "auto"),
     thinking_level_id: userSelection?.thinking_level_id || msgOpts?.thinking_level_id || runOpts?.thinking_level_id || stepOpts?.thinking_level_id || (norm === "kimi" ? "high" : "auto"),
     mode_id: userSelection?.mode_id || msgOpts?.mode_id || runOpts?.mode_id || stepOpts?.mode_id || "standard",
     deep_research: userSelection?.deep_research !== undefined ? userSelection.deep_research : msgOpts?.deep_research !== undefined ? msgOpts.deep_research : runOpts?.deep_research !== undefined ? runOpts.deep_research : activeCaps?.deep_research,
+    research_mode: userSelection?.research_mode || msgOpts?.research_mode || runOpts?.research_mode || stepOpts?.research_mode || activeCaps?.research_mode,
+    web_search: userSelection?.web_search !== undefined ? userSelection.web_search : msgOpts?.web_search !== undefined ? msgOpts.web_search : runOpts?.web_search !== undefined ? runOpts.web_search : activeCaps?.web_search,
   };
 
   // For Free account tier on ChatGPT: lock Model to none and Reasoning to Auto
@@ -121,6 +129,11 @@ export function resolveProviderOptions(
   if (norm === "perplexity") {
     raw.model_id = "auto";
     raw.thinking_level_id = "none";
+  }
+
+  // For Kimi with Deep Research: lock Reasoning to Auto
+  if (norm === "kimi" && raw.deep_research) {
+    raw.thinking_level_id = "auto";
   }
 
   // 2. Model Label
@@ -175,7 +188,8 @@ export function resolveProviderOptions(
       } else if (reasoningId === "high") {
         reasoningLabel = "Cao (High)";
       } else if (norm === "kimi") {
-        if (reasoningId === "standard") reasoningLabel = "Standard (Tiêu chuẩn)";
+        if (raw.deep_research) reasoningLabel = "Auto (Khóa bởi Deep Research)";
+        else if (reasoningId === "standard") reasoningLabel = "Standard (Tiêu chuẩn)";
         else if (reasoningId === "high") reasoningLabel = "High (Chuyên sâu)";
         else reasoningLabel = reasoningId;
       } else {
@@ -217,11 +231,15 @@ export function resolveProviderOptions(
     reasoning: reasoningLabel,
     mode: modeLabel,
     deepResearch: raw.deep_research,
+    researchMode: raw.research_mode,
+    webSearch: raw.web_search,
     raw: {
       model_id: raw.model_id || "auto",
       thinking_level_id: raw.thinking_level_id || "auto",
       mode_id: raw.mode_id || "standard",
       deep_research: raw.deep_research,
+      research_mode: raw.research_mode,
+      web_search: raw.web_search,
     },
   };
 }
@@ -1212,6 +1230,36 @@ export function RightSidebar({
                                       }}
                                     >
                                       Deep Research: BẬT
+                                    </span>
+                                  )}
+                                  {currentProviderOpts.deepResearch && currentProviderOpts.researchMode && (
+                                    <span
+                                      style={{
+                                        fontSize: 10,
+                                        padding: "1px 6px",
+                                        borderRadius: 3,
+                                        backgroundColor: currentProviderOpts.researchMode === "advanced" ? "#f3e8ff" : "#f1f5f9",
+                                        border: `1px solid ${currentProviderOpts.researchMode === "advanced" ? "#d8b4fe" : "#e2e8f0"}`,
+                                        color: currentProviderOpts.researchMode === "advanced" ? "#9333ea" : "#475569",
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      Chế độ DR: {currentProviderOpts.researchMode === "advanced" ? "Advanced" : "Normal"}
+                                    </span>
+                                  )}
+                                  {currentProviderOpts.webSearch !== undefined && (
+                                    <span
+                                      style={{
+                                        fontSize: 10,
+                                        padding: "1px 6px",
+                                        borderRadius: 3,
+                                        backgroundColor: currentProviderOpts.webSearch ? "#ecfdf5" : "#f1f5f9",
+                                        border: `1px solid ${currentProviderOpts.webSearch ? "#a7f3d0" : "#e2e8f0"}`,
+                                        color: currentProviderOpts.webSearch ? "#059669" : "#64748b",
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      Web Search: {currentProviderOpts.webSearch ? "BẬT" : "TẮT"}
                                     </span>
                                   )}
                                 </div>

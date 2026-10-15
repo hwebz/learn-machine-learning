@@ -225,6 +225,7 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
       }
       if (cachedCaps["kimi"].deep_research === undefined) cachedCaps["kimi"].deep_research = false;
       if (cachedCaps["kimi"].web_search === undefined) cachedCaps["kimi"].web_search = true;
+      if (!cachedCaps["kimi"].research_mode) cachedCaps["kimi"].research_mode = "normal";
     }
     if (cachedSelections["kimi"]) {
       cachedSelections["kimi"].mode_id = "";
@@ -233,15 +234,17 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
         if (!cachedSelections["kimi"].model_id || cachedSelections["kimi"].model_id === "instant" || cachedSelections["kimi"].model_id === "default") {
           cachedSelections["kimi"].model_id = "k3";
         }
+        cachedSelections["kimi"].thinking_level_id = "auto";
       } else {
         if (!cachedSelections["kimi"].model_id || cachedSelections["kimi"].model_id === "default") {
           cachedSelections["kimi"].model_id = "instant";
         }
-      }
-      if (!cachedSelections["kimi"].thinking_level_id || cachedSelections["kimi"].thinking_level_id === "auto") {
-        cachedSelections["kimi"].thinking_level_id = "high";
+        if (!cachedSelections["kimi"].thinking_level_id || cachedSelections["kimi"].thinking_level_id === "auto") {
+          cachedSelections["kimi"].thinking_level_id = "high";
+        }
       }
       if (cachedSelections["kimi"].web_search === undefined) cachedSelections["kimi"].web_search = true;
+      if (!cachedSelections["kimi"].research_mode) cachedSelections["kimi"].research_mode = "normal";
     }
     saveStorage(CAPS_STORAGE_KEY, cachedCaps);
     saveStorage(SELECTIONS_STORAGE_KEY, cachedSelections);
@@ -368,10 +371,12 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
             ? "instant"
             : rawModelId;
 
-          // Safe thinking for Claude (fallback to medium if "auto" was stored from prior bug)
-          const defaultThinking = isClaude ? "medium" : isKimi ? "high" : "";
+          // Safe thinking for Claude & Kimi
+          const defaultThinking = isClaude ? "medium" : isKimi && isKimiDeepResearch ? "auto" : isKimi ? "high" : "";
           const safeThinking = isClaude && (!existing.thinking_level_id || existing.thinking_level_id === "auto")
             ? (caps.selected_thinking_level_id || "medium")
+            : isKimi && isKimiDeepResearch
+            ? "auto"
             : isKimi && (!existing.thinking_level_id || existing.thinking_level_id === "auto")
             ? (caps.selected_thinking_level_id || "high")
             : (existing.thinking_level_id || caps.selected_thinking_level_id || caps.thinking_levels[0]?.id || defaultThinking);
@@ -395,14 +400,17 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
                 : (isDeepSeek || isChatGPT)
                 ? (existing.deep_thinking !== undefined ? existing.deep_thinking : (caps.deep_thinking ?? false))
                 : existing.deep_thinking,
-              web_search: isPerplexity || isKimi
+              web_search: isPerplexity
                 ? true
-                : (isDeepSeek || isChatGPT)
+                : (isDeepSeek || isChatGPT || isKimi)
                 ? (existing.web_search !== undefined ? existing.web_search : (caps.web_search ?? true))
                 : existing.web_search,
               deep_research: (isChatGPT || isKimi)
                 ? (existing.deep_research !== undefined ? existing.deep_research : (caps.deep_research ?? false))
                 : existing.deep_research,
+              research_mode: isKimi
+                ? (existing.research_mode || caps.research_mode || "normal")
+                : existing.research_mode,
             },
           };
           saveStorage(SELECTIONS_STORAGE_KEY, updated);
@@ -479,6 +487,14 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
             const currentOrUpdatedModel = updates.model_id !== undefined ? updates.model_id : existing.model_id;
             if (!currentOrUpdatedModel || currentOrUpdatedModel === "instant" || currentOrUpdatedModel === "default") {
               safeUpdates.model_id = "k3";
+            }
+            safeUpdates.thinking_level_id = "auto";
+            if (!existing.research_mode && !updates.research_mode) {
+              safeUpdates.research_mode = "normal";
+            }
+          } else if (updates.deep_research === false && existing.deep_research) {
+            if (existing.thinking_level_id === "auto" && !updates.thinking_level_id) {
+              safeUpdates.thinking_level_id = "high";
             }
           }
         }

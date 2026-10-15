@@ -62,6 +62,8 @@ export function ProviderOptionsBar({
   const isDeepThinking = selection.deep_thinking ?? capabilities?.deep_thinking ?? false;
   const isWebSearch = selection.web_search ?? capabilities?.web_search ?? true;
   const isDeepResearch = selection.deep_research ?? capabilities?.deep_research ?? false;
+  const researchMode = selection.research_mode ?? capabilities?.research_mode ?? "normal";
+  const isResearchAdvanced = researchMode === "advanced";
 
   const claudeFallbackModels: OptionItem[] = [
     { id: "claude-sonnet-5.5", label: "Sonnet 5.5", description: "Cân bằng hoàn hảo giữa trí tuệ và tốc độ", selected: true, badge: "Sonnet", disabled: false },
@@ -229,9 +231,11 @@ export function ProviderOptionsBar({
   const currentModel = isPerplexity
     ? (models.find((m) => m.id === "auto") || models[0])
     : (models.find((m) => m.id === selection.model_id && !m.disabled) || selectableModels[0] || models[0]);
-  const currentThinking = isClaude
-    ? (thinkingLevels.find((t) => t.id === selection.thinking_level_id && t.id !== "auto") || thinkingLevels.find((t) => t.id === "medium") || thinkingLevels[0])
-    : (thinkingLevels.find((t) => t.id === selection.thinking_level_id) || thinkingLevels[0]);
+  const currentThinking = (isKimi && isDeepResearch)
+    ? { id: "auto", label: "Auto", badge: "Khóa", description: "Deep Research tự động điều chỉnh mức độ suy luận" }
+    : isClaude
+      ? (thinkingLevels.find((t) => t.id === selection.thinking_level_id && t.id !== "auto") || thinkingLevels.find((t) => t.id === "medium") || thinkingLevels[0])
+      : (thinkingLevels.find((t) => t.id === selection.thinking_level_id) || thinkingLevels[0]);
   const currentMode = modes.find((m) => m.id === selection.mode_id) || modes[0];
 
   const formatSyncTime = (ts?: string) => {
@@ -666,8 +670,8 @@ export function ProviderOptionsBar({
           <div ref={thinkingRef} style={{ position: "relative" }}>
             <button
               type="button"
-              disabled={isCopilot}
-              onClick={() => !isCopilot && setIsThinkingOpen(!isThinkingOpen)}
+              disabled={isCopilot || (isKimi && isDeepResearch)}
+              onClick={() => !isCopilot && !(isKimi && isDeepResearch) && setIsThinkingOpen(!isThinkingOpen)}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -675,20 +679,21 @@ export function ProviderOptionsBar({
                 padding: "4px 8px",
                 borderRadius: "var(--radius-sm, 6px)",
                 border: "1px solid var(--border-subtle, #cbd5e1)",
-                backgroundColor: isCopilot ? "#f8fafc" : (isThinkingOpen ? "var(--brand-blue-light, #eff6ff)" : "transparent"),
+                backgroundColor: (isCopilot || (isKimi && isDeepResearch)) ? "#f8fafc" : (isThinkingOpen ? "var(--brand-blue-light, #eff6ff)" : "transparent"),
                 fontSize: 12,
                 fontWeight: 600,
-                color: isCopilot ? "#64748b" : "var(--text-primary, #0f172a)",
-                cursor: isCopilot ? "not-allowed" : "pointer",
+                color: (isCopilot || (isKimi && isDeepResearch)) ? "#64748b" : "var(--text-primary, #0f172a)",
+                cursor: (isCopilot || (isKimi && isDeepResearch)) ? "not-allowed" : "pointer",
+                opacity: (isKimi && isDeepResearch) ? 0.75 : 1,
               }}
-              title={isCopilot ? "Copilot: Mức suy luận được quản lý qua menu Chế độ (Mode)" : "Mức độ suy luận (Thinking Level)"}
+              title={isCopilot ? "Copilot: Mức suy luận được quản lý qua menu Chế độ (Mode)" : (isKimi && isDeepResearch) ? "Deep Research tự động điều chỉnh mức độ suy luận (không thể thay đổi)" : "Mức độ suy luận (Thinking Level)"}
             >
-              <BrainIcon size={13} color={isCopilot ? "#94a3b8" : "var(--brand-blue, #2563eb)"} />
-              <span>{isCopilot ? "Auto (Tự động)" : (currentThinking?.label || "Suy luận")}</span>
-              {!isCopilot && <span style={{ fontSize: 10, color: "var(--text-muted, #94a3b8)" }}>▼</span>}
+              <BrainIcon size={13} color={(isCopilot || (isKimi && isDeepResearch)) ? "#94a3b8" : "var(--brand-blue, #2563eb)"} />
+              <span>{isCopilot ? "Auto" : (isKimi && isDeepResearch) ? "Auto" : (currentThinking?.label || "Suy luận")}</span>
+              {!(isCopilot || (isKimi && isDeepResearch)) && <span style={{ fontSize: 10, color: "var(--text-muted, #94a3b8)" }}>▼</span>}
             </button>
 
-            {!isCopilot && isThinkingOpen && (
+            {!isCopilot && !(isKimi && isDeepResearch) && isThinkingOpen && (
               <div
                 style={{
                   position: "absolute",
@@ -753,49 +758,136 @@ export function ProviderOptionsBar({
           </div>
         )}
 
-        {/* Kimi Deep Research Toggle Button */}
+        {/* Kimi Web Search, Deep Research & Research Mode Toggles */}
         {isKimi && (
-          <button
-            type="button"
-            onClick={() => {
-              const nextDr = !isDeepResearch;
-              const updates: Partial<ProviderSelectionConfig> = { deep_research: nextDr };
-              if (nextDr && (currentModel?.id === "instant" || !currentModel?.id || currentModel?.id === "default")) {
-                updates.model_id = "k3";
-              }
-              onUpdateSelection(updates);
-            }}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              padding: "4px 9px",
-              borderRadius: "var(--radius-sm, 6px)",
-              border: `1px solid ${isDeepResearch ? "#7c3aed" : "var(--border-subtle, #cbd5e1)"}`,
-              backgroundColor: isDeepResearch ? "#f5f3ff" : "#ffffff",
-              fontSize: 12,
-              fontWeight: 600,
-              color: isDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-            }}
-            title="Bật/Tắt chế độ Deep Research trên Kimi"
-          >
-            <SparklesIcon size={13} color={isDeepResearch ? "#7c3aed" : "#64748b"} />
-            <span>Deep Research</span>
-            <span
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {/* 1. Web Search Toggle */}
+            <button
+              type="button"
+              onClick={() => onUpdateSelection({ web_search: !isWebSearch })}
               style={{
-                fontSize: 9.5,
-                padding: "1px 4px",
-                borderRadius: 3,
-                backgroundColor: isDeepResearch ? "#7c3aed" : "#f1f5f9",
-                color: isDeepResearch ? "#ffffff" : "#64748b",
-                fontWeight: 700,
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "4px 9px",
+                borderRadius: "var(--radius-sm, 6px)",
+                border: `1px solid ${isWebSearch ? "#059669" : "var(--border-subtle, #cbd5e1)"}`,
+                backgroundColor: isWebSearch ? "#ecfdf5" : "#ffffff",
+                fontSize: 12,
+                fontWeight: 600,
+                color: isWebSearch ? "#059669" : "var(--text-secondary, #475569)",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
               }}
+              title="Bật/Tắt tính năng tìm kiếm Web trên Kimi (+ Web search)"
             >
-              {isDeepResearch ? "ON" : "OFF"}
-            </span>
-          </button>
+              <SearchIcon size={12} color={isWebSearch ? "#059669" : "#64748b"} />
+              <span>Web Search</span>
+              <span
+                style={{
+                  fontSize: 9.5,
+                  padding: "1px 4px",
+                  borderRadius: 3,
+                  backgroundColor: isWebSearch ? "#059669" : "#f1f5f9",
+                  color: isWebSearch ? "#ffffff" : "#64748b",
+                  fontWeight: 700,
+                }}
+              >
+                {isWebSearch ? "ON" : "OFF"}
+              </span>
+            </button>
+
+            {/* 2. Deep Research Toggle Button */}
+            <button
+              type="button"
+              onClick={() => {
+                const nextDr = !isDeepResearch;
+                const updates: Partial<ProviderSelectionConfig> = {
+                  deep_research: nextDr,
+                  ...(nextDr
+                    ? {
+                      thinking_level_id: "auto",
+                      ...(currentModel?.id === "instant" || !currentModel?.id || currentModel?.id === "default" ? { model_id: "k3" } : {}),
+                    }
+                    : { thinking_level_id: "high" }),
+                };
+                onUpdateSelection(updates);
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "4px 9px",
+                borderRadius: "var(--radius-sm, 6px)",
+                border: `1px solid ${isDeepResearch ? "#7c3aed" : "var(--border-subtle, #cbd5e1)"}`,
+                backgroundColor: isDeepResearch ? "#f5f3ff" : "#ffffff",
+                fontSize: 12,
+                fontWeight: 600,
+                color: isDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+              title="Bật/Tắt chế độ Deep Research trên Kimi"
+            >
+              <SparklesIcon size={13} color={isDeepResearch ? "#7c3aed" : "#64748b"} />
+              <span>Deep Research</span>
+              <span
+                style={{
+                  fontSize: 9.5,
+                  padding: "1px 4px",
+                  borderRadius: 3,
+                  backgroundColor: isDeepResearch ? "#7c3aed" : "#f1f5f9",
+                  color: isDeepResearch ? "#ffffff" : "#64748b",
+                  fontWeight: 700,
+                }}
+              >
+                {isDeepResearch ? "ON" : "OFF"}
+              </span>
+            </button>
+
+            {/* 2.1 Research Mode Toggle (when Deep Research is ON) */}
+            {isDeepResearch && (
+              <button
+                type="button"
+                onClick={() => {
+                  const nextMode = isResearchAdvanced ? "normal" : "advanced";
+                  onUpdateSelection({ research_mode: nextMode });
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "4px 9px",
+                  borderRadius: "var(--radius-sm, 6px)",
+                  border: `1px solid ${isResearchAdvanced ? "#9333ea" : "var(--border-subtle, #cbd5e1)"}`,
+                  backgroundColor: isResearchAdvanced ? "#f3e8ff" : "#ffffff",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: isResearchAdvanced ? "#9333ea" : "var(--text-secondary, #475569)",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                }}
+                title={isResearchAdvanced
+                  ? "Advanced: Devoting extra time to a deeper analysis"
+                  : "Normal: Fast, reliable responses for quick tasks"}
+              >
+                <SparklesIcon size={12} color={isResearchAdvanced ? "#9333ea" : "#64748b"} />
+                <span>{isResearchAdvanced ? "Advanced" : "Normal"}</span>
+                <span
+                  style={{
+                    fontSize: 9.5,
+                    padding: "1px 4px",
+                    borderRadius: 3,
+                    backgroundColor: isResearchAdvanced ? "#9333ea" : "#f1f5f9",
+                    color: isResearchAdvanced ? "#ffffff" : "#64748b",
+                    fontWeight: 700,
+                  }}
+                >
+                  {isResearchAdvanced ? "ON" : "OFF"}
+                </span>
+              </button>
+            )}
+          </div>
         )}
 
         {/* 3. Mode Selector */}

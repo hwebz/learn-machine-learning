@@ -56,6 +56,7 @@ export function AgentConfigScreen({
   const [orchDeepThinking, setOrchDeepThinking] = useState<boolean>(false);
   const [orchWebSearch, setOrchWebSearch] = useState<boolean>(true);
   const [orchDeepResearch, setOrchDeepResearch] = useState<boolean>(false);
+  const [orchResearchMode, setOrchResearchMode] = useState<string>("normal");
   const [isSyncingOrch, setIsSyncingOrch] = useState(false);
   const [orchSyncMessage, setOrchSyncMessage] = useState<string | null>(null);
 
@@ -71,6 +72,7 @@ export function AgentConfigScreen({
   const [leadDeepThinking, setLeadDeepThinking] = useState<boolean>(false);
   const [leadWebSearch, setLeadWebSearch] = useState<boolean>(true);
   const [leadDeepResearch, setLeadDeepResearch] = useState<boolean>(false);
+  const [leadResearchMode, setLeadResearchMode] = useState<string>("normal");
   const [isSyncingLead, setIsSyncingLead] = useState(false);
   const [leadSyncMessage, setLeadSyncMessage] = useState<string | null>(null);
 
@@ -169,15 +171,19 @@ export function AgentConfigScreen({
       } else {
         setOrchModel(chosenModel || "instant");
       }
-      if (orchSel?.thinking_level_id) {
+      if (isDr) {
+        setOrchThinkingLevel("auto");
+      } else if (orchSel?.thinking_level_id && orchSel.thinking_level_id !== "auto") {
         setOrchThinkingLevel(orchSel.thinking_level_id);
-      } else if (orchCaps?.selected_thinking_level_id) {
+      } else if (orchCaps?.selected_thinking_level_id && orchCaps.selected_thinking_level_id !== "auto") {
         setOrchThinkingLevel(orchCaps.selected_thinking_level_id);
-      } else if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0) {
+      } else if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0 && !orchCaps.thinking_levels.some((t) => t.id === "auto")) {
         setOrchThinkingLevel(orchCaps.thinking_levels[0].id);
       } else {
         setOrchThinkingLevel("high");
       }
+      setOrchWebSearch(orchSel?.web_search !== undefined ? orchSel.web_search : (orchCaps?.web_search ?? true));
+      setOrchResearchMode(orchSel?.research_mode || orchCaps?.research_mode || "normal");
       return;
     }
 
@@ -291,15 +297,19 @@ export function AgentConfigScreen({
       } else {
         setLeadModel(chosenModel || "instant");
       }
-      if (leadSel?.thinking_level_id) {
+      if (isDr) {
+        setLeadThinkingLevel("auto");
+      } else if (leadSel?.thinking_level_id && leadSel.thinking_level_id !== "auto") {
         setLeadThinkingLevel(leadSel.thinking_level_id);
-      } else if (leadCaps?.selected_thinking_level_id) {
+      } else if (leadCaps?.selected_thinking_level_id && leadCaps.selected_thinking_level_id !== "auto") {
         setLeadThinkingLevel(leadCaps.selected_thinking_level_id);
-      } else if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0) {
+      } else if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0 && !leadCaps.thinking_levels.some((t) => t.id === "auto")) {
         setLeadThinkingLevel(leadCaps.thinking_levels[0].id);
       } else {
         setLeadThinkingLevel("high");
       }
+      setLeadWebSearch(leadSel?.web_search !== undefined ? leadSel.web_search : (leadCaps?.web_search ?? true));
+      setLeadResearchMode(leadSel?.research_mode || leadCaps?.research_mode || "normal");
       return;
     }
 
@@ -794,11 +804,13 @@ export function AgentConfigScreen({
       orchConfig.mode = "";
       orchConfig.mode_id = "";
     } else if (selectedOrchestrator === "kimi") {
-      orchConfig.model = orchModel || "instant";
-      orchConfig.model_id = orchModel || "instant";
-      orchConfig.thinking_level_id = orchThinkingLevel || "high";
-      orchConfig.thinking = orchThinkingLevel || "high";
+      orchConfig.model = orchModel || "k3";
+      orchConfig.model_id = orchModel || "k3";
+      orchConfig.thinking_level_id = orchDeepResearch ? "auto" : (orchThinkingLevel || "high");
+      orchConfig.thinking = orchDeepResearch ? "auto" : (orchThinkingLevel || "high");
       orchConfig.deep_research = orchDeepResearch;
+      orchConfig.web_search = orchWebSearch;
+      orchConfig.research_mode = orchResearchMode;
       orchConfig.mode = "";
       orchConfig.mode_id = "";
     } else if (selectedOrchestrator === "zhipu") {
@@ -854,11 +866,13 @@ export function AgentConfigScreen({
       leadConfig.mode = "";
       leadConfig.mode_id = "";
     } else if (selectedLead === "kimi") {
-      leadConfig.model = leadModel || "instant";
-      leadConfig.model_id = leadModel || "instant";
-      leadConfig.thinking_level_id = leadThinkingLevel || "high";
-      leadConfig.thinking = leadThinkingLevel || "high";
+      leadConfig.model = leadModel || "k3";
+      leadConfig.model_id = leadModel || "k3";
+      leadConfig.thinking_level_id = leadDeepResearch ? "auto" : (leadThinkingLevel || "high");
+      leadConfig.thinking = leadDeepResearch ? "auto" : (leadThinkingLevel || "high");
       leadConfig.deep_research = leadDeepResearch;
+      leadConfig.web_search = leadWebSearch;
+      leadConfig.research_mode = leadResearchMode;
       leadConfig.mode = "";
       leadConfig.mode_id = "";
     }
@@ -1269,19 +1283,26 @@ export function AgentConfigScreen({
                       <label className="agent-option-inline">
                         <span>Reasoning Effort:</span>
                         <select
-                          value={orchThinkingLevel}
+                          disabled={selectedOrchestrator === "kimi" && orchDeepResearch}
+                          value={selectedOrchestrator === "kimi" && orchDeepResearch ? "auto" : orchThinkingLevel}
                           onChange={(e) => {
+                            if (selectedOrchestrator === "kimi" && orchDeepResearch) return;
                             const val = e.target.value;
                             setOrchThinkingLevel(val);
                             onUpdateSelection?.(selectedOrchestrator, { thinking_level_id: val });
                           }}
                           className="agent-select"
+                          style={selectedOrchestrator === "kimi" && orchDeepResearch ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
                         >
-                          {orchThinkingLevels.map((lvl) => (
-                            <option key={lvl.id} value={lvl.id}>
-                              {lvl.label} {lvl.badge ? `[${lvl.badge}]` : ""}
-                            </option>
-                          ))}
+                          {selectedOrchestrator === "kimi" && orchDeepResearch ? (
+                            <option value="auto">Auto</option>
+                          ) : (
+                            orchThinkingLevels.map((lvl) => (
+                              <option key={lvl.id} value={lvl.id}>
+                                {lvl.label} {lvl.badge ? `[${lvl.badge}]` : ""}
+                              </option>
+                            ))
+                          )}
                         </select>
                       </label>
                     ) : selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt" ? null : selectedOrchestrator === "perplexity" ? (
@@ -1330,6 +1351,48 @@ export function AgentConfigScreen({
                       </label>
                     )}
 
+                    {/* Kimi Web Search Toggle */}
+                    {selectedOrchestrator === "kimi" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = !orchWebSearch;
+                          setOrchWebSearch(nextVal);
+                          onUpdateSelection?.(selectedOrchestrator, { web_search: nextVal });
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-sm, 6px)",
+                          border: `1.5px solid ${orchWebSearch ? "#059669" : "var(--border-default, #cbd5e1)"}`,
+                          backgroundColor: orchWebSearch ? "#ecfdf5" : "#ffffff",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: orchWebSearch ? "#059669" : "var(--text-secondary, #475569)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Bật/Tắt tính năng tìm kiếm Web trên Kimi (+ Web search)"
+                      >
+                        <SearchIcon size={14} color={orchWebSearch ? "#059669" : "#64748b"} />
+                        <span>Web Search</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 10,
+                            backgroundColor: orchWebSearch ? "#059669" : "#e2e8f0",
+                            color: orchWebSearch ? "#ffffff" : "#64748b",
+                          }}
+                        >
+                          {orchWebSearch ? "BẬT" : "TẮT"}
+                        </span>
+                      </button>
+                    )}
+
                     {/* Kimi Deep Research Toggle */}
                     {selectedOrchestrator === "kimi" && (
                       <button
@@ -1337,12 +1400,19 @@ export function AgentConfigScreen({
                         onClick={() => {
                           const nextVal = !orchDeepResearch;
                           setOrchDeepResearch(nextVal);
-                          if (nextVal && (orchModel === "instant" || !orchModel || orchModel === "default")) {
-                            setOrchModel("k3");
-                            onUpdateSelection?.(selectedOrchestrator, { deep_research: nextVal, model_id: "k3" });
+                          const updates: Partial<ProviderSelectionConfig> = { deep_research: nextVal };
+                          if (nextVal) {
+                            setOrchThinkingLevel("auto");
+                            updates.thinking_level_id = "auto";
+                            if (orchModel === "instant" || !orchModel || orchModel === "default") {
+                              setOrchModel("k3");
+                              updates.model_id = "k3";
+                            }
                           } else {
-                            onUpdateSelection?.(selectedOrchestrator, { deep_research: nextVal });
+                            setOrchThinkingLevel("high");
+                            updates.thinking_level_id = "high";
                           }
+                          onUpdateSelection?.(selectedOrchestrator, updates);
                         }}
                         style={{
                           display: "flex",
@@ -1373,6 +1443,50 @@ export function AgentConfigScreen({
                           }}
                         >
                           {orchDeepResearch ? "BẬT" : "TẮT"}
+                        </span>
+                      </button>
+                    )}
+
+                    {/* Kimi Research Mode Toggle (when Deep Research is ON) */}
+                    {selectedOrchestrator === "kimi" && orchDeepResearch && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextMode = orchResearchMode === "advanced" ? "normal" : "advanced";
+                          setOrchResearchMode(nextMode);
+                          onUpdateSelection?.(selectedOrchestrator, { research_mode: nextMode });
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-sm, 6px)",
+                          border: `1.5px solid ${orchResearchMode === "advanced" ? "#9333ea" : "var(--border-default, #cbd5e1)"}`,
+                          backgroundColor: orchResearchMode === "advanced" ? "#f3e8ff" : "#ffffff",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: orchResearchMode === "advanced" ? "#9333ea" : "var(--text-secondary, #475569)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                        title={orchResearchMode === "advanced"
+                          ? "Advanced - Devoting extra time to a deeper analysis"
+                          : "Normal - Fast, reliable responses for quick tasks"}
+                      >
+                        <SparklesIcon size={14} color={orchResearchMode === "advanced" ? "#9333ea" : "#64748b"} />
+                        <span>{orchResearchMode === "advanced" ? "Advanced" : "Normal"}</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 10,
+                            backgroundColor: orchResearchMode === "advanced" ? "#9333ea" : "#e2e8f0",
+                            color: orchResearchMode === "advanced" ? "#ffffff" : "#64748b",
+                          }}
+                        >
+                          {orchResearchMode === "advanced" ? "BẬT" : "TẮT"}
                         </span>
                       </button>
                     )}
@@ -1837,19 +1951,26 @@ export function AgentConfigScreen({
                       <label className="agent-option-inline">
                         <span>Reasoning Effort:</span>
                         <select
-                          value={leadThinkingLevel}
+                          disabled={selectedLead === "kimi" && leadDeepResearch}
+                          value={selectedLead === "kimi" && leadDeepResearch ? "auto" : leadThinkingLevel}
                           onChange={(e) => {
+                            if (selectedLead === "kimi" && leadDeepResearch) return;
                             const val = e.target.value;
                             setLeadThinkingLevel(val);
                             onUpdateSelection?.(selectedLead, { thinking_level_id: val });
                           }}
                           className="agent-select"
+                          style={selectedLead === "kimi" && leadDeepResearch ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
                         >
-                          {leadThinkingLevels.map((lvl) => (
-                            <option key={lvl.id} value={lvl.id}>
-                              {lvl.label} {lvl.badge ? `[${lvl.badge}]` : ""}
-                            </option>
-                          ))}
+                          {selectedLead === "kimi" && leadDeepResearch ? (
+                            <option value="auto">Auto</option>
+                          ) : (
+                            leadThinkingLevels.map((lvl) => (
+                              <option key={lvl.id} value={lvl.id}>
+                                {lvl.label} {lvl.badge ? `[${lvl.badge}]` : ""}
+                              </option>
+                            ))
+                          )}
                         </select>
                       </label>
                     ) : selectedLead === "copilot" || selectedLead === "chatgpt" ? null : selectedLead === "perplexity" ? (
@@ -1898,6 +2019,48 @@ export function AgentConfigScreen({
                       </label>
                     )}
 
+                    {/* Kimi Web Search Toggle */}
+                    {selectedLead === "kimi" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = !leadWebSearch;
+                          setLeadWebSearch(nextVal);
+                          onUpdateSelection?.(selectedLead, { web_search: nextVal });
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-sm, 6px)",
+                          border: `1.5px solid ${leadWebSearch ? "#059669" : "var(--border-default, #cbd5e1)"}`,
+                          backgroundColor: leadWebSearch ? "#ecfdf5" : "#ffffff",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: leadWebSearch ? "#059669" : "var(--text-secondary, #475569)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Bật/Tắt tính năng tìm kiếm Web trên Kimi (+ Web search)"
+                      >
+                        <SearchIcon size={14} color={leadWebSearch ? "#059669" : "#64748b"} />
+                        <span>Web Search</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 10,
+                            backgroundColor: leadWebSearch ? "#059669" : "#e2e8f0",
+                            color: leadWebSearch ? "#ffffff" : "#64748b",
+                          }}
+                        >
+                          {leadWebSearch ? "BẬT" : "TẮT"}
+                        </span>
+                      </button>
+                    )}
+
                     {/* Kimi Deep Research Toggle */}
                     {selectedLead === "kimi" && (
                       <button
@@ -1905,12 +2068,19 @@ export function AgentConfigScreen({
                         onClick={() => {
                           const nextVal = !leadDeepResearch;
                           setLeadDeepResearch(nextVal);
-                          if (nextVal && (leadModel === "instant" || !leadModel || leadModel === "default")) {
-                            setLeadModel("k3");
-                            onUpdateSelection?.(selectedLead, { deep_research: nextVal, model_id: "k3" });
+                          const updates: Partial<ProviderSelectionConfig> = { deep_research: nextVal };
+                          if (nextVal) {
+                            setLeadThinkingLevel("auto");
+                            updates.thinking_level_id = "auto";
+                            if (leadModel === "instant" || !leadModel || leadModel === "default") {
+                              setLeadModel("k3");
+                              updates.model_id = "k3";
+                            }
                           } else {
-                            onUpdateSelection?.(selectedLead, { deep_research: nextVal });
+                            setLeadThinkingLevel("high");
+                            updates.thinking_level_id = "high";
                           }
+                          onUpdateSelection?.(selectedLead, updates);
                         }}
                         style={{
                           display: "flex",
@@ -1941,6 +2111,50 @@ export function AgentConfigScreen({
                           }}
                         >
                           {leadDeepResearch ? "BẬT" : "TẮT"}
+                        </span>
+                      </button>
+                    )}
+
+                    {/* Kimi Research Mode Toggle (when Deep Research is ON) */}
+                    {selectedLead === "kimi" && leadDeepResearch && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextMode = leadResearchMode === "advanced" ? "normal" : "advanced";
+                          setLeadResearchMode(nextMode);
+                          onUpdateSelection?.(selectedLead, { research_mode: nextMode });
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-sm, 6px)",
+                          border: `1.5px solid ${leadResearchMode === "advanced" ? "#9333ea" : "var(--border-default, #cbd5e1)"}`,
+                          backgroundColor: leadResearchMode === "advanced" ? "#f3e8ff" : "#ffffff",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: leadResearchMode === "advanced" ? "#9333ea" : "var(--text-secondary, #475569)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                        title={leadResearchMode === "advanced"
+                          ? "Advanced - Devoting extra time to a deeper analysis"
+                          : "Normal - Fast, reliable responses for quick tasks"}
+                      >
+                        <SparklesIcon size={14} color={leadResearchMode === "advanced" ? "#9333ea" : "#64748b"} />
+                        <span>{leadResearchMode === "advanced" ? "Advanced" : "Normal"}</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 10,
+                            backgroundColor: leadResearchMode === "advanced" ? "#9333ea" : "#e2e8f0",
+                            color: leadResearchMode === "advanced" ? "#ffffff" : "#64748b",
+                          }}
+                        >
+                          {leadResearchMode === "advanced" ? "BẬT" : "TẮT"}
                         </span>
                       </button>
                     )}

@@ -33,6 +33,8 @@ class KimiUIAdapter(BrowserProviderAdapter):
                         mode_id=parsed.get("mode_id"),
                         deep_research=parsed.get("deep_research"),
                         deep_thinking=parsed.get("deep_thinking"),
+                        web_search=parsed.get("web_search"),
+                        research_mode=parsed.get("research_mode"),
                     )
                     await strategy.apply_selection(page, config)
                     return

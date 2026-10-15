@@ -114,6 +114,7 @@ class KimiCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             deep_thinking=True,
             web_search=True,
             deep_research=False,
+            research_mode="normal",
             account_type="free",
             supported_data_types=data_types,
             voice_chat=voice,
@@ -234,7 +235,9 @@ class KimiCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
                 except Exception:
                     pass
 
-        # If deep research is active, disable Instant model and default to k3
+        # If deep research is active:
+        # 1. Disable Instant model and default to k3
+        # 2. Lock reasoning effort to Auto and disable changing reasoning
         if caps.deep_research:
             for m in caps.available_models:
                 if m.id == "instant":
@@ -242,6 +245,17 @@ class KimiCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
                     m.badge = "Không hỗ trợ DR"
             if caps.selected_model_id == "instant":
                 caps.selected_model_id = "k3"
+            caps.selected_thinking_level_id = "auto"
+            caps.thinking_levels = [
+                OptionItem(
+                    id="auto",
+                    label="Auto (Tự động)",
+                    description="Deep Research tự động điều chỉnh mức độ suy luận (Khóa bởi Deep Research)",
+                    selected=True,
+                    disabled=True,
+                    badge="Auto",
+                )
+            ]
 
         # Update selected flags in lists
         for m in caps.available_models:
@@ -255,7 +269,7 @@ class KimiCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
         return caps
 
     async def apply_selection(self, page: Any, config: ProviderSelectionRequest) -> None:
-        """Apply selected model, thinking level, and deep research on kimi.ai."""
+        """Apply selected model, thinking level, web search, deep research, and research mode on kimi.ai."""
         logger.info("kimi_apply_selection_started", config=config.model_dump())
 
         # 1. Apply Deep Research toggle if specified
@@ -281,9 +295,54 @@ class KimiCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
                     await page.goto("https://www.kimi.ai/", wait_until="domcontentloaded")
                     await asyncio.sleep(1.5)
 
-        # 2. Apply Model Selection (Deep Research does not allow Instant)
-        target_model = (config.model_id or "").lower()
         effective_dr = target_dr if target_dr is not None else ("deep-research" in page.url.lower())
+
+        # 2. Apply Research Mode (Advanced vs Normal) when Deep Research is active
+        if effective_dr and config.research_mode:
+            target_rm = config.research_mode.lower()
+            mode_label = "Advanced" if target_rm == "advanced" else "Normal"
+            logger.info("kimi_applying_research_mode", mode=mode_label)
+            try:
+                # First check if the mode button is directly visible
+                mode_btn = page.locator(f"button:has-text('{mode_label}'), [role='button']:has-text('{mode_label}')").first
+                if await mode_btn.count() > 0 and await mode_btn.is_visible(timeout=1000):
+                    await mode_btn.click(timeout=2000)
+                    await asyncio.sleep(0.5)
+                else:
+                    # Open '+' menu nearby textbox area
+                    plus_btn = page.locator("button:has-text('+'), [data-testid*='plus'], [data-testid*='attachment'], [aria-label*='Add'], [aria-label*='plus']").first
+                    if await plus_btn.count() > 0 and await plus_btn.is_visible(timeout=1000):
+                        await plus_btn.click(timeout=1500)
+                        await asyncio.sleep(0.5)
+                        opt_btn = page.locator(f":is(button, div, span):has-text('{mode_label}')").first
+                        if await opt_btn.count() > 0 and await opt_btn.is_visible(timeout=1500):
+                            await opt_btn.click(timeout=2000)
+                            await asyncio.sleep(0.5)
+                        else:
+                            await page.keyboard.press("Escape")
+            except Exception as exc:
+                logger.warning("kimi_research_mode_toggle_failed", error=str(exc))
+                try:
+                    await page.keyboard.press("Escape")
+                except Exception:
+                    pass
+
+        # 3. Apply Web Search Toggle if specified
+        if config.web_search is not None:
+            logger.info("kimi_applying_web_search", web_search=config.web_search)
+            try:
+                # Look for web search toggle button or in '+' menu
+                search_btn = page.locator("button:has-text('Web search'), button:has-text('Search'), [data-testid*='search']").first
+                if await search_btn.count() > 0 and await search_btn.is_visible(timeout=1000):
+                    is_active = "active" in (await search_btn.get_attribute("class") or "").lower() or (await search_btn.get_attribute("aria-pressed") or "") == "true"
+                    if is_active != config.web_search:
+                        await search_btn.click(timeout=2000)
+                        await asyncio.sleep(0.5)
+            except Exception as exc:
+                logger.warning("kimi_web_search_toggle_failed", error=str(exc))
+
+        # 4. Apply Model Selection (Deep Research does not allow Instant)
+        target_model = (config.model_id or "").lower()
         if effective_dr and (not target_model or target_model in {"instant", "default"}):
             logger.info("kimi_deep_research_disallows_instant_fallback_to_k3")
             target_model = "k3"
@@ -331,39 +390,42 @@ class KimiCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
                         except Exception:
                             pass
 
-        # 3. Apply Thinking Effort Selection
-        target_effort = (config.thinking_level_id or "").lower()
-        if target_effort in {"standard", "high", "low"}:
-            effort_label = "Standard" if target_effort in {"standard", "low"} else "High"
-            trigger = await self._find_model_trigger(page)
-            if trigger is not None:
-                cur_text = (await trigger.inner_text()).strip()
-                if effort_label.lower() not in cur_text.lower():
-                    try:
-                        await trigger.click(timeout=2000)
-                        await asyncio.sleep(0.5)
-
-                        think_row = page.locator(":is(div, span, button):text-matches('Thinking effort', 'i')").last
-                        if await think_row.count() > 0 and await think_row.is_visible(timeout=2000):
-                            await think_row.hover()
-                            await asyncio.sleep(0.3)
-                            await think_row.click()
+        # 5. Apply Thinking Effort Selection (Deep Research does NOT allow changing reasoning; locks to Auto)
+        if not effective_dr:
+            target_effort = (config.thinking_level_id or "").lower()
+            if target_effort in {"standard", "high", "low"}:
+                effort_label = "Standard" if target_effort in {"standard", "low"} else "High"
+                trigger = await self._find_model_trigger(page)
+                if trigger is not None:
+                    cur_text = (await trigger.inner_text()).strip()
+                    if effort_label.lower() not in cur_text.lower():
+                        try:
+                            await trigger.click(timeout=2000)
                             await asyncio.sleep(0.5)
 
-                            opt_btn = page.locator(f"button.effort-option:has-text('{effort_label}'), button:has-text('{effort_label}')").first
-                            if await opt_btn.count() > 0 and await opt_btn.is_visible(timeout=2000):
-                                await opt_btn.click(timeout=2000)
-                                logger.info("kimi_thinking_effort_selected", effort=effort_label)
-                                await asyncio.sleep(0.8)
+                            think_row = page.locator(":is(div, span, button):text-matches('Thinking effort', 'i')").last
+                            if await think_row.count() > 0 and await think_row.is_visible(timeout=2000):
+                                await think_row.hover()
+                                await asyncio.sleep(0.3)
+                                await think_row.click()
+                                await asyncio.sleep(0.5)
+
+                                opt_btn = page.locator(f"button.effort-option:has-text('{effort_label}'), button:has-text('{effort_label}')").first
+                                if await opt_btn.count() > 0 and await opt_btn.is_visible(timeout=2000):
+                                    await opt_btn.click(timeout=2000)
+                                    logger.info("kimi_thinking_effort_selected", effort=effort_label)
+                                    await asyncio.sleep(0.8)
+                                else:
+                                    await page.keyboard.press("Escape")
                             else:
                                 await page.keyboard.press("Escape")
-                        else:
-                            await page.keyboard.press("Escape")
-                    except Exception as exc:
-                        logger.warning("kimi_thinking_effort_switch_failed", error=str(exc))
-                        try:
-                            await page.keyboard.press("Escape")
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            logger.warning("kimi_thinking_effort_switch_failed", error=str(exc))
+                            try:
+                                await page.keyboard.press("Escape")
+                            except Exception:
+                                pass
+        else:
+            logger.info("kimi_deep_research_active_skipping_thinking_effort_change")
 
         logger.info("kimi_apply_selection_completed")

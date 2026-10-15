@@ -250,6 +250,8 @@ export function ProviderModal({
               const isDeepThinking = sel.deep_thinking !== undefined ? sel.deep_thinking : (caps?.deep_thinking ?? false);
               const isWebSearch = sel.web_search !== undefined ? sel.web_search : (caps?.web_search ?? true);
               const isDeepResearch = sel.deep_research !== undefined ? sel.deep_research : (caps?.deep_research ?? false);
+              const researchMode = sel.research_mode || caps?.research_mode || "normal";
+              const isResearchAdvanced = researchMode === "advanced";
 
               // 1. Models: Empty for ChatGPT, Copilot, and DeepSeek
               const claudeFallbackModels = [
@@ -1114,24 +1116,24 @@ export function ProviderModal({
                               >
                                 Mức suy luận (Reasoning)
                               </label>
-                              {currentThinking?.badge && (
-                                <span
-                                  style={{
-                                    fontSize: 9.5,
-                                    padding: "1px 5px",
-                                    borderRadius: 3,
-                                    backgroundColor: "#dbeafe",
-                                    color: "var(--brand-blue)",
-                                    fontWeight: 700,
-                                  }}
-                                >
-                                  {currentThinking.badge}
-                                </span>
-                              )}
+                              <span
+                                style={{
+                                  fontSize: 9.5,
+                                  padding: "1px 5px",
+                                  borderRadius: 3,
+                                  backgroundColor: isDeepResearch ? "#f1f5f9" : "#dbeafe",
+                                  color: isDeepResearch ? "#64748b" : "var(--brand-blue)",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {isDeepResearch ? "Auto" : (currentThinking?.badge || "High")}
+                              </span>
                             </div>
                             <select
-                              value={currentThinkingId}
+                              disabled={isDeepResearch}
+                              value={isDeepResearch ? "auto" : currentThinkingId}
                               onChange={(e) => {
+                                if (isDeepResearch) return;
                                 onUpdateSelection?.(p.id, { thinking_level_id: e.target.value });
                               }}
                               style={{
@@ -1139,74 +1141,187 @@ export function ProviderModal({
                                 padding: "6px 8px",
                                 borderRadius: 6,
                                 border: "1px solid var(--border-default, #cbd5e1)",
-                                backgroundColor: "#ffffff",
+                                backgroundColor: isDeepResearch ? "#f1f5f9" : "#ffffff",
                                 fontSize: 12,
                                 fontWeight: 600,
-                                color: "var(--text-primary, #0f172a)",
-                                cursor: "pointer",
+                                color: isDeepResearch ? "#64748b" : "var(--text-primary, #0f172a)",
+                                cursor: isDeepResearch ? "not-allowed" : "pointer",
                                 outline: "none",
+                                opacity: isDeepResearch ? 0.75 : 1,
                               }}
                             >
-                              {thinkingLevels.map((t) => (
-                                <option key={t.id} value={t.id}>
-                                  {t.label}
-                                </option>
-                              ))}
+                              {isDeepResearch ? (
+                                <option value="auto">Auto</option>
+                              ) : (
+                                thinkingLevels.map((t) => (
+                                  <option key={t.id} value={t.id} disabled={t.disabled}>
+                                    {t.label}
+                                  </option>
+                                ))
+                              )}
                             </select>
-                            <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
-                              {currentThinking?.description || "2 mức suy luận trong menu mô hình"}
+                            <span style={{ fontSize: 10.5, color: isDeepResearch ? "var(--accent-purple, #7c3aed)" : "var(--text-muted)", lineHeight: 1.25 }}>
+                              {isDeepResearch ? "Deep Research tự động điều chỉnh mức độ suy luận (không thể thay đổi)" : (currentThinking?.description || "2 mức suy luận trong menu mô hình")}
                             </span>
                           </div>
                         </div>
 
-                        {/* Row 2: Deep Research Toggle */}
+                        {/* Row 2: Toggles (Web Search, Deep Research, and Research Mode when Deep Research is ON) */}
                         <div
-                          onClick={() => {
-                            const nextDr = !isDeepResearch;
-                            const updates: Partial<ProviderSelectionConfig> = { deep_research: nextDr };
-                            if (nextDr && (currentModelId === "instant" || !currentModelId || currentModelId === "default")) {
-                              updates.model_id = "k3";
-                            }
-                            onUpdateSelection?.(p.id, updates);
-                          }}
                           style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            padding: "8px 12px",
-                            borderRadius: 6,
-                            border: `1.5px solid ${isDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
-                            backgroundColor: isDeepResearch ? "#f5f3ff" : "#ffffff",
-                            cursor: "pointer",
-                            transition: "all 0.15s ease",
-                            gap: '5px'
+                            display: "grid",
+                            gridTemplateColumns: "repeat(2, 1fr)",
+                            gridTemplateRows: "2 1fr",
+                            gap: 8,
                           }}
-                          title="Bật/Tắt tính năng Deep Research của Kimi (Nút phía dưới khung nhập liệu)"
                         >
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                            <SparklesIcon size={15} color={isDeepResearch ? "#7c3aed" : "#64748b"} />
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: isDeepResearch ? "#7c3aed" : "var(--text-primary, #0f172a)" }}>
-                                Deep Research
-                              </div>
-                              <div style={{ fontSize: 10, color: "var(--text-muted, #64748b)" }}>
-                                Nghiên cứu chuyên sâu đa nguồn (Nút nằm ở danh sách phía dưới khung nhập liệu)
+                          {/* 1. Web Search Toggle */}
+                          <div
+                            onClick={() => onUpdateSelection?.(p.id, { web_search: !isWebSearch })}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "8px 10px",
+                              borderRadius: 6,
+                              border: `1.5px solid ${isWebSearch ? "#059669" : "var(--border-default, #cbd5e1)"}`,
+                              backgroundColor: isWebSearch ? "#ecfdf5" : "#ffffff",
+                              cursor: "pointer",
+                              transition: "all 0.15s ease",
+                            }}
+                            title="Bật/Tắt tính năng tìm kiếm Web trên Kimi (+ Web search)"
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden" }}>
+                              <SearchIcon size={14} color={isWebSearch ? "#059669" : "#64748b"} />
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 11.5, fontWeight: 700, color: isWebSearch ? "#059669" : "var(--text-primary, #0f172a)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                  Web Search
+                                </div>
+                                <div style={{ fontSize: 9.5, color: "var(--text-muted, #64748b)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                  Tra cứu trực tuyến
+                                </div>
                               </div>
                             </div>
+                            <span
+                              style={{
+                                fontSize: 9.5,
+                                fontWeight: 700,
+                                padding: "2px 6px",
+                                borderRadius: 10,
+                                backgroundColor: isWebSearch ? "#059669" : "#e2e8f0",
+                                color: isWebSearch ? "#ffffff" : "#64748b",
+                                marginLeft: 4,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {isWebSearch ? "BẬT" : "TẮT"}
+                            </span>
                           </div>
-                          <span
-                            style={{
-                              fontSize: 10,
-                              fontWeight: 700,
-                              padding: "2px 8px",
-                              borderRadius: 10,
-                              backgroundColor: isDeepResearch ? "#7c3aed" : "#e2e8f0",
-                              color: isDeepResearch ? "#ffffff" : "#64748b",
-                              flexShrink: 0,
+
+                          {/* 2. Deep Research Toggle */}
+                          <div
+                            onClick={() => {
+                              const nextDr = !isDeepResearch;
+                              const updates: Partial<ProviderSelectionConfig> = {
+                                deep_research: nextDr,
+                                ...(nextDr
+                                  ? {
+                                    thinking_level_id: "auto",
+                                    ...(currentModelId === "instant" || !currentModelId || currentModelId === "default" ? { model_id: "k3" } : {}),
+                                  }
+                                  : { thinking_level_id: "high" }),
+                              };
+                              onUpdateSelection?.(p.id, updates);
                             }}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              padding: "8px 10px",
+                              borderRadius: 6,
+                              border: `1.5px solid ${isDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
+                              backgroundColor: isDeepResearch ? "#f5f3ff" : "#ffffff",
+                              cursor: "pointer",
+                              transition: "all 0.15s ease",
+                            }}
+                            title="Bật/Tắt tính năng Deep Research của Kimi (+ Deep research)"
                           >
-                            {isDeepResearch ? "BẬT" : "TẮT"}
-                          </span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden" }}>
+                              <SparklesIcon size={14} color={isDeepResearch ? "#7c3aed" : "#64748b"} />
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 11.5, fontWeight: 700, color: isDeepResearch ? "#7c3aed" : "var(--text-primary, #0f172a)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                  Deep Research
+                                </div>
+                                <div style={{ fontSize: 9.5, color: "var(--text-muted, #64748b)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                  Nghiên cứu sâu
+                                </div>
+                              </div>
+                            </div>
+                            <span
+                              style={{
+                                fontSize: 9.5,
+                                fontWeight: 700,
+                                padding: "2px 6px",
+                                borderRadius: 10,
+                                backgroundColor: isDeepResearch ? "#7c3aed" : "#e2e8f0",
+                                color: isDeepResearch ? "#ffffff" : "#64748b",
+                                marginLeft: 4,
+                                flexShrink: 0,
+                              }}
+                            >
+                              {isDeepResearch ? "BẬT" : "TẮT"}
+                            </span>
+                          </div>
+
+                          {/* 2.1 Research Mode Toggle (when Deep Research is ON) */}
+                          {isDeepResearch && (
+                            <div
+                              onClick={() => {
+                                const nextMode = isResearchAdvanced ? "normal" : "advanced";
+                                onUpdateSelection?.(p.id, { research_mode: nextMode });
+                              }}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                padding: "8px 10px",
+                                borderRadius: 6,
+                                border: `1.5px solid ${isResearchAdvanced ? "#9333ea" : "var(--border-default, #cbd5e1)"}`,
+                                backgroundColor: isResearchAdvanced ? "#f3e8ff" : "#ffffff",
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                              }}
+                              title={isResearchAdvanced
+                                ? "Advanced - Devoting extra time to a deeper analysis"
+                                : "Normal - Fast, reliable responses for quick tasks"}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden" }}>
+                                <SparklesIcon size={14} color={isResearchAdvanced ? "#9333ea" : "#64748b"} />
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontSize: 11.5, fontWeight: 700, color: isResearchAdvanced ? "#9333ea" : "var(--text-primary, #0f172a)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                    {isResearchAdvanced ? "Advanced" : "Normal"}
+                                  </div>
+                                  <div style={{ fontSize: 9, color: "var(--text-muted, #64748b)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={isResearchAdvanced ? "Devoting extra time to a deeper analysis" : "Fast, reliable responses for quick tasks"}>
+                                    {isResearchAdvanced ? "Extra time deeper analysis" : "Fast & reliable"}
+                                  </div>
+                                </div>
+                              </div>
+                              <span
+                                style={{
+                                  fontSize: 9.5,
+                                  fontWeight: 700,
+                                  padding: "2px 6px",
+                                  borderRadius: 10,
+                                  backgroundColor: isResearchAdvanced ? "#9333ea" : "#e2e8f0",
+                                  color: isResearchAdvanced ? "#ffffff" : "#64748b",
+                                  marginLeft: 4,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {isResearchAdvanced ? "BẬT" : "TẮT"}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ) : (

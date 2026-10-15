@@ -40,6 +40,7 @@ export interface ProviderLiveCapabilities {
   deep_thinking?: boolean;
   web_search?: boolean;
   deep_research?: boolean;
+  research_mode?: "normal" | "advanced" | string;
   last_error?: string | null;
 }
 
@@ -50,4 +51,5 @@ export interface ProviderSelectionConfig {
   deep_thinking?: boolean;
   web_search?: boolean;
   deep_research?: boolean;
+  research_mode?: "normal" | "advanced" | string;
 }

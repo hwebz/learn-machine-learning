@@ -53,6 +53,7 @@ class ProviderLiveCapabilities(BaseModel):
     deep_thinking: bool = False
     web_search: bool = True
     deep_research: bool = False
+    research_mode: str | None = None  # "normal" | "advanced"
     last_error: str | None = None
 
 
@@ -66,4 +67,5 @@ class ProviderSelectionRequest(BaseModel):
     deep_thinking: bool | None = None
     web_search: bool | None = None
     deep_research: bool | None = None
+    research_mode: str | None = None  # "normal" | "advanced"
     custom_params: dict[str, Any] = Field(default_factory=dict)
