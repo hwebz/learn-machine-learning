@@ -139,13 +139,41 @@ class CapabilitiesRegistry:
             return self._strategies[p]
         return GenericDefaultCapabilitiesStrategy(p)
 
+    def _merge_defaults_if_empty(self, p: str, caps: ProviderLiveCapabilities) -> ProviderLiveCapabilities:
+        strategy = self.get_strategy(p)
+        defaults = strategy.get_default_capabilities()
+
+        if not caps.available_models and defaults.available_models:
+            caps.available_models = defaults.available_models
+            if not caps.selected_model_id:
+                caps.selected_model_id = defaults.selected_model_id
+        elif not caps.selected_model_id:
+            caps.selected_model_id = defaults.selected_model_id or (caps.available_models[0].id if caps.available_models else None)
+
+        if not caps.modes and defaults.modes:
+            caps.modes = defaults.modes
+            if not caps.selected_mode_id:
+                caps.selected_mode_id = defaults.selected_mode_id
+        elif not caps.selected_mode_id:
+            caps.selected_mode_id = defaults.selected_mode_id or (caps.modes[0].id if caps.modes else None)
+
+        if not caps.thinking_levels and defaults.thinking_levels:
+            caps.thinking_levels = defaults.thinking_levels
+            if not caps.selected_thinking_level_id:
+                caps.selected_thinking_level_id = defaults.selected_thinking_level_id
+        elif not caps.selected_thinking_level_id:
+            caps.selected_thinking_level_id = defaults.selected_thinking_level_id or (caps.thinking_levels[0].id if caps.thinking_levels else None)
+
+        return caps
+
     def _load_cache_from_disk(self) -> None:
         if not CAPS_CACHE_FILE.is_file():
             return
         try:
             raw = json.loads(CAPS_CACHE_FILE.read_text(encoding="utf-8"))
             for p, item in raw.items():
-                self._cache[p] = ProviderLiveCapabilities.model_validate(item)
+                caps = ProviderLiveCapabilities.model_validate(item)
+                self._cache[p] = self._merge_defaults_if_empty(p, caps)
             logger.info("capabilities_cache_loaded", count=len(self._cache))
         except Exception as exc:
             logger.warning("capabilities_cache_load_failed", error=str(exc))
@@ -164,7 +192,7 @@ class CapabilitiesRegistry:
         strategy = self.get_strategy(p)
 
         if not force_sync and p in self._cache:
-            return self._cache[p]
+            return self._merge_defaults_if_empty(p, self._cache[p])
 
         if not force_sync:
             # Return strategy baseline if not yet synced

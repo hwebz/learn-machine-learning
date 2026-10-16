@@ -71,6 +71,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
   const [mounted, setMounted] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>(routeChatId || "");
+  const [currentRouteChatId, setCurrentRouteChatId] = useState<string | undefined>(routeChatId);
   const [draftSession, setDraftSession] = useState<ChatSession>(() => ({
     id: "session-draft",
     title: "Phiên nghiên cứu mới",
@@ -96,6 +97,16 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
   const activeUnsubscribeRef = useRef<(() => void) | null>(null);
   const isCancelledRef = useRef<boolean>(false);
 
+  // Keep currentRouteChatId in sync with route navigation if not actively running a job
+  useEffect(() => {
+    if (!isGenerating && !activeJobIdRef.current) {
+      const incomingId = (routeParams?.id as string | undefined)?.trim() || initialChatId?.trim();
+      if (incomingId && incomingId !== currentRouteChatId) {
+        setCurrentRouteChatId(incomingId);
+      }
+    }
+  }, [routeParams?.id, initialChatId, isGenerating, currentRouteChatId]);
+
   const handleSelectThinking = (provider?: string, message?: Message) => {
     setIsRightSidebarOpen(true);
     if (message) {
@@ -110,7 +121,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
   // Synchronize history from backend on mount and via button
   const loadHistoryFromBackend = useCallback(async (preferredId?: string) => {
     setIsLoadingHistory(true);
-    const targetId = preferredId || routeChatId;
+    const targetId = preferredId || currentRouteChatId;
 
     try {
       const historyJobs = await fetchResearchHistory(50);
@@ -262,45 +273,76 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       }
 
       setSessions((prev) => {
-        const existingJobIds = new Set(newSessions.map((s) => s.id));
-        const keptPrev = prev.filter((s) => !existingJobIds.has(s.id) && !existingJobIds.has(s.jobId || ""));
-        const validCombined = [...newSessions, ...keptPrev].filter(
+        // 1. Identify any active sessions that are generating or running
+        const activeRunningSessions = prev.filter(
+          (s) =>
+            s.id === activeJobIdRef.current ||
+            s.jobId === activeJobIdRef.current ||
+            s.status === "running" ||
+            s.status === "orchestrating" ||
+            s.status === "researching" ||
+            s.status === "leading"
+        );
+        const activeRunningIds = new Set(activeRunningSessions.flatMap((s) => [s.id, s.jobId || ""]));
+
+        // 2. Filter newSessions so they do not overwrite live state of actively running jobs
+        const safeNewSessions = newSessions.filter(
+          (s) => !activeRunningIds.has(s.id) && !activeRunningIds.has(s.jobId || "")
+        );
+        const existingJobIds = new Set(safeNewSessions.map((s) => s.id));
+        const keptPrev = prev.filter(
+          (s) => !existingJobIds.has(s.id) && !existingJobIds.has(s.jobId || "") && !activeRunningIds.has(s.id)
+        );
+        const validCombined = [...activeRunningSessions, ...safeNewSessions, ...keptPrev].filter(
           (s) => (s.messages && s.messages.length > 0) || s.jobId
         );
 
         if (!targetId) {
-          const freshId = `session-${Date.now()}`;
-          setActiveSessionId(freshId);
-          setActiveSteps([]);
-          setInspectedMessage(undefined);
-          setInspectedProvider(undefined);
-          setIsRightSidebarOpen(false);
+          if (!activeJobIdRef.current && !isGenerating) {
+            const freshId = `session-${Date.now()}`;
+            setActiveSessionId(freshId);
+            setActiveSteps([]);
+            setInspectedMessage(undefined);
+            setInspectedProvider(undefined);
+            setIsRightSidebarOpen(false);
+          }
           return validCombined;
         }
 
         if (validCombined.length > 0) {
           setActiveSessionId((curr) => {
-            if (validCombined.some((s) => s.id === targetId || s.jobId === targetId)) {
-              return targetId;
+            // NEVER switch away if a job is actively running/generating!
+            if (activeJobIdRef.current) {
+              return activeJobIdRef.current;
             }
+            if (curr && isGenerating) {
+              return curr;
+            }
+            // Keep user on their currently viewed session if it is present
             if (curr && validCombined.some((s) => s.id === curr || s.jobId === curr)) {
               return curr;
             }
-            return validCombined[0].id;
+            // If targetId is explicitly present in sessions, select it
+            if (targetId && validCombined.some((s) => s.id === targetId || s.jobId === targetId)) {
+              return targetId;
+            }
+            return validCombined[0]?.id || curr;
           });
           return validCombined;
         }
 
         const freshId = `session-${Date.now()}`;
-        setActiveSessionId(freshId);
-        return [];
+        if (!activeJobIdRef.current && !isGenerating) {
+          setActiveSessionId(freshId);
+        }
+        return activeRunningSessions;
       });
     } catch (err) {
       console.warn("Could not fetch research history from backend:", err);
     } finally {
       setIsLoadingHistory(false);
     }
-  }, [routeChatId]);
+  }, [currentRouteChatId]);
 
   useEffect(() => {
     setMounted(true);
@@ -333,12 +375,13 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  // When routeChatId changes from props/navigation, sync activeSessionId
+  // When currentRouteChatId changes from props/navigation, sync activeSessionId
   useEffect(() => {
-    if (routeChatId && routeChatId !== activeSessionId) {
-      handleSelectSession(routeChatId, false);
+    if (isGenerating || activeJobIdRef.current) return;
+    if (currentRouteChatId && currentRouteChatId !== activeSessionId) {
+      handleSelectSession(currentRouteChatId, false);
     }
-  }, [routeChatId]);
+  }, [currentRouteChatId, isGenerating]);
 
   const activeSession: ChatSession =
     sessions.find((s) => s.id === activeSessionId || s.jobId === activeSessionId) ||
@@ -371,6 +414,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
   const handleSelectSession = async (id: string, updateUrl: boolean = true) => {
     setActiveSessionId(id);
+    setCurrentRouteChatId(id);
 
     // Update browser URL to /chat/{id}
     if (updateUrl && typeof window !== "undefined") {
@@ -415,6 +459,12 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       try {
         const fullJob = await getResearchResult(targetJobId);
         if (!fullJob) return;
+
+        // If the job is still actively running and has no final report yet, preserve live streaming state!
+        if (fullJob.status !== "completed" && !fullJob.report_markdown) {
+          return;
+        }
+
         let jobSources = fullJob.sources || [];
         if (jobSources.length === 0) {
           try {
@@ -436,10 +486,18 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         const resolvedFirstProvider = (fullJobProviders[0] || initialFirstProvider).toLowerCase();
         setInspectedProvider(resolvedFirstProvider);
 
+        const isAgentJob = (fullJob as any).job_type === "agent" || session?.job_type === "agent";
+        const orchProv = (fullJob as any).orchestrator_provider || session?.orchestrator_provider;
+        const leadProv = (fullJob as any).lead_provider || session?.lead_provider;
+        const toneVal = (fullJob as any).tone || session?.tone;
+        const orchDispatch = (fullJob as any).orchestrator_dispatch || session?.orchestrator_dispatch;
+
         const asstMsg: Message = {
           id: `msg-${targetJobId}-detail`,
           role: "assistant",
-          authorName: `AI Research Engine${fullJobProviders.length ? ' (' : ''}${fullJobProviders.join(", ")}${fullJobProviders.length ? ')' : ''}`,
+          authorName: isAgentJob
+            ? `Deep Research Orchestrator (${(orchProv || "copilot").toUpperCase()} ➜ ${(leadProv || "chatgpt").toUpperCase()})`
+            : `AI Research Engine${fullJobProviders.length ? ' (' : ''}${fullJobProviders.join(", ")}${fullJobProviders.length ? ')' : ''}`,
           timestamp: fullJob.finished_at
             ? new Date(fullJob.finished_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
             : (existingAsst?.timestamp || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })),
@@ -450,6 +508,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           provider_runs: fullJob.provider_runs || {},
           factCheckStatus: "verified",
           steps: jobSteps,
+          job_type: isAgentJob ? "agent" : "research",
+          orchestrator_provider: orchProv,
+          lead_provider: leadProv,
+          tone: toneVal,
+          orchestrator_dispatch: orchDispatch,
         };
 
         setInspectedMessage(asstMsg);
@@ -464,6 +527,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               selectedProviders: fullJobProviders,
               selectedProvider: fullJobProviders[0] || s.selectedProvider,
               messages: otherMsgs.length > 0 ? [...otherMsgs, asstMsg] : [asstMsg],
+              job_type: isAgentJob ? "agent" : s.job_type,
+              orchestrator_provider: orchProv || s.orchestrator_provider,
+              lead_provider: leadProv || s.lead_provider,
+              tone: toneVal || s.tone,
+              orchestrator_dispatch: orchDispatch || s.orchestrator_dispatch,
             };
           })
         );
@@ -492,6 +560,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     };
     setDraftSession(cleanDraft);
     setActiveSessionId(newId);
+    setCurrentRouteChatId(undefined);
     setActiveSteps([]);
     setInspectedMessage(undefined);
     setInspectedProvider(undefined);
@@ -559,6 +628,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
     setSessions((prev) => [newSession, ...prev]);
     setActiveSessionId(newId);
+    setCurrentRouteChatId(newId);
     setIsGenerating(true);
     setActiveSteps([]);
     setInspectedMessage(undefined);
@@ -582,6 +652,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       }
 
       activeJobIdRef.current = jobAccepted.job_id;
+      setCurrentRouteChatId(jobAccepted.job_id);
 
       if (typeof window !== "undefined") {
         window.history.replaceState(null, "", `/chat/${jobAccepted.job_id}`);
@@ -667,11 +738,13 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               )
             );
             setIsGenerating(false);
+            activeJobIdRef.current = null;
           }
         },
         onError: (err) => {
           console.warn("Agent job SSE error:", err);
           setIsGenerating(false);
+          activeJobIdRef.current = null;
         },
         onDone: async () => {
           if (isCancelledRef.current) return;
@@ -714,6 +787,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             console.warn("Could not fetch final research result in onDone:", e);
           } finally {
             setIsGenerating(false);
+            activeJobIdRef.current = null;
           }
         },
       });
@@ -722,6 +796,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     } catch (err: any) {
       console.error("Failed to start agent research job:", err);
       setIsGenerating(false);
+      activeJobIdRef.current = null;
       setSessions((prev) =>
         prev.map((s) =>
           s.id === newId
@@ -1032,6 +1107,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       }
 
       activeJobIdRef.current = jobAccepted.job_id;
+      setCurrentRouteChatId(jobAccepted.job_id);
 
       // Update URL to /chat/{job_id} for shareable direct route
       if (typeof window !== "undefined") {

@@ -29,9 +29,36 @@ class ChatGPTCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
 
     def get_default_capabilities(self) -> ProviderLiveCapabilities:
         """Baseline options for ChatGPT (Free Account defaults with 3 toggles: Web search, Deep research, Thinking)."""
-        models: list[OptionItem] = []
-        thinking_levels: list[OptionItem] = []
-        modes: list[OptionItem] = []
+        models = [
+            OptionItem(
+                id="none",
+                label="Auto (Default)",
+                description="Tự động chọn mô hình phù hợp theo tài khoản",
+                selected=True,
+            )
+        ]
+        thinking_levels = [
+            OptionItem(
+                id="auto",
+                label="Auto Reasoning",
+                description="Tự động kích hoạt tư duy khi câu hỏi phức tạp",
+                selected=True,
+            )
+        ]
+        modes = [
+            OptionItem(
+                id="standard",
+                label="Standard",
+                description="Chế độ trò chuyện tiêu chuẩn tốc độ cao",
+                selected=True,
+            ),
+            OptionItem(
+                id="thinking",
+                label="Thinking",
+                description="Kích hoạt tư duy và giải thích các bước lý luận",
+                selected=False,
+            ),
+        ]
 
         data_types = SupportedDataTypes(
             text=True,
@@ -64,11 +91,11 @@ class ChatGPTCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             synced_at=datetime.now(timezone.utc),
             is_live_dom=False,
             available_models=models,
-            selected_model_id=None,
+            selected_model_id="none",
             thinking_levels=thinking_levels,
-            selected_thinking_level_id=None,
+            selected_thinking_level_id="auto",
             modes=modes,
-            selected_mode_id=None,
+            selected_mode_id="standard",
             account_type="free",
             supported_data_types=data_types,
             voice_chat=voice,

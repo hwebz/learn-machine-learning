@@ -72,8 +72,24 @@ class CopilotCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             ),
         ]
 
-        models: list[OptionItem] = []
-        thinking_levels: list[OptionItem] = []
+        models = [
+            OptionItem(
+                id="auto",
+                label="Auto",
+                description="Mô hình cân bằng mặc định của Copilot",
+                selected=True,
+                badge="Auto",
+            )
+        ]
+        thinking_levels = [
+            OptionItem(
+                id="auto",
+                label="Auto Reasoning",
+                description="Tự động điều chỉnh mức độ suy luận",
+                selected=True,
+                badge="Auto",
+            )
+        ]
 
         data_types = SupportedDataTypes(
             text=True,
@@ -107,9 +123,9 @@ class CopilotCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             synced_at=datetime.now(timezone.utc),
             is_live_dom=False,
             available_models=models,
-            selected_model_id=None,
+            selected_model_id="auto",
             thinking_levels=thinking_levels,
-            selected_thinking_level_id=None,
+            selected_thinking_level_id="auto",
             modes=modes,
             selected_mode_id="auto",
             account_type="personal",
