@@ -18,56 +18,49 @@ class ZhipuUIAdapter(BrowserProviderAdapter):
     name = "zhipu"
 
     async def _select_mode(self, page: Any, mode: str) -> None:
-        """Switch Zhipu mode (Thought Process toggle or GLM-5/Pro vs Flash)."""
-        is_deep = mode in {"deep", "deep_research", "research", "pro"}
-        cfg_modes = self._cfg.get("mode_selectors") or {}
+        """Switch Zhipu model via capabilities strategy (top-left dropdown)."""
+        from app.adapters.capabilities.models import ProviderSelectionRequest
+        from app.adapters.capabilities.zhipu import ZhipuCapabilitiesStrategy
 
-        # 1. Try toggling "Thought Process" if available
-        thought_chain = cfg_modes.get("thought_toggle")
-        if thought_chain:
-            locator, _ = await resolve_locator(page, thought_chain)
-            if locator is not None:
-                try:
-                    aria_pressed = await locator.get_attribute("aria-pressed")
-                    cls = await locator.get_attribute("class") or ""
-                    is_active = aria_pressed == "true" or "active" in cls or "selected" in cls
-                    if is_deep and not is_active:
-                        await locator.click(timeout=3000)
-                        logger.info("zhipu_thought_process_enabled", mode=mode)
-                    elif not is_deep and is_active:
-                        await locator.click(timeout=3000)
-                        logger.info("zhipu_thought_process_disabled", mode=mode)
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning("zhipu_thought_toggle_failed", error=str(exc))
+        strategy = ZhipuCapabilitiesStrategy()
 
-        # 2. Try model dropdown selector
-        dropdown_chain = cfg_modes.get("model_dropdown")
-        if dropdown_chain:
-            locator, _ = await resolve_locator(page, dropdown_chain)
-            if locator is not None:
-                try:
-                    curr_text = (await locator.inner_text()).strip().lower()
-                    if is_deep and ("glm-5" in curr_text or "pro" in curr_text):
-                        logger.info("zhipu_mode_already_deep")
-                        return
-                    if not is_deep and "flash" in curr_text:
-                        logger.info("zhipu_mode_already_flash")
-                        return
+        if mode and mode.startswith("{") and mode.endswith("}"):
+            try:
+                import json
+                parsed = json.loads(mode)
+                if isinstance(parsed, dict):
+                    config = ProviderSelectionRequest(
+                        model_id=parsed.get("model_id"),
+                    )
+                    await strategy.apply_selection(page, config)
+                    return
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("zhipu_selection_parse_failed", error=str(exc))
 
-                    await locator.click(timeout=4000)
-                    import asyncio
-                    await asyncio.sleep(0.8)
+        # Handle direct model IDs or legacy mode strings
+        target_model = "glm-5.3-flash"
+        if mode:
+            lower = mode.strip().lower()
+            if "5.3" in lower and "flash" in lower:
+                target_model = "glm-5.3-flash"
+            elif "5.3" in lower:
+                target_model = "glm-5.3"
+            elif "5.2" in lower:
+                target_model = "glm-5.2"
+            elif lower in {"deep", "pro", "research", "deep_research", "flagship"}:
+                target_model = "glm-5.3"
+            elif lower in {"flash", "standard", "fast"}:
+                target_model = "glm-5.3-flash"
+            elif "plus" in lower:
+                target_model = "glm-4-plus"
+            elif "air" in lower:
+                target_model = "glm-4-air"
+            elif "zero" in lower:
+                target_model = "glm-zero"
+            elif lower.startswith("glm-"):
+                target_model = lower
 
-                    target_key = "deep_model" if is_deep else "standard_model"
-                    target_chain = cfg_modes.get(target_key)
-                    if target_chain:
-                        item_loc, _ = await resolve_locator(page, target_chain)
-                        if item_loc is not None:
-                            await item_loc.click(timeout=4000)
-                            logger.info("zhipu_model_selected", mode=mode, target=target_key)
-                            await asyncio.sleep(0.8)
-                            return
-                    await page.keyboard.press("Escape")
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning("zhipu_model_switch_failed", error=str(exc))
+        config = ProviderSelectionRequest(model_id=target_model)
+        await strategy.apply_selection(page, config)
+
 

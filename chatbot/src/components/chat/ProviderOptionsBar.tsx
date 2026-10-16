@@ -61,6 +61,15 @@ export function ProviderOptionsBar({
   const isGemini = providerId === "gemini";
   const isGrok = providerId === "grok";
   const isMistral = providerId === "mistral";
+  const isZhipu = providerId === "zhipu";
+
+  const zhipuFallbackModels: OptionItem[] = [
+    { id: "glm-5.3-flash", label: "GLM-5.3-Flash", description: "Lightweight flagship model, instant response (Mô hình cờ đầu gọn nhẹ, phản hồi tức thì)", selected: true, badge: "Flash" },
+    { id: "glm-5.3", label: "GLM-5.3", description: "Flagship model, excels at coding and long-horizon tasks (Mô hình cờ đầu, lập trình & tác vụ chuyên sâu)", selected: false, badge: "Flagship" },
+    { id: "glm-5.2", label: "GLM-5.2", description: "Previous flagship model (Mô hình cờ đầu thế hệ trước)", selected: false, badge: "5.2" },
+    { id: "glm-4-plus", label: "GLM-4-Plus", description: "Mô hình hiệu năng cao toàn diện cho tác vụ phức tạp", selected: false, badge: "Plus" },
+    { id: "glm-4-air", label: "GLM-4-Air", description: "Cân bằng tốc độ xử lý nhanh và độ chính xác cao", selected: false, badge: "Air" },
+  ];
 
   const isDeepThinking = selection.deep_thinking ?? capabilities?.deep_thinking ?? false;
   const isWebSearch = selection.web_search ?? capabilities?.web_search ?? true;
@@ -148,9 +157,13 @@ export function ProviderOptionsBar({
                   { id: "qwen-3.7-plus", label: "Qwen3.7-Plus (High Performance)", description: "Mô hình hiệu năng cao", selected: false, badge: "Plus" },
                   { id: "qwen-3.8-omni-flash", label: "Qwen3.8-Omni-Flash (Multimodal)", description: "Mô hình đa phương tiện tự nhiên", selected: false, badge: "Omni" },
                 ]
-                : [];
+                : isZhipu
+                  ? (capabilities?.available_models && capabilities.available_models.length > 0 && !capabilities.available_models.some((m) => m.id === "default")
+                    ? capabilities.available_models
+                    : zhipuFallbackModels)
+                  : [];
 
-  const thinkingLevels: OptionItem[] = isDeepSeek || isCopilot || isChatGPT || isPerplexity || isGrok
+  const thinkingLevels: OptionItem[] = isDeepSeek || isCopilot || isChatGPT || isPerplexity || isGrok || isZhipu
     ? []
     : isClaude
       ? (capabilities?.thinking_levels && capabilities.thinking_levels.length > 0 && !capabilities.thinking_levels.some((t) => t.id === "auto")
@@ -227,7 +240,7 @@ export function ProviderOptionsBar({
     },
   ];
 
-  const modes = (providerId === "gemini" || providerId === "qwen" || providerId === "claude" || providerId === "deepseek" || providerId === "chatgpt" || providerId === "perplexity" || providerId === "kimi" || providerId === "grok" || providerId === "mistral")
+  const modes = (providerId === "gemini" || providerId === "qwen" || providerId === "claude" || providerId === "deepseek" || providerId === "chatgpt" || providerId === "perplexity" || providerId === "kimi" || providerId === "grok" || providerId === "mistral" || providerId === "zhipu")
     ? []
     : capabilities?.modes && capabilities.modes.length > 0
       ? capabilities.modes

@@ -104,3 +104,43 @@ async def test_mistral_capabilities_strategy() -> None:
     reg_strat = registry.get_strategy("mistral")
     assert isinstance(reg_strat, MistralCapabilitiesStrategy)
 
+
+@pytest.mark.asyncio
+async def test_zhipu_capabilities_strategy() -> None:
+    from app.adapters.capabilities.zhipu import ZhipuCapabilitiesStrategy
+
+    strategy = ZhipuCapabilitiesStrategy()
+    assert isinstance(strategy, BaseProviderCapabilitiesStrategy)
+    assert strategy.provider_name == "zhipu"
+
+    caps = strategy.get_default_capabilities()
+    assert caps.provider == "zhipu"
+    # Requirement 1: Model selection available via dropdown (GLM-5.3-Flash, GLM-5.3, GLM-5.2)
+    assert len(caps.available_models) >= 3
+    model_ids = [m.id for m in caps.available_models]
+    assert "glm-5.3-flash" in model_ids
+    assert "glm-5.3" in model_ids
+    assert "glm-5.2" in model_ids
+    assert caps.selected_model_id == "glm-5.3-flash"
+
+    # Requirement 2: Otherwise, no more options
+    assert caps.thinking_levels == []
+    assert caps.selected_thinking_level_id is None
+    assert caps.modes == []
+    assert caps.selected_mode_id is None
+    assert caps.deep_thinking is False
+    assert caps.web_search is False
+    assert caps.deep_research is False
+
+    registry = CapabilitiesRegistry.instance()
+    reg_strat = registry.get_strategy("zhipu")
+    assert isinstance(reg_strat, ZhipuCapabilitiesStrategy)
+
+    fetched_caps = await registry.get_capabilities("zhipu", force_sync=False)
+    assert fetched_caps.provider == "zhipu"
+    assert "glm-5.3-flash" in [m.id for m in fetched_caps.available_models]
+    assert "glm-5.3" in [m.id for m in fetched_caps.available_models]
+    assert fetched_caps.thinking_levels == []
+    assert fetched_caps.modes == []
+
+

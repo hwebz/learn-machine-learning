@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { PROVIDERS_LIST, DEFAULT_SELECTED_PROVIDERS } from "../../lib/constants";
 import { ChatSession, Message, StepLog, ProviderInfo } from "../../types/chat";
 import { LeftSidebar } from "../sidebar/LeftSidebar";
@@ -65,8 +65,15 @@ interface ChatDashboardProps {
 }
 
 export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
+  const router = useRouter();
   const routeParams = useParams();
-  const routeChatId = (initialChatId || (routeParams?.id as string | undefined))?.trim();
+  const isAtRoot = typeof window !== "undefined" && window.location.pathname === "/";
+  const pathChatId = typeof window !== "undefined"
+    ? (isAtRoot ? undefined : window.location.pathname.match(/^\/chat\/([^/?#]+)/)?.[1])
+    : undefined;
+  const routeChatId = isAtRoot
+    ? undefined
+    : (pathChatId || initialChatId || (routeParams?.id as string | undefined))?.trim();
 
   const [mounted, setMounted] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -100,8 +107,19 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
   // Keep currentRouteChatId in sync with route navigation if not actively running a job
   useEffect(() => {
     if (!isGenerating && !activeJobIdRef.current) {
-      const incomingId = (routeParams?.id as string | undefined)?.trim() || initialChatId?.trim();
-      if (incomingId && incomingId !== currentRouteChatId) {
+      let incomingId: string | undefined;
+      if (typeof window !== "undefined") {
+        if (window.location.pathname === "/") {
+          incomingId = undefined;
+        } else {
+          const match = window.location.pathname.match(/^\/chat\/([^/?#]+)/);
+          incomingId = match && match[1] ? decodeURIComponent(match[1]).trim() : undefined;
+        }
+      } else {
+        incomingId = (routeParams?.id as string | undefined)?.trim() || initialChatId?.trim();
+      }
+
+      if (incomingId !== currentRouteChatId) {
         setCurrentRouteChatId(incomingId);
       }
     }
@@ -121,7 +139,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
   // Synchronize history from backend on mount and via button
   const loadHistoryFromBackend = useCallback(async (preferredId?: string) => {
     setIsLoadingHistory(true);
-    const targetId = preferredId || currentRouteChatId;
+    const targetId = preferredId || routeChatId;
 
     try {
       const historyJobs = await fetchResearchHistory(50);
@@ -342,15 +360,13 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     } finally {
       setIsLoadingHistory(false);
     }
-  }, [currentRouteChatId]);
+  }, [routeChatId]);
 
   useEffect(() => {
     setMounted(true);
+    loadHistoryFromBackend(routeChatId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    loadHistoryFromBackend();
-  }, [loadHistoryFromBackend]);
 
   // Handle browser back/forward buttons (popstate)
   useEffect(() => {
@@ -358,30 +374,56 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       if (typeof window === "undefined") return;
       const match = window.location.pathname.match(/^\/chat\/([^/?#]+)/);
       if (match && match[1]) {
-        handleSelectSession(match[1], false);
+        handleSelectSession(decodeURIComponent(match[1]).trim(), false);
       } else if (window.location.pathname === "/") {
         const freshDraftId = `session-${Date.now()}`;
         setActiveSessionId(freshDraftId);
+        setCurrentRouteChatId(undefined);
         setActiveSteps([]);
         setInspectedMessage(undefined);
         setInspectedProvider(undefined);
         setIsRightSidebarOpen(false);
         setIsProvidersModalOpen(false);
         setIsGenerating(false);
+        setDraftSession({
+          id: freshDraftId,
+          title: "Phiên nghiên cứu mới",
+          pinned: false,
+          createdAt: "Vừa xong",
+          createdTimestamp: Date.now(),
+          selectedProviders: (sessions[0]?.selectedProviders && sessions[0].selectedProviders.length > 0)
+            ? sessions[0].selectedProviders
+            : DEFAULT_SELECTED_PROVIDERS,
+          selectedProvider: sessions[0]?.selectedProvider || DEFAULT_SELECTED_PROVIDERS[0] || "copilot",
+          messages: [],
+        });
       }
     };
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
+  }, [sessions]);
 
   // When currentRouteChatId changes from props/navigation, sync activeSessionId
   useEffect(() => {
     if (isGenerating || activeJobIdRef.current) return;
-    if (currentRouteChatId && currentRouteChatId !== activeSessionId) {
-      handleSelectSession(currentRouteChatId, false);
+    if (currentRouteChatId) {
+      if (currentRouteChatId !== activeSessionId) {
+        handleSelectSession(currentRouteChatId, false);
+      }
+    } else {
+      // Switched to root "/"
+      const isViewingSaved = sessions.some((s) => s.id === activeSessionId || s.jobId === activeSessionId);
+      if (isViewingSaved || (typeof window !== "undefined" && window.location.pathname === "/" && activeSessionId && !activeSessionId.startsWith("session-"))) {
+        const freshDraftId = `session-${Date.now()}`;
+        setActiveSessionId(freshDraftId);
+        setActiveSteps([]);
+        setInspectedMessage(undefined);
+        setInspectedProvider(undefined);
+        setIsRightSidebarOpen(false);
+      }
     }
-  }, [currentRouteChatId, isGenerating]);
+  }, [currentRouteChatId, isGenerating, sessions, activeSessionId]);
 
   const activeSession: ChatSession =
     sessions.find((s) => s.id === activeSessionId || s.jobId === activeSessionId) ||
@@ -570,6 +612,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     if (typeof window !== "undefined" && window.location.pathname !== "/") {
       window.history.pushState(null, "", "/");
     }
+    try {
+      router.push("/");
+    } catch { }
   };
 
   const handleNewAgent = () => {
@@ -850,6 +895,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     if (activeSessionId === id || activeSessionId === targetJobId) {
       const freshDraftId = `session-${Date.now()}`;
       setActiveSessionId(freshDraftId);
+      setCurrentRouteChatId(undefined);
       setActiveSteps([]);
       setInspectedMessage(undefined);
       setInspectedProvider(undefined);
@@ -871,6 +917,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       if (typeof window !== "undefined" && window.location.pathname !== "/") {
         window.history.pushState(null, "", "/");
       }
+      try {
+        router.push("/");
+      } catch { }
     }
   };
 

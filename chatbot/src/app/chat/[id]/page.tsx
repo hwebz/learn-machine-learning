@@ -9,5 +9,5 @@ interface ChatDetailPageProps {
 
 export default function ChatDetailPage({ params }: ChatDetailPageProps) {
   const resolvedParams = use(params);
-  return <ChatDashboard initialChatId={resolvedParams.id} />;
+  return <ChatDashboard key={resolvedParams.id} initialChatId={resolvedParams.id} />;
 }

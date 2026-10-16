@@ -49,6 +49,8 @@ function normalizeProvider(name: string): string {
   if (s.includes("claude")) return "claude";
   if (s.includes("perplexity")) return "perplexity";
   if (s.includes("mistral")) return "mistral";
+  if (s.includes("kimi") || s.includes("moonshot")) return "kimi";
+  if (s.includes("zhipu") || s.includes("glm")) return "zhipu";
   return s;
 }
 
@@ -56,7 +58,7 @@ function extractProvider(st: StepLog): string {
   if (st.provider) return normalizeProvider(st.provider);
   if (st.data?.provider) return normalizeProvider(String(st.data.provider));
   const match = st.message.match(
-    /\b(qwen|copilot|gemini|deepseek|chatgpt|openai|grok|perplexity|claude|mistral)\b/i
+    /\b(qwen|copilot|gemini|deepseek|chatgpt|openai|grok|perplexity|claude|mistral|kimi|moonshot|zhipu|glm)\b/i
   );
   if (match) return normalizeProvider(match[1]);
   return "";

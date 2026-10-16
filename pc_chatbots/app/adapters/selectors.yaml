@@ -480,11 +480,20 @@ providers:
         - { css: "button:has-text('Thought Process')" }
       model_dropdown:
         - { css: "#model-selector-x-preview-l-button" }
-        - { css: "button[aria-label='Select a model']" }
+        - { css: "button[id*='model-selector']" }
+        - { css: "div[id*='model-selector']" }
+        - { css: "button[aria-label*='Select a model' i]" }
+        - { css: "button[aria-label*='Select model' i]" }
+        - { css: "button[aria-label*='model' i]" }
+        - { css: "header button:has-text('GLM')" }
+        - { css: "button:has-text('GLM')" }
+        - { css: "button:has-text('Flash')" }
       deep_model:
+        - { css: "button:has-text('GLM-5.3'):not(:has-text('Flash'))" }
+        - { css: "[role='menuitem']:has-text('GLM-5.3')" }
         - { css: "[role='menuitem']:has-text('GLM-5')" }
-        - { css: "[role='menuitem']:has-text('Pro')" }
       standard_model:
+        - { css: "button:has-text('GLM-5.3-Flash')" }
         - { css: "[role='menuitem']:has-text('Flash')" }
 
     # NOTE: no generating_indicator — the Send button's disabled state is also the

@@ -300,6 +300,39 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
         cachedSelections["qwen"].thinking_level_id = "auto";
       }
     }
+    if (cachedCaps["zhipu"]) {
+      cachedCaps["zhipu"].modes = [];
+      cachedCaps["zhipu"].selected_mode_id = undefined;
+      cachedCaps["zhipu"].thinking_levels = [];
+      cachedCaps["zhipu"].selected_thinking_level_id = undefined;
+      cachedCaps["zhipu"].deep_research = false;
+      cachedCaps["zhipu"].deep_thinking = false;
+      cachedCaps["zhipu"].web_search = false;
+      const hasBadZhipuModels =
+        !cachedCaps["zhipu"].available_models ||
+        cachedCaps["zhipu"].available_models.length === 0 ||
+        cachedCaps["zhipu"].available_models.some((m) => m.id === "default" || m.id === "glm-5");
+      if (hasBadZhipuModels) {
+        cachedCaps["zhipu"].available_models = [
+          { id: "glm-5.3-flash", label: "GLM-5.3-Flash", description: "Lightweight flagship model, instant response (Mô hình cờ đầu gọn nhẹ, phản hồi tức thì)", selected: true, badge: "Flash" },
+          { id: "glm-5.3", label: "GLM-5.3", description: "Flagship model, excels at coding and long-horizon tasks (Mô hình cờ đầu, lập trình & tác vụ chuyên sâu)", selected: false, badge: "Flagship" },
+          { id: "glm-5.2", label: "GLM-5.2", description: "Previous flagship model (Mô hình cờ đầu thế hệ trước)", selected: false, badge: "5.2" },
+          { id: "glm-4-plus", label: "GLM-4-Plus", description: "Mô hình hiệu năng cao toàn diện cho tác vụ phức tạp", selected: false, badge: "Plus" },
+          { id: "glm-4-air", label: "GLM-4-Air", description: "Cân bằng tốc độ xử lý nhanh và độ chính xác cao", selected: false, badge: "Air" },
+        ];
+        cachedCaps["zhipu"].selected_model_id = "glm-5.3-flash";
+      }
+    }
+    if (cachedSelections["zhipu"]) {
+      cachedSelections["zhipu"].thinking_level_id = "";
+      cachedSelections["zhipu"].mode_id = "";
+      cachedSelections["zhipu"].deep_research = false;
+      cachedSelections["zhipu"].deep_thinking = false;
+      cachedSelections["zhipu"].web_search = false;
+      if (!cachedSelections["zhipu"].model_id || cachedSelections["zhipu"].model_id === "default" || cachedSelections["zhipu"].model_id === "glm-5") {
+        cachedSelections["zhipu"].model_id = "glm-5.3-flash";
+      }
+    }
     saveStorage(CAPS_STORAGE_KEY, cachedCaps);
     saveStorage(SELECTIONS_STORAGE_KEY, cachedSelections);
     setCapabilitiesMap(cachedCaps);
@@ -434,6 +467,29 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           if (caps.deep_research === undefined) caps.deep_research = false;
           if (caps.web_search === undefined) caps.web_search = true;
         }
+        if (p === "zhipu" && caps) {
+          caps.modes = [];
+          caps.selected_mode_id = undefined;
+          caps.thinking_levels = [];
+          caps.selected_thinking_level_id = undefined;
+          caps.deep_research = false;
+          caps.deep_thinking = false;
+          caps.web_search = false;
+          const hasBadZhipuModels =
+            !caps.available_models ||
+            caps.available_models.length === 0 ||
+            caps.available_models.some((m) => m.id === "default" || m.id === "glm-5");
+          if (hasBadZhipuModels) {
+            caps.available_models = [
+              { id: "glm-5.3-flash", label: "GLM-5.3-Flash", description: "Lightweight flagship model, instant response (Mô hình cờ đầu gọn nhẹ, phản hồi tức thì)", selected: true, badge: "Flash" },
+              { id: "glm-5.3", label: "GLM-5.3", description: "Flagship model, excels at coding and long-horizon tasks (Mô hình cờ đầu, lập trình & tác vụ chuyên sâu)", selected: false, badge: "Flagship" },
+              { id: "glm-5.2", label: "GLM-5.2", description: "Previous flagship model (Mô hình cờ đầu thế hệ trước)", selected: false, badge: "5.2" },
+              { id: "glm-4-plus", label: "GLM-4-Plus", description: "Mô hình hiệu năng cao toàn diện cho tác vụ phức tạp", selected: false, badge: "Plus" },
+              { id: "glm-4-air", label: "GLM-4-Air", description: "Cân bằng tốc độ xử lý nhanh và độ chính xác cao", selected: false, badge: "Air" },
+            ];
+            caps.selected_model_id = "glm-5.3-flash";
+          }
+        }
         setCapabilitiesMap((prev) => {
           const updated = { ...prev, [p]: caps };
           saveStorage(CAPS_STORAGE_KEY, updated);
@@ -453,6 +509,7 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           const isGemini = p === "gemini";
           const isGrok = p === "grok";
           const isMistral = p === "mistral";
+          const isZhipu = p === "zhipu";
 
           // Safe model for Claude & Kimi
           const isKimiDeepResearch = isKimi && (existing.deep_research !== undefined ? existing.deep_research : (caps.deep_research ?? false));
@@ -464,6 +521,8 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
             ? "k3"
             : isKimi && (!rawModelId || rawModelId === "default")
             ? "instant"
+            : isZhipu && (!rawModelId || rawModelId === "default" || rawModelId === "glm-5")
+            ? "glm-5.3-flash"
             : rawModelId;
 
           // Safe thinking for Claude, Kimi & Qwen
@@ -484,25 +543,29 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
                 : (isDeepSeek || isCopilot || isChatGPT || isGrok || isMistral)
                 ? ""
                 : safeModelId,
-              thinking_level_id: (isDeepSeek || isCopilot || isChatGPT || isPerplexity || isGrok)
+              thinking_level_id: (isDeepSeek || isCopilot || isChatGPT || isPerplexity || isGrok || isZhipu)
                 ? ""
                 : isMistral
                 ? (existing.thinking_level_id || caps.selected_thinking_level_id || "fast")
                 : safeThinking,
-              mode_id: (isDeepSeek || isChatGPT || isPerplexity || isKimi || isQwen || isGemini || isGrok || isMistral)
+              mode_id: (isDeepSeek || isChatGPT || isPerplexity || isKimi || isQwen || isGemini || isGrok || isMistral || isZhipu)
                 ? ""
                 : existing.mode_id || caps.selected_mode_id || caps.modes[0]?.id || (isCopilot ? "auto" : ""),
-              deep_thinking: isPerplexity
+              deep_thinking: (isPerplexity || isZhipu)
                 ? false
                 : (isDeepSeek || isChatGPT)
                 ? (existing.deep_thinking !== undefined ? existing.deep_thinking : (caps.deep_thinking ?? false))
                 : existing.deep_thinking,
               web_search: isPerplexity || isKimi
                 ? true
+                : isZhipu
+                ? false
                 : (isDeepSeek || isChatGPT || isQwen)
                 ? (existing.web_search !== undefined ? existing.web_search : (caps.web_search ?? true))
                 : existing.web_search,
-              deep_research: (isChatGPT || isKimi || isQwen || isGemini || isMistral)
+              deep_research: isZhipu
+                ? false
+                : (isChatGPT || isKimi || isQwen || isGemini || isMistral)
                 ? (existing.deep_research !== undefined ? existing.deep_research : (caps.deep_research ?? false))
                 : existing.deep_research,
               research_mode: isQwen
@@ -599,6 +662,8 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           safeUpdates = { ...updates, mode_id: "" };
         } else if (p === "grok") {
           safeUpdates = { ...updates, model_id: "", thinking_level_id: "", mode_id: "" };
+        } else if (p === "zhipu") {
+          safeUpdates = { ...updates, thinking_level_id: "", mode_id: "", deep_thinking: false, deep_research: false, web_search: false };
         }
         const updated = {
           ...prev,

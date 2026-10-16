@@ -38,7 +38,7 @@ $ProjectRoot = Split-Path -Parent $ScriptDir
 Set-Location $ProjectRoot
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "  Deep Research Local - Khởi động API Server" -ForegroundColor Cyan
+Write-Host "  Deep Research Local - Starting API Server" -ForegroundColor Cyan
 Write-Host "  Thư mục: $ProjectRoot" -ForegroundColor DarkGray
 Write-Host "==========================================================" -ForegroundColor Cyan
 

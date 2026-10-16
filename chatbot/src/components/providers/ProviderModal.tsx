@@ -250,12 +250,21 @@ export function ProviderModal({
               const isGemini = p.id === "gemini";
               const isGrok = p.id === "grok";
               const isMistral = p.id === "mistral";
+              const isZhipu = p.id === "zhipu";
 
               const isDeepThinking = sel.deep_thinking !== undefined ? sel.deep_thinking : (caps?.deep_thinking ?? false);
               const isWebSearch = sel.web_search !== undefined ? sel.web_search : (caps?.web_search ?? true);
               const isDeepResearch = sel.deep_research !== undefined ? sel.deep_research : (caps?.deep_research ?? false);
               const researchMode = sel.research_mode || caps?.research_mode || "normal";
               const isResearchAdvanced = researchMode === "advanced";
+
+              const zhipuFallbackModels = [
+                { id: "glm-5.3-flash", label: "GLM-5.3-Flash", description: "Lightweight flagship model, instant response (Mô hình cờ đầu gọn nhẹ, phản hồi tức thì)", selected: true, badge: "Flash", disabled: false },
+                { id: "glm-5.3", label: "GLM-5.3", description: "Flagship model, excels at coding and long-horizon tasks (Mô hình cờ đầu, lập trình & tác vụ chuyên sâu)", selected: false, badge: "Flagship", disabled: false },
+                { id: "glm-5.2", label: "GLM-5.2", description: "Previous flagship model (Mô hình cờ đầu thế hệ trước)", selected: false, badge: "5.2", disabled: false },
+                { id: "glm-4-plus", label: "GLM-4-Plus", description: "Mô hình hiệu năng cao toàn diện cho tác vụ phức tạp", selected: false, badge: "Plus", disabled: false },
+                { id: "glm-4-air", label: "GLM-4-Air", description: "Cân bằng tốc độ xử lý nhanh và độ chính xác cao", selected: false, badge: "Air", disabled: false },
+              ];
 
               // 1. Models: Empty for ChatGPT, Copilot, and DeepSeek
               const claudeFallbackModels = [
@@ -338,17 +347,21 @@ export function ProviderModal({
                               { id: "qwen-3.7-plus", label: "Qwen3.7-Plus (High Performance)", description: "Mô hình hiệu năng cao", selected: false, badge: "Plus" },
                               { id: "qwen-3.8-omni-flash", label: "Qwen3.8-Omni-Flash (Multimodal)", description: "Mô hình đa phương tiện tự nhiên", selected: false, badge: "Omni" },
                             ]
-                            : [
-                              {
-                                id: "auto",
-                                label: "Auto (Tự động)",
-                                description: "Tự động chọn mô hình phù hợp",
-                                selected: true,
-                              },
-                            ];
+                            : p.id === "zhipu"
+                              ? (caps?.available_models && caps.available_models.length > 0 && !caps.available_models.some((m) => m.id === "default")
+                                ? caps.available_models
+                                : zhipuFallbackModels)
+                              : [
+                                {
+                                  id: "auto",
+                                  label: "Auto (Tự động)",
+                                  description: "Tự động chọn mô hình phù hợp",
+                                  selected: true,
+                                },
+                              ];
 
               // 2. Reasoning: Empty for ChatGPT, Copilot, DeepSeek, Perplexity, and Grok
-              const thinkingLevels = isChatGPT || isCopilot || isDeepSeek || isPerplexity || isGrok
+              const thinkingLevels = isChatGPT || isCopilot || isDeepSeek || isPerplexity || isGrok || isZhipu
                 ? []
                 : isClaude
                   ? (caps?.thinking_levels && caps.thinking_levels.length > 0 && !caps.thinking_levels.some((t) => t.id === "auto")
@@ -389,7 +402,7 @@ export function ProviderModal({
 
               // 3. Modes: Copilot (All 5 options). Gemini, Qwen, Claude, DeepSeek, ChatGPT, Perplexity, Kimi, and Grok have no modes.
               const modes =
-                p.id === "gemini" || p.id === "qwen" || isClaude || isDeepSeek || isChatGPT || isPerplexity || isKimi || isGrok || isMistral
+                p.id === "gemini" || p.id === "qwen" || isClaude || isDeepSeek || isChatGPT || isPerplexity || isKimi || isGrok || isMistral || isZhipu
                   ? []
                   : isCopilot && (!caps?.modes || caps.modes.length === 0)
                     ? [
@@ -445,11 +458,17 @@ export function ProviderModal({
                       : caps?.selected_model_id && models.some((m) => m.id === caps.selected_model_id && !m.disabled)
                         ? caps.selected_model_id
                         : "claude-sonnet-5.5")
-                    : sel.model_id && models.some((m) => m.id === sel.model_id && !m.disabled)
-                      ? sel.model_id
-                      : caps?.selected_model_id && models.some((m) => m.id === caps.selected_model_id && !m.disabled)
-                        ? caps.selected_model_id
-                        : selectableModels[0]?.id || models[0]?.id || "";
+                    : isZhipu
+                      ? (sel.model_id && sel.model_id !== "glm-5" && models.some((m) => m.id === sel.model_id && !m.disabled)
+                        ? sel.model_id
+                        : caps?.selected_model_id && caps.selected_model_id !== "glm-5" && models.some((m) => m.id === caps.selected_model_id && !m.disabled)
+                          ? caps.selected_model_id
+                          : "glm-5.3-flash")
+                      : sel.model_id && models.some((m) => m.id === sel.model_id && !m.disabled)
+                        ? sel.model_id
+                        : caps?.selected_model_id && models.some((m) => m.id === caps.selected_model_id && !m.disabled)
+                          ? caps.selected_model_id
+                          : selectableModels[0]?.id || models[0]?.id || "";
               const currentModel = isPerplexity
                 ? (models.find((m) => m.id === "auto") || models[0])
                 : (models.find((m) => m.id === currentModelId) || selectableModels[0] || models[0]);
@@ -1940,66 +1959,68 @@ export function ProviderModal({
                         </div>
 
                         {/* 2. Reasoning Picker */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <label
-                              style={{
-                                fontSize: 11,
-                                fontWeight: 700,
-                                color: "var(--text-secondary)",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 4,
-                              }}
-                            >
-                              <BrainIcon size={12} color="var(--brand-blue)" />
-                              <span>Mức suy luận (Reasoning)</span>
-                            </label>
-                            {currentThinking?.badge && (
-                              <span
+                        {thinkingLevels.length > 0 && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <label
                                 style={{
-                                  fontSize: 9.5,
-                                  padding: "1px 5px",
-                                  borderRadius: 3,
-                                  backgroundColor: "#eff6ff",
-                                  color: "var(--brand-blue)",
+                                  fontSize: 11,
                                   fontWeight: 700,
+                                  color: "var(--text-secondary)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 4,
                                 }}
                               >
-                                {currentThinking.badge}
-                              </span>
-                            )}
+                                <BrainIcon size={12} color="var(--brand-blue)" />
+                                <span>Mức suy luận (Reasoning)</span>
+                              </label>
+                              {currentThinking?.badge && (
+                                <span
+                                  style={{
+                                    fontSize: 9.5,
+                                    padding: "1px 5px",
+                                    borderRadius: 3,
+                                    backgroundColor: "#eff6ff",
+                                    color: "var(--brand-blue)",
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {currentThinking.badge}
+                                </span>
+                              )}
+                            </div>
+                            <select
+                              disabled={thinkingLevels.length <= 1}
+                              value={currentThinkingId}
+                              onChange={(e) => {
+                                onUpdateSelection?.(p.id, { thinking_level_id: e.target.value });
+                              }}
+                              style={{
+                                width: "100%",
+                                padding: "6px 8px",
+                                borderRadius: 6,
+                                border: "1px solid var(--border-default, #cbd5e1)",
+                                backgroundColor: thinkingLevels.length <= 1 ? "#f8fafc" : "#ffffff",
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: thinkingLevels.length <= 1 ? "#64748b" : "var(--text-primary, #0f172a)",
+                                cursor: thinkingLevels.length <= 1 ? "not-allowed" : "pointer",
+                                outline: "none",
+                              }}
+                              title="Chọn mức độ suy luận"
+                            >
+                              {thinkingLevels.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.label}
+                                </option>
+                              ))}
+                            </select>
+                            <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
+                              {currentThinking?.description || ""}
+                            </span>
                           </div>
-                          <select
-                            disabled={thinkingLevels.length <= 1}
-                            value={currentThinkingId}
-                            onChange={(e) => {
-                              onUpdateSelection?.(p.id, { thinking_level_id: e.target.value });
-                            }}
-                            style={{
-                              width: "100%",
-                              padding: "6px 8px",
-                              borderRadius: 6,
-                              border: "1px solid var(--border-default, #cbd5e1)",
-                              backgroundColor: thinkingLevels.length <= 1 ? "#f8fafc" : "#ffffff",
-                              fontSize: 12,
-                              fontWeight: 600,
-                              color: thinkingLevels.length <= 1 ? "#64748b" : "var(--text-primary, #0f172a)",
-                              cursor: thinkingLevels.length <= 1 ? "not-allowed" : "pointer",
-                              outline: "none",
-                            }}
-                            title="Chọn mức độ suy luận"
-                          >
-                            {thinkingLevels.map((t) => (
-                              <option key={t.id} value={t.id}>
-                                {t.label}
-                              </option>
-                            ))}
-                          </select>
-                          <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
-                            {currentThinking?.description || ""}
-                          </span>
-                        </div>
+                        )}
 
                         {/* 3. Mode Picker (if applicable) */}
                         {modes.length > 0 && (

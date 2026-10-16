@@ -18,6 +18,7 @@ from app.adapters.capabilities.perplexity import PerplexityCapabilitiesStrategy
 from app.adapters.capabilities.kimi import KimiCapabilitiesStrategy
 from app.adapters.capabilities.grok import GrokCapabilitiesStrategy
 from app.adapters.capabilities.mistral import MistralCapabilitiesStrategy
+from app.adapters.capabilities.zhipu import ZhipuCapabilitiesStrategy
 from app.adapters.capabilities.models import (
     OptionItem,
     ProviderLiveCapabilities,
@@ -129,6 +130,8 @@ class CapabilitiesRegistry:
         self.register(grok_strat)
         mistral_strat = MistralCapabilitiesStrategy()
         self.register(mistral_strat)
+        zhipu_strat = ZhipuCapabilitiesStrategy()
+        self.register(zhipu_strat)
 
     def register(self, strategy: BaseProviderCapabilitiesStrategy) -> None:
         self._strategies[strategy.provider_name.lower()] = strategy
