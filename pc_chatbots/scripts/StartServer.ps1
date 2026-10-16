@@ -47,13 +47,14 @@ $PythonExe = "python"
 $VenvPython = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
 $VenvActivate = Join-Path $ProjectRoot ".venv\Scripts\Activate.ps1"
 if (Test-Path $VenvActivate) {
-    Write-Host "[1/3] Kích hoạt virtual environment (.venv)..." -ForegroundColor Green
+    Write-Host "[1/3] Activate virtual environment (.venv)..." -ForegroundColor Green
     & $VenvActivate
     if (Test-Path $VenvPython) {
         $PythonExe = $VenvPython
     }
-} else {
-    Write-Host "[CẢNH BÁO] Không tìm thấy $VenvActivate. Sử dụng Python hiện tại của hệ thống." -ForegroundColor Yellow
+}
+else {
+    Write-Host "[WARNING] Cannot find $VenvActivate. Using Python from system." -ForegroundColor Yellow
 }
 
 # 2. Kiểm tra xung đột cổng
@@ -75,23 +76,24 @@ if ($ExistingConns) {
     }
 
     if ($shouldKill) {
-        Write-Host "[XỬ LÝ] Tự động giải phóng cổng $Port (PID: $($Pids -join ', '))..." -ForegroundColor Yellow
+        Write-Host "[KILL] Killing process on port $Port (PID: $($Pids -join ', '))..." -ForegroundColor Yellow
         foreach ($p in $Pids) {
             Stop-Process -Id $p -Force -ErrorAction SilentlyContinue
         }
         Start-Sleep -Seconds 1
-    } else {
-        Write-Host "[LỖI/CẢNH BÁO] Cổng $Port đang được sử dụng bởi Process ID: $($Pids -join ', ')" -ForegroundColor Red
-        Write-Host "             Bạn có thể chạy lại với cờ -KillExisting để tự động tắt process cũ:" -ForegroundColor Yellow
+    }
+    else {
+        Write-Host "[ERROR/WARNING] Port $Port is being used by PID: $($Pids -join ', ')" -ForegroundColor Red
+        Write-Host "             You can restart the server with the -KillExisting flag to automatically shut down the old process:" -ForegroundColor Yellow
         Write-Host "             .\scripts\StartServer.ps1 -KillExisting`n" -ForegroundColor Yellow
     }
 }
 
-# 3. Khởi động Uvicorn
-Write-Host "[2/3] Địa chỉ server: http://$($HostAddress):$Port" -ForegroundColor Green
-Write-Host "      Kiểm tra sức khỏe: http://$($HostAddress):$Port/health" -ForegroundColor DarkCyan
-Write-Host "[3/3] Bắt đầu chạy Uvicorn..." -ForegroundColor Green
-Write-Host "      (Nhấn Ctrl + C để dừng server)`n" -ForegroundColor DarkGray
+# 3. Start Uvicorn
+Write-Host "[2/3] Server address: http://$($HostAddress):$Port" -ForegroundColor Green
+Write-Host "      Check health: http://$($HostAddress):$Port/health" -ForegroundColor DarkCyan
+Write-Host "[3/3] Starting Uvicorn..." -ForegroundColor Green
+Write-Host "      (Press Ctrl + C to stop the server)`n" -ForegroundColor DarkGray
 
 $UvicornArgs = @("app.main:app", "--host", $HostAddress, "--port", "$Port")
 # Bắt buộc dùng ProactorEventLoop trên Windows để hỗ trợ subprocess cho Playwright browser automation
@@ -101,10 +103,11 @@ if ($env:OS -like "*Windows*" -or $IsWindows -or $env:PROCESSOR_ARCHITECTURE) {
 
 if ($Reload) {
     if ($env:OS -like "*Windows*" -or $IsWindows -or $env:PROCESSOR_ARCHITECTURE) {
-        Write-Host "      [Chế độ Reload - Windows] Khởi chạy qua watchfiles runner để đảm bảo Proactor IOCP sạch..." -ForegroundColor DarkCyan
+        Write-Host "      [Reload Mode - Windows] Running through watchfiles runner to ensure clean Proactor IOCP..." -ForegroundColor DarkCyan
         & $PythonExe -m watchfiles --filter python "`"$PythonExe`" -m uvicorn $($UvicornArgs -join ' ')" app
         exit $LASTEXITCODE
-    } else {
+    }
+    else {
         $UvicornArgs += "--reload"
     }
 }
