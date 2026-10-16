@@ -496,20 +496,53 @@ providers:
         - { css: "button:has-text('GLM-5.3-Flash')" }
         - { css: "[role='menuitem']:has-text('Flash')" }
 
-    # NOTE: no generating_indicator — the Send button's disabled state is also the
-    # idle state (empty input), so it cannot distinguish "generating" from "done".
-    # Completion relies on done_marker (Copy button) + stable answer text.
+    generating_indicator:
+      - { css: "button:has-text('Stop')" }
+      - { css: "button:has-text('停止')" }
+      - { css: "button[aria-label*='Stop' i]" }
+      - { css: "button[aria-label*='停止']" }
+      - { css: "button[class*='stop' i]" }
+      - { css: "button[data-testid*='stop']" }
+      - { css: "div.chat-assistant [class*='loading']" }
+      - { css: "div.chat-assistant [class*='typing']" }
+      - { css: "div.chat-assistant [class*='cursor']" }
+      - { css: "div.chat-assistant .cursor" }
+      - { css: ".chat-assistant [class*='loading']" }
+      - { css: ".chat-assistant [class*='typing']" }
+      - { css: ".chat-assistant [class*='cursor']" }
+      - { css: ".chat-assistant .cursor" }
+      - { css: "div.chat-assistant svg.animate-spin" }
+
     # Done when Copy button appears (answer rendered)
     done_indicator:
+      - { css: "div.chat-assistant button.copy-response-button" }
+      - { css: "div.chat-assistant button[class*='copy' i]" }
+      - { css: "div.chat-assistant [aria-label*='Copy' i]" }
+      - { css: "div.chat-assistant button:has-text('Copy')" }
+      - { css: ".chat-assistant button[class*='copy' i]" }
+      - { css: ".chat-assistant [aria-label*='Copy' i]" }
       - { css: "button.copy-response-button" }
       - { css: "div[aria-label='Copy'] button.copy-response-button" }
-    # Answer is in a <p dir="auto"> inside the message area
+      - { css: "button[aria-label*='Copy' i]" }
+      - { css: "button[class*='copy' i]" }
+      - { css: "button:has-text('Copy')" }
+
+    # Answer is inside .chat-assistant
     answer_container:
+      - { css: "div.chat-assistant [class*='markdown']" }
+      - { css: "div.chat-assistant .markdown-body" }
+      - { css: ".chat-assistant [class*='markdown']" }
+      - { css: ".chat-assistant .markdown-body" }
+      - { css: "div.chat-assistant p[dir='auto']" }
+      - { css: "div.chat-assistant" }
+      - { css: "[class*='chat-assistant']" }
       - { css: "p[dir='auto']" }
       - { css: "div[class*='message'] .markdown" }
       - { css: ".markdown-body" }
       - { css: "div[class*='answer']" }
     source_links:
+      - { css: "div.chat-assistant a[href^='http'][target='_blank']" }
+      - { css: ".chat-assistant a[href^='http'][target='_blank']" }
       - { css: "a[href^='http'][target='_blank']" }
 
   # ─────────────────────────────────────── Grok

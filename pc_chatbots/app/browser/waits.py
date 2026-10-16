@@ -188,7 +188,10 @@ DOM_EXTRACT_NON_CONVERSATION_TEXT = """
         '[class*="thinking"]',
         '[class*="canvas"]',
         '[class*="collapsible-content"]',
-        '[id*="collapsible-content"]'
+        '[id*="collapsible-content"]',
+        '.chat-assistant',
+        '[class*="chat-assistant"]',
+        'div.chat-assistant'
     ].join(', ');
 
     const excludedNodes = document.querySelectorAll(excludeSelector);
@@ -562,6 +565,44 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
                                 expandBtn.dataset.expandAttempts = (attempts + 1).toString();
                                 triggerClick(expandBtn);
                             }
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    // 1.6. Zhipu-specific: Open thought process accordion / summary inside .chat-assistant if closed
+    if (provider === "zhipu" || !provider) {
+        try {
+            const zhipuAssts = document.querySelectorAll(".chat-assistant, [class*='chat-assistant']");
+            const targetAsst = zhipuAssts.length > 0 ? zhipuAssts[zhipuAssts.length - 1] : null;
+            if (targetAsst) {
+                const detailsEls = targetAsst.querySelectorAll("details:not([open])");
+                for (const d of detailsEls) {
+                    const sum = d.querySelector("summary");
+                    if (sum) {
+                        const attempts = parseInt(sum.dataset.expandAttempts || "0", 10);
+                        if (attempts < 5) {
+                            sum.dataset.expandAttempts = (attempts + 1).toString();
+                            triggerClick(sum);
+                        }
+                    }
+                }
+                const thoughtButtons = targetAsst.querySelectorAll(
+                    "button[class*='thought'], " +
+                    "button:has-text('Thought Process'), " +
+                    "button:has-text('Thinking'), " +
+                    "button[aria-label*='Thought' i], " +
+                    "button[aria-label*='Thinking' i], " +
+                    "[class*='thought-process'] button"
+                );
+                for (const btn of thoughtButtons) {
+                    if (btn.getAttribute("aria-expanded") === "false") {
+                        const attempts = parseInt(btn.dataset.expandAttempts || "0", 10);
+                        if (attempts < 5) {
+                            btn.dataset.expandAttempts = (attempts + 1).toString();
+                            triggerClick(btn);
                         }
                     }
                 }
@@ -1289,6 +1330,102 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
         } catch (e) {}
     }
 
+    // 2.6. Zhipu-specific: Extract structured thinking steps and thinking text from .chat-assistant
+    if (provider === "zhipu" || !provider) {
+        try {
+            const zhipuStopBtn = document.querySelector(
+                "button:has-text('Stop'), " +
+                "button:has-text('停止'), " +
+                "button[aria-label*='Stop' i], " +
+                "button[aria-label*='停止'], " +
+                "button[class*='stop' i], " +
+                "button[data-testid*='stop']"
+            );
+            const isZhipuGenerating = zhipuStopBtn && (zhipuStopBtn.offsetParent !== null || zhipuStopBtn.getAttribute("aria-disabled") !== "true");
+
+            const hasConfirmPreferences = Array.from(document.querySelectorAll("div, form, [role='dialog']")).some(el => {
+                if (el.offsetWidth > 0 && el.offsetHeight > 0) {
+                    const t = (el.innerText || el.textContent || "").toLowerCase();
+                    return t.includes("confirm preferences") || t.includes("confirm preference") || t.includes("确认偏好") || t.includes("偏好确认");
+                }
+                return false;
+            });
+
+            if (hasConfirmPreferences) {
+                isThinking = true;
+                const prefTitle = "Confirm Preferences";
+                const prefDesc = "Đang chờ cấu hình mặc định hoặc tự động tiếp tục...";
+                const dedupeKey = prefTitle + "::" + prefDesc;
+                if (!seenStepKeys.has(dedupeKey)) {
+                    seenStepKeys.add(dedupeKey);
+                    thinkingSteps.push({
+                        title: prefTitle,
+                        description: prefDesc,
+                        status: "running"
+                    });
+                }
+            }
+
+            const asstEls = document.querySelectorAll(".chat-assistant, [class*='chat-assistant']");
+            if (asstEls.length > 0) {
+                const lastAsst = asstEls[asstEls.length - 1];
+                const isTyping = lastAsst.querySelector(".cursor, [class*='cursor'], [class*='typing'], [class*='loading'], svg.animate-spin") !== null;
+                if (isZhipuGenerating || isTyping) {
+                    isThinking = true;
+                }
+
+                const thoughtEls = lastAsst.querySelectorAll(
+                    "[class*='thought'], [class*='reasoning'], details, [class*='thinking'], [aria-label*='thought' i], [aria-label*='thinking' i]"
+                );
+
+                for (const tEl of thoughtEls) {
+                    let stepTitle = "";
+                    const summaryEl = tEl.querySelector("summary, button, [class*='title'], [class*='header']");
+                    if (summaryEl) {
+                        stepTitle = clean(summaryEl.innerText || summaryEl.textContent || "");
+                    }
+                    if (!stepTitle) {
+                        stepTitle = "Thought Process";
+                    }
+
+                    let thoughtDesc = "";
+                    const descEl = tEl.querySelector(".markdown, .markdown-body, [class*='content'], p") || tEl;
+                    if (descEl) {
+                        const clone = descEl.cloneNode(true);
+                        clone.querySelectorAll("summary, button, svg").forEach(i => i.remove());
+                        thoughtDesc = clean(clone.innerText || clone.textContent || "");
+                    }
+
+                    if (thoughtDesc) {
+                        thinkingText = (thinkingText ? thinkingText + "\\n\\n" : "") + thoughtDesc;
+                        isThinking = true;
+                        const dedupeKey = stepTitle + "::" + thoughtDesc;
+                        if (!seenStepKeys.has(dedupeKey)) {
+                            seenStepKeys.add(dedupeKey);
+                            thinkingSteps.push({
+                                title: stepTitle,
+                                description: thoughtDesc,
+                                status: isZhipuGenerating ? "running" : "completed"
+                            });
+                        }
+                    }
+                }
+
+                if ((isZhipuGenerating || isTyping) && thinkingSteps.length === 0) {
+                    const fallbackKey = "Thinking::Zhipu";
+                    if (!seenStepKeys.has(fallbackKey)) {
+                        seenStepKeys.add(fallbackKey);
+                        thinkingSteps.push({
+                            title: "Thinking Process",
+                            description: "Đang suy luận...",
+                            status: "running"
+                        });
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
     // 3. Fallback: query general thinking containers across other providers
     if (!thinkingText && thinkingSteps.length === 0) {
         const thinkingSelectors = [
@@ -1521,7 +1658,9 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
         "sup a[href^='http']",
         "div[class*='status-card'] a[href^='http']",
         "[aria-label='Sources'] a[href^='http']",
-        "[aria-label*='Sources' i] a[href^='http']"
+        "[aria-label*='Sources' i] a[href^='http']",
+        "div.chat-assistant a[href^='http']",
+        ".chat-assistant a[href^='http']"
     ];
 
     for (const sel of linkSelectors) {
