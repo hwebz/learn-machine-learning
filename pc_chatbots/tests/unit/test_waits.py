@@ -437,3 +437,141 @@ async def test_detect_blocking_state_fallback_locator() -> None:
     assert state is not None
     assert state.kind == "captcha"
 
+
+@pytest.mark.asyncio
+async def test_wait_for_completion_suppresses_visible_text_blocking_during_active_generation() -> None:
+    from app.browser.waits import wait_for_completion
+
+    clock = FakeClock()
+
+    class MockLocator:
+        def __init__(self, visible: bool = True) -> None:
+            self._visible = visible
+
+        async def count(self) -> int:
+            return 1 if self._visible else 0
+
+        async def is_visible(self, timeout: int = 500) -> bool:
+            return self._visible
+
+        async def is_editable(self, timeout: int = 1000) -> bool:
+            return False
+
+        async def inner_text(self, timeout: int = 3000) -> str:
+            return "Streaming response discussing captchas..."
+
+    class MockPage:
+        url = "https://chat.mistral.ai/chat"
+
+        def __init__(self) -> None:
+            self.tick = 0
+
+        async def evaluate(self, script: Any, *args: Any) -> Any:
+            # First 2 ticks: text matches 'captcha' (simulating search snippet)
+            # 3rd tick: returns clean text
+            if "DOM_SCAN_THINKING" in str(script):
+                return {"is_thinking": self.tick < 2, "thinking_text": "", "thinking_steps": [], "citations": []}
+            return "search snippet blocked by captcha" if self.tick < 2 else "clean text"
+
+        def locator(self, selector: str) -> MockLocator:
+            # No challenge container present
+            if "challenge" in selector or "turnstile" in selector:
+                return MockLocator(visible=False)
+            if "Stop generation" in selector and self.tick >= 2:
+                return MockLocator(visible=False)
+            return MockLocator(visible=True)
+
+    page = MockPage()
+
+    async def fake_sleep(secs: float) -> None:
+        page.tick += 1
+        clock.advance(secs)
+
+    async def mock_response_ready(p: Any) -> bool:
+        # Generating on tick 0, ready on tick 2
+        return page.tick >= 2
+
+    provider_cfg = {
+        "generating_indicator": [{"css": "button[aria-label='Stop generation']"}],
+        "question_input": [{"css": "textarea"}],
+        "answer_container": [{"css": ".markdown"}],
+        "done_indicator": [{"css": "button[aria-label='Copy']"}],
+    }
+    blocking = {
+        "url_patterns": ["/login"],
+        "text_patterns": ["captcha"],
+    }
+    completion_cfg = {
+        "stable_seconds": 1,
+        "poll_interval_s": 0.5,
+    }
+
+    res = await wait_for_completion(
+        page,
+        provider="mistral",
+        provider_cfg=provider_cfg,
+        blocking=blocking,
+        completion_cfg=completion_cfg,
+        timeout_s=10.0,
+        response_ready=mock_response_ready,
+        clock=clock,
+        sleep=fake_sleep,
+    )
+    # Must NOT abort as 'blocked'
+    assert res.reason != "blocked"
+    assert res.done is True
+    assert res.reason in {"media_ready", "done_marker", "stable"}
+
+
+@pytest.mark.asyncio
+async def test_wait_for_completion_does_not_suppress_url_blocking_during_active_generation() -> None:
+    from app.browser.waits import wait_for_completion
+
+    clock = FakeClock()
+
+    class MockPage:
+        # Redirected to /login
+        url = "https://chat.mistral.ai/auth/login"
+
+        async def evaluate(self, script: Any, *args: Any) -> Any:
+            return ""
+
+        def locator(self, selector: str) -> Any:
+            class MockLoc:
+                async def count(self) -> int:
+                    return 1
+                async def is_visible(self, timeout: int = 500) -> bool:
+                    return True
+                async def is_editable(self, timeout: int = 1000) -> bool:
+                    return False
+                async def inner_text(self, timeout: int = 3000) -> str:
+                    return ""
+            return MockLoc()
+
+    provider_cfg = {
+        "generating_indicator": [{"css": "button[aria-label='Stop generation']"}],
+        "question_input": [{"css": "textarea"}],
+        "answer_container": [{"css": ".markdown"}],
+        "done_indicator": [{"css": "button[aria-label='Copy']"}],
+    }
+    blocking = {
+        "url_patterns": ["/auth/login"],
+        "text_patterns": ["captcha"],
+    }
+
+    res = await wait_for_completion(
+        MockPage(),
+        provider="mistral",
+        provider_cfg=provider_cfg,
+        blocking=blocking,
+        completion_cfg={"stable_seconds": 1, "poll_interval_s": 0.5},
+        timeout_s=5.0,
+        clock=clock,
+        sleep=lambda s: None,
+    )
+    # URL block MUST take effect immediately
+    assert res.done is False
+    assert res.reason == "blocked"
+    assert "URL matched" in (res.blocking_detail or "")
+
+

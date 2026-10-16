@@ -155,22 +155,25 @@ DOM_EXTRACT_NON_CONVERSATION_TEXT = """
 () => {
     // 1. Check for Cloudflare / bot challenge containers first
     const challenge = document.querySelector(
-        '#challenge-stage, .cf-turnstile, iframe[src*="cloudflare"], iframe[src*="challenges"]'
+        '#challenge-stage, .cf-turnstile, iframe[src*="cloudflare"], iframe[src*="challenges"], iframe[src*="arkose"], iframe[src*="recaptcha"], iframe[src*="turnstile"]'
     );
     if (challenge) {
         return document.body ? (document.body.innerText || '') : '';
     }
 
-    // 2. Selectors that represent user & assistant chat messages and inputs
+    // 2. Selectors that represent user & assistant chat messages, inputs, thinking containers
     const excludeSelector = [
         'article',
         '[data-message-author-role]',
         '[data-message-id]',
+        '[data-message-part-type]',
         '.conversation-turn',
         '[data-testid*="conversation"]',
         '[data-testid*="chat-message"]',
         '[data-testid*="user-message"]',
         '[data-testid*="assistant-message"]',
+        '[data-testid*="harness"]',
+        '[data-testid*="thinking"]',
         '.agent-turn',
         '#prompt-textarea',
         'textarea',
@@ -180,7 +183,12 @@ DOM_EXTRACT_NON_CONVERSATION_TEXT = """
         'pre',
         'code',
         '[data-markdown-text-style]',
-        '[class*="MarkdownRoot"]'
+        '[class*="MarkdownRoot"]',
+        '[class*="markdown-container"]',
+        '[class*="thinking"]',
+        '[class*="canvas"]',
+        '[class*="collapsible-content"]',
+        '[id*="collapsible-content"]'
     ].join(', ');
 
     const excludedNodes = document.querySelectorAll(excludeSelector);
@@ -188,20 +196,27 @@ DOM_EXTRACT_NON_CONVERSATION_TEXT = """
         return document.body ? (document.body.innerText || '') : '';
     }
 
-    // 3. Always include visible text from alerts, dialogs, toasts, error banners
+    const isInsideExcluded = (el) => {
+        if (!el) return false;
+        if (el.nodeType === Node.TEXT_NODE) el = el.parentElement;
+        return el ? Boolean(el.closest(excludeSelector)) : false;
+    };
+
+    // 3. Modals, dialogs, toasts, error banners (NEVER inside conversation/message containers!)
     const alertSelector = [
         '[role="alert"]',
         '[role="alertdialog"]',
-        '[role="dialog"]',
-        '[data-state="open"]',
+        '[role="dialog"]:not([data-message-author-role] *)',
+        'div[aria-modal="true"]',
         '.toast',
         '[data-testid*="toast"]',
         '[data-testid*="error"]',
-        'div[class*="error"]',
+        'div[class*="error"]:not([data-message-author-role] *)',
         'div[class*="banner"]'
     ].join(', ');
 
-    const alertElements = Array.from(document.querySelectorAll(alertSelector));
+    const alertElements = Array.from(document.querySelectorAll(alertSelector))
+        .filter(el => !isInsideExcluded(el));
     let alertText = alertElements.map(el => el.innerText || '').join(' ');
 
     // 4. Gather text from visible elements in body that are NOT inside excludeSelector
@@ -212,22 +227,14 @@ DOM_EXTRACT_NON_CONVERSATION_TEXT = """
                 if (['script', 'style', 'noscript', 'template'].includes(tag)) {
                     return NodeFilter.FILTER_REJECT;
                 }
-                if (node.matches && node.matches(excludeSelector)) {
+                if (node.matches && (node.matches(excludeSelector) || isInsideExcluded(node))) {
                     return NodeFilter.FILTER_REJECT;
                 }
                 return NodeFilter.FILTER_SKIP;
             }
             if (node.nodeType === Node.TEXT_NODE) {
-                let parent = node.parentElement;
-                while (parent && parent !== document.body) {
-                    const ptag = parent.tagName.toLowerCase();
-                    if (['script', 'style', 'noscript', 'template'].includes(ptag)) {
-                        return NodeFilter.FILTER_REJECT;
-                    }
-                    if (parent.matches && parent.matches(excludeSelector)) {
-                        return NodeFilter.FILTER_REJECT;
-                    }
-                    parent = parent.parentElement;
+                if (isInsideExcluded(node)) {
+                    return NodeFilter.FILTER_REJECT;
                 }
                 return NodeFilter.FILTER_ACCEPT;
             }
@@ -272,9 +279,20 @@ async def detect_blocking_state(page: Any, blocking: dict[str, Any]) -> Blocking
 
     if text is None:
         try:
-            res_locator = await page.locator("body").inner_text(timeout=3000)
-            if isinstance(res_locator, str):
-                text = res_locator
+            has_messages = False
+            if hasattr(page, "locator"):
+                try:
+                    count = await page.locator(
+                        "[data-message-author-role], article, [data-testid*='conversation'], .conversation-turn"
+                    ).count()
+                    has_messages = count > 0
+                except Exception:
+                    pass
+            # Only fall back to body.inner_text() if NO conversation elements exist
+            if not has_messages and hasattr(page, "locator"):
+                res_locator = await page.locator("body").inner_text(timeout=3000)
+                if isinstance(res_locator, str):
+                    text = res_locator
         except Exception as exc:  # noqa: BLE001 — page may still be loading
             if is_target_closed_error(exc):
                 raise
@@ -502,6 +520,48 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
                         if (attempts < 5) {
                             btn.dataset.expandAttempts = (attempts + 1).toString();
                             triggerClick(btn);
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    // 1.5. Mistral-specific: Open Thinking / harness-steps accordion and Expand button if truncated
+    if (provider === "mistral" || !provider) {
+        try {
+            // A. Expand Thinking collapsible triggers if closed
+            const mistralTriggers = document.querySelectorAll(
+                "button[id^='collapsible-trigger-'][data-state='closed'], " +
+                "button[aria-controls^='collapsible-content-'][aria-expanded='false'], " +
+                "div[data-testid='harness-steps-summary'] button, " +
+                "div[data-testid='harness-steps-summary']"
+            );
+            for (const trg of mistralTriggers) {
+                const btn = trg.tagName === "BUTTON" ? trg : (trg.closest("button") || trg.querySelector("button"));
+                if (btn && btn.getAttribute("aria-expanded") === "false") {
+                    const attempts = parseInt(btn.dataset.expandAttempts || "0", 10);
+                    if (attempts < 5) {
+                        btn.dataset.expandAttempts = (attempts + 1).toString();
+                        triggerClick(btn);
+                    }
+                }
+            }
+
+            // B. If 'Content truncated' paragraph is found, click Expand button at footer
+            const textNodes = document.querySelectorAll("p, div, span");
+            for (const el of textNodes) {
+                if (/content\\s+truncated/i.test(el.innerText || el.textContent || "")) {
+                    const container = el.closest("div") || el.parentElement;
+                    if (container) {
+                        const expandBtn = container.querySelector("button, [role='button']") ||
+                                          document.querySelector("button[aria-label*='Expand' i]");
+                        if (expandBtn) {
+                            const attempts = parseInt(expandBtn.dataset.expandAttempts || "0", 10);
+                            if (attempts < 5) {
+                                expandBtn.dataset.expandAttempts = (attempts + 1).toString();
+                                triggerClick(expandBtn);
+                            }
                         }
                     }
                 }
@@ -1141,6 +1201,94 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
         } catch (e) {}
     }
 
+    // 2.5. Mistral-specific: Extract structured thinking and research steps
+    if (provider === "mistral" || !provider) {
+        try {
+            // Check Stop generation button or active spinners
+            const mistralStopBtn = document.querySelector(
+                "button[aria-label='Stop generation'], " +
+                "button[aria-label*='Stop' i]"
+            );
+            const isMistralGenerating = mistralStopBtn && (mistralStopBtn.offsetParent !== null || mistralStopBtn.getAttribute("aria-disabled") !== "true");
+            if (isMistralGenerating) {
+                isThinking = true;
+            }
+
+            // Find reasoning parts
+            const reasoningEls = document.querySelectorAll("div[data-message-part-type='reasoning']");
+            if (isMistralGenerating && reasoningEls.length > 0) {
+                isThinking = true;
+            }
+            for (const rEl of reasoningEls) {
+                const stepItem = rEl.closest("div[id^='collapsible-content-']") || rEl.closest(".flex.flex-col") || rEl.parentElement;
+                let stepTitle = "";
+                let stepStatus = "completed";
+
+                const triggerId = stepItem ? stepItem.getAttribute("aria-labelledby") : null;
+                let triggerBtn = triggerId ? document.getElementById(triggerId) : null;
+                if (!triggerBtn && stepItem && stepItem.parentElement) {
+                    triggerBtn = stepItem.parentElement.querySelector("button[id^='collapsible-trigger-']");
+                }
+                if (triggerBtn) {
+                    stepTitle = clean(triggerBtn.innerText || triggerBtn.textContent || "");
+                }
+                if (!stepTitle) {
+                    const summaryEl = document.querySelector("div[data-testid='harness-steps-summary']");
+                    if (summaryEl) {
+                        stepTitle = clean(summaryEl.innerText || summaryEl.textContent || "");
+                    }
+                }
+                if (!stepTitle) {
+                    stepTitle = "Thinking";
+                }
+
+                const spinEl = stepItem ? stepItem.parentElement.querySelector("[data-step-state='running'], .animate-spin") : null;
+                if (spinEl || (isMistralGenerating && reasoningEls.length === 1)) {
+                    stepStatus = "running";
+                }
+
+                const paragraphs = Array.from(rEl.querySelectorAll("p")).map(p => clean(p.innerText || p.textContent)).filter(Boolean);
+                const fullDesc = paragraphs.join("\\n\\n") || clean(rEl.innerText || rEl.textContent || "");
+                if (fullDesc) {
+                    thinkingText = (thinkingText ? thinkingText + "\\n\\n" : "") + fullDesc;
+                }
+
+                const dedupeKey = stepTitle + "::" + fullDesc;
+                if (!seenStepKeys.has(dedupeKey)) {
+                    seenStepKeys.add(dedupeKey);
+                    thinkingSteps.push({
+                        title: stepTitle,
+                        description: fullDesc,
+                        status: stepStatus
+                    });
+                }
+            }
+
+            // Fallback for Mistral harness steps summary if reasoning blocks are not yet present
+            if (thinkingSteps.length === 0) {
+                const summaryEl = document.querySelector("div[data-testid='harness-steps-summary']");
+                if (summaryEl) {
+                    const sTitle = clean(summaryEl.innerText || summaryEl.textContent || "Thinking");
+                    isThinking = true;
+                    const dedupeKey = sTitle + "::summary";
+                    if (!seenStepKeys.has(dedupeKey)) {
+                        seenStepKeys.add(dedupeKey);
+                        thinkingSteps.push({
+                            title: sTitle,
+                            description: "Đang suy luận...",
+                            status: isMistralGenerating ? "running" : "completed"
+                        });
+                    }
+                }
+            }
+
+            // Sequential: all steps prior to the latest active are completed
+            for (let sIdx = 0; sIdx < thinkingSteps.length - 1; sIdx++) {
+                thinkingSteps[sIdx].status = "completed";
+            }
+        } catch (e) {}
+    }
+
     // 3. Fallback: query general thinking containers across other providers
     if (!thinkingText && thinkingSteps.length === 0) {
         const thinkingSelectors = [
@@ -1348,6 +1496,7 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
 
     // 4.4. General link selectors for citations across providers
     const linkSelectors = [
+        "div[data-message-author-role='assistant'] a[href^='http']",
         "[data-markdown-text-style='assistant-message'] a[href^='http']",
         "[class*='MarkdownRoot'] a[href^='http']",
         "a[data-testid='citation']",
@@ -1442,20 +1591,51 @@ async def wait_for_completion(
 
     while clock() < deadline:
         try:
+            generating = await _indicator_visible(page, generating_chain)
+        except RuntimeError as exc:
+            if is_target_closed_error(exc):
+                return CompletionResult(done=False, reason="page_closed", text=last_text, blocking_detail=str(exc))
+            raise
+
+        ready: bool | None = None
+        if response_ready is not None:
+            try:
+                ready = await response_ready(page)
+            except Exception as exc:
+                if is_target_closed_error(exc):
+                    return CompletionResult(done=False, reason="page_closed", text=last_text, blocking_detail=str(exc))
+                raise
+
+        is_actively_generating = generating or (ready is False)
+
+        try:
             state = await detect_blocking_state(page, blocking)
         except RuntimeError as exc:
             if is_target_closed_error(exc):
                 return CompletionResult(done=False, reason="page_closed", text=last_text, blocking_detail=str(exc))
             raise
         if state is not None:
-            return CompletionResult(done=False, reason="blocked", text=last_text, blocking_detail=state.detail)
-
-        try:
-            generating = await _indicator_visible(page, generating_chain)
-        except RuntimeError as exc:
-            if is_target_closed_error(exc):
-                return CompletionResult(done=False, reason="page_closed", text=last_text, blocking_detail=str(exc))
-            raise
+            is_real_block = True
+            if state.detail.startswith("Visible text") and is_actively_generating:
+                has_challenge_container = False
+                if hasattr(page, "locator"):
+                    try:
+                        challenge_loc = page.locator(
+                            '#challenge-stage, .cf-turnstile, iframe[src*="cloudflare"], iframe[src*="challenges"], iframe[src*="arkose"], iframe[src*="recaptcha"]'
+                        )
+                        if await challenge_loc.count() > 0 and await challenge_loc.first.is_visible(timeout=200):
+                            has_challenge_container = True
+                    except Exception:
+                        pass
+                if not has_challenge_container:
+                    is_real_block = False
+                    logger.warning(
+                        "blocking_text_pattern_suppressed_during_generation",
+                        detail=state.detail,
+                        provider=provider,
+                    )
+            if is_real_block:
+                return CompletionResult(done=False, reason="blocked", text=last_text, blocking_detail=state.detail)
 
         try:
             editable = await _input_editable(page, question_input)
@@ -1487,17 +1667,12 @@ async def wait_for_completion(
             generating=generating,
         )
 
-        if response_ready is not None:
-            try:
-                ready = await response_ready(page)
-            except Exception as exc:
-                if is_target_closed_error(exc):
-                    return CompletionResult(done=False, reason="page_closed", text=last_text, blocking_detail=str(exc))
-                raise
-            if ready is False:
-                done, reason = False, "in_progress"
-            elif ready is True and not generating:
-                done, reason = True, "media_ready"
+        if ready is False:
+            done, reason = False, "in_progress"
+            generating = True
+        elif ready is True:
+            done, reason = True, "media_ready"
+            generating = False
 
         poll_count += 1
         elapsed = clock() - start_time

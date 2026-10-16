@@ -686,16 +686,31 @@ providers:
     generating_indicator:
       - { css: "button[aria-label='Stop generation']" }
       - { css: "button[aria-label*='Stop' i]" }
+      - { role: button, name: "Stop generating" }
       - { role: button, name: "Stop" }
     done_indicator:
-      - { css: "div[data-message-author-role='assistant'] button[aria-label='Copy to clipboard']" }
-      - { css: "button[aria-label='Copy to clipboard']" }
-      - { css: "button[aria-label*='Copy' i]" }
+      - { css: "div[data-message-author-role='assistant']:last-of-type button[aria-label*='Copy' i]" }
+      - { css: "div[class*='group/message']:last-of-type button[aria-label*='Copy' i]" }
+      - { css: "div[data-message-author-role='assistant']:last-of-type button[aria-label*='Like' i]" }
+      - { css: "div[data-message-author-role='assistant']:last-of-type button[aria-label*='Sao chép' i]" }
+      - { css: "div[data-message-author-role='assistant'] button[aria-label*='Copy' i]" }
+      - { css: "div[class*='group/message'] button[aria-label*='Copy' i]" }
+      - { css: "#chat-side-panel button[aria-label*='Copy' i]" }
+      - { css: "[data-panel-id='chat-side-panel'] button[aria-label*='Copy' i]" }
     answer_container:
+      - { css: "[data-panel-id='chat-side-panel'] .ProseMirror" }
+      - { css: "#chat-side-panel .ProseMirror" }
+      - { css: "[data-panel-id='chat-side-panel'] .markdown-container-style" }
+      - { css: "#chat-side-panel [class*='editor']" }
       - { css: "div[data-message-author-role='assistant'] .markdown-container-style" }
+      - { css: "div[class*='group/message'] .markdown-container-style" }
       - { css: "div[data-message-author-role='assistant']" }
+      - { css: "div[class*='group/message']" }
       - { css: "div[class*='prose']" }
       - { css: ".markdown-body" }
     source_links:
+      - { css: "[data-panel-id='chat-side-panel'] a[href^='http']" }
+      - { css: "#chat-side-panel a[href^='http']" }
       - { css: "div[data-message-author-role='assistant'] a[href^='http']" }
+      - { css: "div[class*='group/message'] a[href^='http']" }
       - { css: "a[href^='http'][target='_blank']" }

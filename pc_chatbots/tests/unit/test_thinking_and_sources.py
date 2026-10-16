@@ -603,6 +603,247 @@ async def test_chatgpt_extract_sources_via_more_actions_and_modal() -> None:
     assert sources[1].snippet == "Research on chain of thought."
 
 
+def test_dom_scan_script_mistral_tokens() -> None:
+    from app.browser.waits import DOM_SCAN_THINKING_AND_CITATIONS
+
+    assert "harness-steps-summary" in DOM_SCAN_THINKING_AND_CITATIONS
+    assert "data-message-part-type='reasoning'" in DOM_SCAN_THINKING_AND_CITATIONS
+    assert "content\\s+truncated" in DOM_SCAN_THINKING_AND_CITATIONS
+
+
+@pytest.mark.asyncio
+async def test_mistral_response_ready_checks() -> None:
+    from app.adapters.mistral_ui import MistralUIAdapter
+
+    adapter = MistralUIAdapter()
+    mock_page = MagicMock()
+
+    # Case 1: Stop button is visible -> must return False (still generating)
+    mock_stop = MagicMock()
+    mock_stop.count = AsyncMock(return_value=1)
+    mock_stop_item = MagicMock()
+    mock_stop_item.is_visible = AsyncMock(return_value=True)
+    mock_stop.nth = MagicMock(return_value=mock_stop_item)
+
+    mock_page.locator = MagicMock(return_value=mock_stop)
+    assert await adapter._response_ready(mock_page) is False
+
+    # Case 2: Stop button gone, but Send button missing -> return False
+    def mock_loc_no_send(sel: str) -> Any:
+        m = MagicMock()
+        m.count = AsyncMock(return_value=0)
+        m.first = m
+        m.is_editable = AsyncMock(return_value=False)
+        m.is_visible = AsyncMock(return_value=False)
+        return m
+
+    mock_page.locator = MagicMock(side_effect=mock_loc_no_send)
+    assert await adapter._response_ready(mock_page) is False
+
+    # Case 3: Stop gone, Send ready, but action buttons missing on assistant -> return False
+    mock_asst = MagicMock()
+    mock_asst.count = AsyncMock(return_value=1)
+    mock_asst_elem = MagicMock()
+    mock_asst.last = mock_asst_elem
+
+    empty_btn = MagicMock()
+    empty_btn.count = AsyncMock(return_value=0)
+    mock_asst_elem.locator = MagicMock(return_value=empty_btn)
+
+    def mock_loc_no_actions(sel: str) -> Any:
+        m = MagicMock()
+        if "Stop" in sel:
+            m.count = AsyncMock(return_value=0)
+            return m
+        if "data-step-state='running'" in sel or ".animate-spin" in sel:
+            m.count = AsyncMock(return_value=0)
+            return m
+        if "Send" in sel or "submit" in sel:
+            m.count = AsyncMock(return_value=1)
+            item = MagicMock()
+            item.is_visible = AsyncMock(return_value=True)
+            m.nth = MagicMock(return_value=item)
+            return m
+        if "data-message-author-role='assistant'" in sel:
+            return mock_asst
+        m.count = AsyncMock(return_value=0)
+        return m
+
+    mock_page.locator = MagicMock(side_effect=mock_loc_no_actions)
+    assert await adapter._response_ready(mock_page) is False
+
+    # Case 4: Stop gone, Send ready, Action buttons present (Like, Copy, etc.) -> returns True
+    visible_btn = MagicMock()
+    visible_btn.count = AsyncMock(return_value=1)
+    visible_btn.first = visible_btn
+    visible_btn.is_visible = AsyncMock(return_value=True)
+    mock_asst_elem.locator = MagicMock(return_value=visible_btn)
+
+    assert await adapter._response_ready(mock_page) is True
+
+
+    # Case 5: Stop gone, Send ready, side-panel visible -> returns True
+    def mock_loc_side_panel(sel: str) -> Any:
+        m = MagicMock()
+        if "Stop" in sel:
+            m.count = AsyncMock(return_value=0)
+            return m
+        if "Send" in sel or "submit" in sel:
+            m.count = AsyncMock(return_value=1)
+            item = MagicMock()
+            item.is_visible = AsyncMock(return_value=True)
+            m.nth = MagicMock(return_value=item)
+            return m
+        if "chat-side-panel" in sel:
+            m.count = AsyncMock(return_value=1)
+            m.first = m
+            m.is_visible = AsyncMock(return_value=True)
+            return m
+        m.count = AsyncMock(return_value=0)
+        return m
+
+    mock_page.locator = MagicMock(side_effect=mock_loc_side_panel)
+    assert await adapter._response_ready(mock_page) is True
+
+
+@pytest.mark.asyncio
+async def test_mistral_extract_deep_research_report_from_side_panel() -> None:
+    from app.adapters.mistral_ui import MistralUIAdapter
+
+    adapter = MistralUIAdapter()
+
+    mock_page = MagicMock()
+
+    # Mock side panel locators
+    mock_side_panel = MagicMock()
+    mock_side_panel.count = AsyncMock(return_value=1)
+    mock_side_panel.is_visible = AsyncMock(return_value=True)
+    mock_side_panel.first = mock_side_panel
+
+    mock_editor = MagicMock()
+    mock_editor.count = AsyncMock(return_value=1)
+    mock_editor.is_visible = AsyncMock(return_value=True)
+    mock_editor.first = mock_editor
+    mock_editor.inner_html = AsyncMock(return_value="<h1>Deep Research Report</h1><p>Full detailed report content here.</p>")
+
+    def side_panel_locator(sel: str) -> Any:
+        if "ProseMirror" in sel or "canva-editor" in sel or "markdown-editor" in sel:
+            return mock_editor
+        m = MagicMock()
+        m.count = AsyncMock(return_value=0)
+        return m
+
+    mock_side_panel.locator = MagicMock(side_effect=side_panel_locator)
+
+    def page_locator(sel: str) -> Any:
+        if "chat-side-panel" in sel:
+            return mock_side_panel
+        m = MagicMock()
+        m.count = AsyncMock(return_value=0)
+        return m
+
+    mock_page.locator = MagicMock(side_effect=page_locator)
+
+    report = await adapter._extract_deep_research_report(mock_page)
+    assert "Deep Research Report" in report
+    assert "Full detailed report content here." in report
+
+
+@pytest.mark.asyncio
+async def test_mistral_extract_answer_renders_report_above_final_response() -> None:
+    from app.adapters.mistral_ui import MistralUIAdapter
+
+    adapter = MistralUIAdapter()
+    mock_page = MagicMock()
+
+    adapter._extract_deep_research_report = AsyncMock(
+        return_value="# Xu hướng phát triển LLM Reasoning Models 2026\n\nNội dung chi tiết báo cáo."
+    )
+    adapter._extract_main_chat_answer = AsyncMock(
+        return_value="Tôi đã hoàn thành nghiên cứu chuyên sâu về các mô hình reasoning."
+    )
+
+    answer = await adapter._extract_answer(mock_page, prompt="so sánh reasoning models")
+
+    # Ensure report is rendered ABOVE the final response
+    assert answer.startswith("# Xu hướng phát triển LLM Reasoning Models 2026")
+    assert "---" in answer
+    assert answer.endswith("Tôi đã hoàn thành nghiên cứu chuyên sâu về các mô hình reasoning.")
+    # Check ordering
+    report_idx = answer.find("# Xu hướng phát triển LLM Reasoning Models 2026")
+    chat_idx = answer.find("Tôi đã hoàn thành nghiên cứu chuyên sâu về các mô hình reasoning.")
+    assert report_idx < chat_idx
+
+
+@pytest.mark.asyncio
+async def test_mistral_extract_answer_preserves_short_main_chat_response() -> None:
+    from app.adapters.mistral_ui import MistralUIAdapter
+
+    adapter = MistralUIAdapter()
+    mock_page = MagicMock()
+
+    adapter._extract_deep_research_report = AsyncMock(
+        return_value="# Full Report\n\nExtensive data analysis."
+    )
+    adapter._extract_main_chat_answer = AsyncMock(
+        return_value="Here is the report."
+    )
+
+    answer = await adapter._extract_answer(mock_page, prompt="report prompt")
+    assert answer.startswith("# Full Report")
+    assert "---" in answer
+    assert answer.endswith("Here is the report.")
+
+
+@pytest.mark.asyncio
+async def test_mistral_extract_answer_full_ordered_three_parts() -> None:
+    from app.adapters.mistral_ui import MistralUIAdapter
+
+    adapter = MistralUIAdapter()
+    mock_page = MagicMock()
+
+    adapter._extract_thinking_steps = AsyncMock(
+        return_value=[
+            {
+                "title": "Search queries formulation",
+                "description": "Searching for recent AI benchmarks",
+                "links": [{"url": "https://example.com/benchmarks", "title": "AI Benchmarks 2026"}],
+            },
+            {
+                "title": "Synthesizing deep research data",
+                "description": "Analyzing multi-agent performance",
+                "links": [],
+            },
+        ]
+    )
+    adapter._extract_deep_research_report = AsyncMock(
+        return_value="# Detailed Deep Research Report\n\nFull analysis and charts."
+    )
+    adapter._extract_main_chat_answer = AsyncMock(
+        return_value="Dựa trên báo cáo chi tiết, chúng tôi kết luận mô hình mới vượt trội 15%."
+    )
+
+    answer = await adapter._extract_answer(mock_page, prompt="so sánh hiệu năng")
+
+    # Order must strictly be:
+    # 1. Thinking steps
+    # 2. Deep research report
+    # 3. Final conclusion
+    assert "Thinking & Research Steps" in answer
+    assert "Search queries formulation" in answer
+    assert "https://example.com/benchmarks" in answer
+    assert "# Detailed Deep Research Report" in answer
+    assert "Dựa trên báo cáo chi tiết, chúng tôi kết luận mô hình mới vượt trội 15%." in answer
+
+    idx_thinking = answer.find("Thinking & Research Steps")
+    idx_report = answer.find("# Detailed Deep Research Report")
+    idx_conclusion = answer.find("Dựa trên báo cáo chi tiết")
+
+    assert idx_thinking < idx_report < idx_conclusion
+
+
+
+
 
 
 
