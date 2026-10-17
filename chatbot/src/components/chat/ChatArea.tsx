@@ -2038,7 +2038,7 @@ export function ChatArea({
 
           {/* Provider Options Bar for selected provider(s) (Models, Deep Research toggle, Reasoning, DOM Sync) */}
           {selectedCount === 1 && (
-            <div style={{ padding: "6px 12px 4px 12px", borderBottom: "1px solid var(--border-subtle, #f1f5f9)" }}>
+            <div style={{ padding: "0 0 4px 0", borderBottom: "1px solid var(--border-subtle, #f1f5f9)" }}>
               <ProviderOptionsBar
                 providerName={(selectedProviders[0] || selectedProvider).name}
                 providerId={(selectedProviders[0] || selectedProvider).id}

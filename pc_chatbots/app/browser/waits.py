@@ -1444,22 +1444,33 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
                 if (asstEls.length > 0) {
                     const lastAsst = asstEls[asstEls.length - 1];
 
-                    // Look for thinking disclosure inside lastAsst (or root)
+                    // Look for thinking detail / disclosure inside lastAsst (or root)
+                    const detailEl = lastAsst.querySelector("[data-testid='turn-process-detail']") ||
+                                     root.querySelector("[data-testid='turn-process-detail']");
                     const disclosure = lastAsst.querySelector("[data-testid='turn-process-disclosure'], section.mavis-turn-process-disclosure") ||
                                        root.querySelector("[data-testid='turn-process-disclosure'], section.mavis-turn-process-disclosure");
 
-                    if (disclosure) {
+                    const container = detailEl || disclosure;
+
+                    if (container) {
                         isThinking = true;
 
                         // Summary header (e.g. "Processing 1m 28s" or "Processed 25s")
                         let overallSummary = "";
-                        const summaryEl = disclosure.querySelector("[data-testid='turn-process-summary']");
+                        const summaryEl = (disclosure || root).querySelector("[data-testid='turn-process-summary']");
                         if (summaryEl) {
                             overallSummary = clean(summaryEl.innerText || summaryEl.textContent || "");
                         }
 
-                        // Activity groups (thinking / search / tool execution steps)
-                        const activityGroups = disclosure.querySelectorAll("[data-testid='activity-group']");
+                        // Loader label if streaming
+                        let loaderLabel = "";
+                        const loaderEl = (disclosure || container).querySelector("[data-testid='streaming-rose-loader-label'], .streaming-rose-loader-label");
+                        if (loaderEl) {
+                            loaderLabel = clean(loaderEl.innerText || loaderEl.textContent || "");
+                        }
+
+                        // Activity groups inside turn-process-detail / disclosure
+                        const activityGroups = container.querySelectorAll("[data-testid='activity-group']");
 
                         for (let agIdx = 0; agIdx < activityGroups.length; agIdx++) {
                             const ag = activityGroups[agIdx];
@@ -1476,7 +1487,13 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
                                 }
                             }
                             if (!stepTitle) {
-                                stepTitle = overallSummary || "Thinking Step";
+                                const shimmer = ag.querySelector(".shimmer-text__label-text");
+                                if (shimmer) {
+                                    stepTitle = clean(shimmer.innerText || shimmer.textContent || "");
+                                }
+                            }
+                            if (!stepTitle) {
+                                stepTitle = overallSummary || loaderLabel || "Thinking Step";
                             }
 
                             // Extract description from inner markdown or following siblings
@@ -1518,9 +1535,35 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
                             }
                         }
 
-                        // Fallback if disclosure exists but no activity groups yet
-                        if (thinkingSteps.length === 0 && (overallSummary || isMinimaxGenerating)) {
-                            const title = overallSummary || "Thinking Process";
+                        // Also check active trailing blocks inside turn-process-detail during real-time streaming
+                        const trailing = container.querySelector("[data-testid='assistant-active-trailing-blocks']");
+                        if (trailing) {
+                            const trailingTags = Array.from(trailing.querySelectorAll("p, .matrix-markdown")).map(el => clean(el.innerText || el.textContent)).filter(Boolean);
+                            const trailingText = trailingTags.join("\\n\\n") || clean(trailing.innerText || trailing.textContent || "");
+                            if (trailingText) {
+                                if (thinkingSteps.length > 0 && isMinimaxGenerating) {
+                                    const lastStep = thinkingSteps[thinkingSteps.length - 1];
+                                    if (!lastStep.description || !lastStep.description.includes(trailingText)) {
+                                        lastStep.description = lastStep.description ? lastStep.description + "\\n\\n" + trailingText : trailingText;
+                                    }
+                                } else {
+                                    const title = loaderLabel || "Thinking Step";
+                                    const dedupeKey = title + "::" + trailingText;
+                                    if (!seenStepKeys.has(dedupeKey)) {
+                                        seenStepKeys.add(dedupeKey);
+                                        thinkingSteps.push({
+                                            title: title,
+                                            description: trailingText,
+                                            status: "running"
+                                        });
+                                    }
+                                }
+                            }
+                        }
+
+                        // Fallback if detail/disclosure exists but no activity groups yet
+                        if (thinkingSteps.length === 0 && (overallSummary || loaderLabel || isMinimaxGenerating)) {
+                            const title = loaderLabel || overallSummary || "Thinking Process";
                             const desc = "Đang suy luận...";
                             const dedupeKey = title + "::" + desc;
                             if (!seenStepKeys.has(dedupeKey)) {

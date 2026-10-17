@@ -195,8 +195,8 @@ class MinimaxUIAdapter(BrowserProviderAdapter):
                     const clone = el.cloneNode(true);
                     // Remove buttons, icons, actions
                     clone.querySelectorAll("button, [role='button'], svg, [data-testid='message-actions'], [class*='actions']").forEach(b => b.remove());
-                    // Remove thinking/turn-process disclosure so final answer is clean
-                    clone.querySelectorAll("[data-testid='turn-process-disclosure'], section.mavis-turn-process-disclosure, [data-testid='activity-group']").forEach(t => t.remove());
+                    // Remove thinking/turn-process disclosure & detail so final answer is clean
+                    clone.querySelectorAll("[data-testid='turn-process-disclosure'], [data-testid='turn-process-detail'], section.mavis-turn-process-disclosure, [data-testid='activity-group']").forEach(t => t.remove());
                     const md = clone.querySelector("[data-testid='assistant-segment-active'], [data-testid='assistant-active-flow'], .matrix-markdown, [class*='markdown']");
                     return md ? md.innerHTML : clone.innerHTML;
                 }
@@ -211,7 +211,7 @@ class MinimaxUIAdapter(BrowserProviderAdapter):
                     if (!el) return '';
                     const clone = el.cloneNode(true);
                     clone.querySelectorAll("button, [role='button'], svg, [data-testid='message-actions'], [class*='actions']").forEach(b => b.remove());
-                    clone.querySelectorAll("[data-testid='turn-process-disclosure'], section.mavis-turn-process-disclosure, [data-testid='activity-group']").forEach(t => t.remove());
+                    clone.querySelectorAll("[data-testid='turn-process-disclosure'], [data-testid='turn-process-detail'], section.mavis-turn-process-disclosure, [data-testid='activity-group']").forEach(t => t.remove());
                     return clone.innerText || clone.textContent || '';
                 }
                 """, target)
