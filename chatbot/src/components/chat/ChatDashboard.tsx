@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { PROVIDERS_LIST, DEFAULT_SELECTED_PROVIDERS } from "../../lib/constants";
 import { ChatSession, Message, StepLog, ProviderInfo } from "../../types/chat";
@@ -190,6 +190,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               lead_provider: (job as any).lead_provider,
               tone: (job as any).tone,
               orchestrator_dispatch: (job as any).orchestrator_dispatch,
+              delegated_providers: (job as any).delegated_providers,
             });
           }
 
@@ -214,6 +215,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             lead_provider: (job as any).lead_provider,
             tone: (job as any).tone,
             orchestrator_dispatch: (job as any).orchestrator_dispatch,
+            delegated_providers: (job as any).delegated_providers,
+            providerConfigurations: (job as any).providerConfigurations || (job as any).provider_options || {
+              ...(((job as any).orchestrator_config && (job as any).orchestrator_provider) ? { [(job as any).orchestrator_provider]: (job as any).orchestrator_config } : {}),
+              ...(((job as any).lead_config && (job as any).lead_provider) ? { [(job as any).lead_provider]: (job as any).lead_config } : {}),
+            },
           });
         }
       }
@@ -282,6 +288,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               lead_provider: (directJob as any).lead_provider,
               tone: (directJob as any).tone,
               orchestrator_dispatch: (directJob as any).orchestrator_dispatch,
+              delegated_providers: (directJob as any).delegated_providers,
+              providerConfigurations: (directJob as any).providerConfigurations || (directJob as any).provider_options || {
+                ...(((directJob as any).orchestrator_config && (directJob as any).orchestrator_provider) ? { [(directJob as any).orchestrator_provider]: (directJob as any).orchestrator_config } : {}),
+                ...(((directJob as any).lead_config && (directJob as any).lead_provider) ? { [(directJob as any).lead_provider]: (directJob as any).lead_config } : {}),
+              },
             };
             newSessions.unshift(directSession);
           }
@@ -443,6 +454,105 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
   const capsHook = useProviderCapabilities(primarySelectedProvider.id);
 
+  // Derive previous agent/provider configurations from the active selected conversation
+  const activeSessionAgentDefaults = useMemo(() => {
+    if (!activeSession) {
+      return {
+        initialOrchestratorProvider: "gemini",
+        initialLeadProvider: "chatgpt",
+        initialDelegatedProviders: ["copilot", "gemini", "chatgpt", "deepseek", "qwen", "perplexity", "claude"],
+        initialTone: "professional",
+        initialQuery: "",
+        initialOrchestratorConfig: undefined as Record<string, any> | undefined,
+        initialLeadConfig: undefined as Record<string, any> | undefined,
+      };
+    }
+
+    // 1. Orchestrator provider:
+    const rawOrch =
+      activeSession.orchestrator_provider ||
+      activeSession.messages.find((m) => m.orchestrator_provider)?.orchestrator_provider ||
+      activeSession.selectedProviders?.[0] ||
+      activeSession.selectedProvider ||
+      "gemini";
+    const resolvedOrch = (rawOrch || "gemini").toLowerCase();
+
+    // 2. Lead provider:
+    const rawLead =
+      activeSession.lead_provider ||
+      activeSession.messages.find((m) => m.lead_provider)?.lead_provider ||
+      (activeSession.selectedProviders && activeSession.selectedProviders.length > 1
+        ? activeSession.selectedProviders[1]
+        : (resolvedOrch !== "chatgpt" ? "chatgpt" : "gemini"));
+    const resolvedLead = (rawLead || "chatgpt").toLowerCase();
+
+    // 3. Delegated providers:
+    let resolvedDelegated: string[] = [];
+    if (activeSession.delegated_providers && activeSession.delegated_providers.length > 0) {
+      resolvedDelegated = activeSession.delegated_providers;
+    } else {
+      const msgDelegated = activeSession.messages.find(
+        (m) => m.delegated_providers && m.delegated_providers.length > 0
+      )?.delegated_providers;
+      if (msgDelegated && msgDelegated.length > 0) {
+        resolvedDelegated = msgDelegated;
+      } else if (activeSession.orchestrator_dispatch && activeSession.orchestrator_dispatch.length > 0) {
+        resolvedDelegated = Array.from(
+          new Set(
+            activeSession.orchestrator_dispatch
+              .map((d: any) => d.id || d.provider_role_key)
+              .filter(Boolean)
+          )
+        );
+      } else if (activeSession.selectedProviders && activeSession.selectedProviders.length > 0) {
+        resolvedDelegated = activeSession.selectedProviders;
+      }
+    }
+
+    if (!resolvedDelegated || resolvedDelegated.length === 0) {
+      resolvedDelegated = ["copilot", "gemini", "chatgpt", "deepseek", "qwen", "perplexity", "claude"];
+    }
+
+    // 4. Tone:
+    const resolvedTone =
+      activeSession.tone ||
+      activeSession.messages.find((m) => m.tone)?.tone ||
+      "professional";
+
+    // 5. Query:
+    const userMsg = activeSession.messages.find((m) => m.role === "user");
+    const resolvedQuery =
+      userMsg?.content ||
+      (activeSession.title &&
+      !activeSession.title.startsWith("Phiên mới") &&
+      !activeSession.title.startsWith("session-") &&
+      !activeSession.title.startsWith("Draft")
+        ? activeSession.title
+        : "");
+
+    // 6. Orchestrator config:
+    const orchConfig =
+      activeSession.providerConfigurations?.[resolvedOrch] ||
+      capsHook.selectionsMap?.[resolvedOrch] ||
+      activeSession.messages.find((m) => m.provider_options?.[resolvedOrch])?.provider_options?.[resolvedOrch];
+
+    // 7. Lead config:
+    const leadConfig =
+      activeSession.providerConfigurations?.[resolvedLead] ||
+      capsHook.selectionsMap?.[resolvedLead] ||
+      activeSession.messages.find((m) => m.provider_options?.[resolvedLead])?.provider_options?.[resolvedLead];
+
+    return {
+      initialOrchestratorProvider: resolvedOrch,
+      initialLeadProvider: resolvedLead,
+      initialDelegatedProviders: resolvedDelegated,
+      initialTone: resolvedTone,
+      initialQuery: resolvedQuery,
+      initialOrchestratorConfig: orchConfig,
+      initialLeadConfig: leadConfig,
+    };
+  }, [activeSession, capsHook.selectionsMap]);
+
   // Automatically open the right sidebar when generating starts so user can clearly see the thinking steps
   useEffect(() => {
     if (isGenerating) {
@@ -555,6 +665,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           lead_provider: leadProv,
           tone: toneVal,
           orchestrator_dispatch: orchDispatch,
+          delegated_providers: (fullJob as any).delegated_providers,
         };
 
         setInspectedMessage(asstMsg);
@@ -574,6 +685,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               lead_provider: leadProv || s.lead_provider,
               tone: toneVal || s.tone,
               orchestrator_dispatch: orchDispatch || s.orchestrator_dispatch,
+              delegated_providers: (fullJob as any).delegated_providers || s.delegated_providers,
+              providerConfigurations: s.providerConfigurations || (fullJob as any).providerConfigurations || (fullJob as any).provider_options || {
+                ...((orchProv && (fullJob as any).orchestrator_config) ? { [orchProv]: (fullJob as any).orchestrator_config } : {}),
+                ...((leadProv && (fullJob as any).lead_config) ? { [leadProv]: (fullJob as any).lead_config } : {}),
+              },
             };
           })
         );
@@ -652,6 +768,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       orchestrator_provider: config.orchestrator_provider,
       lead_provider: config.lead_provider,
       tone: config.tone,
+      delegated_providers: config.delegated_providers,
+      provider_options: {
+        [config.orchestrator_provider]: config.orchestrator_config,
+        [config.lead_provider]: config.lead_config,
+      },
     };
 
     const newId = `session-agent-${Date.now()}`;
@@ -669,6 +790,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       orchestrator_provider: config.orchestrator_provider,
       lead_provider: config.lead_provider,
       tone: config.tone,
+      delegated_providers: config.delegated_providers,
+      providerConfigurations: {
+        [config.orchestrator_provider]: config.orchestrator_config,
+        [config.lead_provider]: config.lead_config,
+      },
     };
 
     setSessions((prev) => [newSession, ...prev]);
@@ -768,6 +894,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               lead_provider: config.lead_provider,
               tone: config.tone,
               orchestrator_dispatch: (result as any).orchestrator_dispatch,
+              delegated_providers: config.delegated_providers,
+              provider_options: {
+                [config.orchestrator_provider]: config.orchestrator_config,
+                [config.lead_provider]: config.lead_config,
+              },
             };
 
             setSessions((prev) =>
@@ -778,6 +909,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                     status: "completed",
                     messages: [...s.messages.filter((m) => m.role === "user"), assistantMsg],
                     orchestrator_dispatch: (result as any).orchestrator_dispatch || s.orchestrator_dispatch,
+                    delegated_providers: config.delegated_providers || s.delegated_providers,
+                    providerConfigurations: s.providerConfigurations || {
+                      [config.orchestrator_provider]: config.orchestrator_config,
+                      [config.lead_provider]: config.lead_config,
+                    },
                   }
                   : s
               )
@@ -813,6 +949,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                 lead_provider: config.lead_provider,
                 tone: config.tone,
                 orchestrator_dispatch: finalResult.orchestrator_dispatch,
+                delegated_providers: config.delegated_providers,
+                provider_options: {
+                  [config.orchestrator_provider]: config.orchestrator_config,
+                  [config.lead_provider]: config.lead_config,
+                },
               };
 
               setSessions((prev) =>
@@ -823,6 +964,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                       status: "completed",
                       messages: [...s.messages.filter((m) => m.role === "user"), assistantMsg],
                       orchestrator_dispatch: finalResult.orchestrator_dispatch || s.orchestrator_dispatch,
+                      delegated_providers: config.delegated_providers || s.delegated_providers,
+                      providerConfigurations: s.providerConfigurations || {
+                        [config.orchestrator_provider]: config.orchestrator_config,
+                        [config.lead_provider]: config.lead_config,
+                      },
                     }
                     : s
                 )
@@ -1501,6 +1647,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         onToggleRightSidebar={() => setIsRightSidebarOpen(!isRightSidebarOpen)}
         isGenerating={isGenerating}
         onOpenProvidersModal={() => setIsProvidersModalOpen(true)}
+        onOpenAgentConfig={() => setIsAgentConfigOpen(true)}
         activeSteps={activeSteps}
         onSelectThinking={handleSelectThinking}
         onStopResearch={handleStopResearch}
@@ -1578,6 +1725,13 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           onSyncProvider={capsHook.syncProvider}
           loadingProvider={capsHook.loadingProvider}
           onLoadCapabilities={capsHook.loadProviderCapabilities}
+          initialQuery={activeSessionAgentDefaults.initialQuery}
+          initialOrchestratorProvider={activeSessionAgentDefaults.initialOrchestratorProvider}
+          initialOrchestratorConfig={activeSessionAgentDefaults.initialOrchestratorConfig}
+          initialLeadProvider={activeSessionAgentDefaults.initialLeadProvider}
+          initialLeadConfig={activeSessionAgentDefaults.initialLeadConfig}
+          initialDelegatedProviders={activeSessionAgentDefaults.initialDelegatedProviders}
+          initialTone={activeSessionAgentDefaults.initialTone}
         />
       )}
     </div>

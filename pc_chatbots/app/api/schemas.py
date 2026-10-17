@@ -138,6 +138,9 @@ class ResearchResponse(BaseModel):
     lead_provider: str | None = None
     tone: str | None = None
     orchestrator_dispatch: list[dict[str, Any]] | None = None
+    delegated_providers: list[str] | None = None
+    orchestrator_config: dict[str, Any] | None = None
+    lead_config: dict[str, Any] | None = None
     created_at: datetime
     finished_at: datetime | None
 

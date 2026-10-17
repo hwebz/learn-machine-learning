@@ -24,6 +24,13 @@ interface AgentConfigScreenProps {
   onSyncProvider?: (providerId: string) => Promise<any>;
   loadingProvider?: string | null;
   onLoadCapabilities?: (providerId: string) => void;
+  initialQuery?: string;
+  initialOrchestratorProvider?: string;
+  initialOrchestratorConfig?: Record<string, any>;
+  initialLeadProvider?: string;
+  initialLeadConfig?: Record<string, any>;
+  initialDelegatedProviders?: string[];
+  initialTone?: string;
 }
 
 const SUGGESTED_AGENT_TOPICS = [
@@ -43,12 +50,21 @@ export function AgentConfigScreen({
   onSyncProvider,
   loadingProvider,
   onLoadCapabilities,
+  initialQuery,
+  initialOrchestratorProvider,
+  initialOrchestratorConfig,
+  initialLeadProvider,
+  initialLeadConfig,
+  initialDelegatedProviders,
+  initialTone,
 }: AgentConfigScreenProps) {
   // Use all providers implemented in normal chat mode
   const availableProviders = providers && providers.length > 0 ? providers : PROVIDERS_LIST;
 
-  const [query, setQuery] = useState("");
-  const [selectedOrchestrator, setSelectedOrchestrator] = useState<string>("gemini");
+  const [query, setQuery] = useState(initialQuery || "");
+  const [selectedOrchestrator, setSelectedOrchestrator] = useState<string>(
+    initialOrchestratorProvider || "gemini"
+  );
   const [orchThinking, setOrchThinking] = useState<boolean>(true);
   const [orchThinkingLevel, setOrchThinkingLevel] = useState<string>("auto");
   const [orchModel, setOrchModel] = useState<string>("pro");
@@ -60,11 +76,17 @@ export function AgentConfigScreen({
   const [isSyncingOrch, setIsSyncingOrch] = useState(false);
   const [orchSyncMessage, setOrchSyncMessage] = useState<string | null>(null);
 
-  // Sub-providers delegation state (default to top reasoning models)
+  // Sub-providers delegation state (default to top reasoning models or previous selected)
   const DEFAULT_DELEGATED = ["copilot", "gemini", "chatgpt", "deepseek", "qwen", "perplexity", "claude"];
-  const [selectedDelegatedProviders, setSelectedDelegatedProviders] = useState<string[]>(DEFAULT_DELEGATED);
+  const [selectedDelegatedProviders, setSelectedDelegatedProviders] = useState<string[]>(
+    initialDelegatedProviders && initialDelegatedProviders.length > 0
+      ? initialDelegatedProviders
+      : DEFAULT_DELEGATED
+  );
 
-  const [selectedLead, setSelectedLead] = useState<string>("chatgpt");
+  const [selectedLead, setSelectedLead] = useState<string>(
+    initialLeadProvider || "chatgpt"
+  );
   const [leadThinking, setLeadThinking] = useState<boolean>(true);
   const [leadThinkingLevel, setLeadThinkingLevel] = useState<string>("auto");
   const [leadModel, setLeadModel] = useState<string>("default");
@@ -76,8 +98,35 @@ export function AgentConfigScreen({
   const [isSyncingLead, setIsSyncingLead] = useState(false);
   const [leadSyncMessage, setLeadSyncMessage] = useState<string | null>(null);
 
-  const [selectedTone, setSelectedTone] = useState<string>("professional");
+  const [selectedTone, setSelectedTone] = useState<string>(
+    initialTone || "professional"
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Sync state when initial props change (e.g. switching conversation or opening modal)
+  useEffect(() => {
+    if (initialOrchestratorProvider) {
+      setSelectedOrchestrator(initialOrchestratorProvider);
+    }
+    if (initialLeadProvider) {
+      setSelectedLead(initialLeadProvider);
+    }
+    if (initialDelegatedProviders && initialDelegatedProviders.length > 0) {
+      setSelectedDelegatedProviders(initialDelegatedProviders);
+    }
+    if (initialTone) {
+      setSelectedTone(initialTone);
+    }
+    if (initialQuery !== undefined) {
+      setQuery(initialQuery);
+    }
+  }, [
+    initialOrchestratorProvider,
+    initialLeadProvider,
+    initialDelegatedProviders,
+    initialTone,
+    initialQuery,
+  ]);
 
   // Auto-fetch capabilities if not cached when provider selected
   useEffect(() => {
@@ -96,10 +145,40 @@ export function AgentConfigScreen({
   const leadProviderObj = availableProviders.find((p) => p.id === selectedLead);
 
   const orchCaps = capabilitiesMap[selectedOrchestrator];
-  const orchSel = selectionsMap[selectedOrchestrator];
+  const orchConfigMerged = selectedOrchestrator === initialOrchestratorProvider ? initialOrchestratorConfig : undefined;
+  const orchSel = useMemo(() => {
+    const base = selectionsMap[selectedOrchestrator] || {};
+    if (!orchConfigMerged) return base;
+    return {
+      ...base,
+      ...orchConfigMerged,
+      model_id: orchConfigMerged.model_id || orchConfigMerged.model || base.model_id,
+      thinking_level_id: orchConfigMerged.thinking_level_id || (typeof orchConfigMerged.thinking === "string" ? orchConfigMerged.thinking : undefined) || base.thinking_level_id,
+      mode_id: orchConfigMerged.mode_id || orchConfigMerged.mode || base.mode_id,
+      deep_research: orchConfigMerged.deep_research !== undefined ? orchConfigMerged.deep_research : base.deep_research,
+      deep_thinking: orchConfigMerged.deep_thinking !== undefined ? orchConfigMerged.deep_thinking : base.deep_thinking,
+      web_search: orchConfigMerged.web_search !== undefined ? orchConfigMerged.web_search : base.web_search,
+      research_mode: orchConfigMerged.research_mode || base.research_mode,
+    };
+  }, [selectionsMap, selectedOrchestrator, orchConfigMerged]);
 
   const leadCaps = capabilitiesMap[selectedLead];
-  const leadSel = selectionsMap[selectedLead];
+  const leadConfigMerged = selectedLead === initialLeadProvider ? initialLeadConfig : undefined;
+  const leadSel = useMemo(() => {
+    const base = selectionsMap[selectedLead] || {};
+    if (!leadConfigMerged) return base;
+    return {
+      ...base,
+      ...leadConfigMerged,
+      model_id: leadConfigMerged.model_id || leadConfigMerged.model || base.model_id,
+      thinking_level_id: leadConfigMerged.thinking_level_id || (typeof leadConfigMerged.thinking === "string" ? leadConfigMerged.thinking : undefined) || base.thinking_level_id,
+      mode_id: leadConfigMerged.mode_id || leadConfigMerged.mode || base.mode_id,
+      deep_research: leadConfigMerged.deep_research !== undefined ? leadConfigMerged.deep_research : base.deep_research,
+      deep_thinking: leadConfigMerged.deep_thinking !== undefined ? leadConfigMerged.deep_thinking : base.deep_thinking,
+      web_search: leadConfigMerged.web_search !== undefined ? leadConfigMerged.web_search : base.web_search,
+      research_mode: leadConfigMerged.research_mode || base.research_mode,
+    };
+  }, [selectionsMap, selectedLead, leadConfigMerged]);
 
   // Helper to format synced time
   const formatSyncTime = (timestamp?: string) => {
@@ -254,6 +333,24 @@ export function AgentConfigScreen({
       } else {
         setOrchMode("auto");
       }
+      return;
+    }
+
+    if (selectedOrchestrator === "minimax") {
+      setOrchMode("");
+      setOrchThinkingLevel("");
+      const isDr = orchSel?.deep_research !== undefined ? orchSel.deep_research : (orchCaps?.deep_research ?? false);
+      setOrchDeepResearch(isDr);
+      const chosenModel = orchSel?.model_id || orchCaps?.selected_model_id || (orchCaps?.available_models && orchCaps.available_models.length > 0 ? orchCaps.available_models[0].id : "m3");
+      setOrchModel(chosenModel);
+      return;
+    }
+
+    if (selectedOrchestrator === "zhipu") {
+      setOrchThinkingLevel("");
+      const chosenModel = orchSel?.model_id || orchCaps?.selected_model_id || (orchCaps?.available_models && orchCaps.available_models.length > 0 ? orchCaps.available_models[0].id : "glm-5.3");
+      setOrchModel(chosenModel);
+      setOrchMode(orchSel?.mode_id || orchCaps?.selected_mode_id || "high");
       return;
     }
 
@@ -435,6 +532,24 @@ export function AgentConfigScreen({
       } else {
         setLeadMode("auto");
       }
+      return;
+    }
+
+    if (selectedLead === "minimax") {
+      setLeadMode("");
+      setLeadThinkingLevel("");
+      const isDr = leadSel?.deep_research !== undefined ? leadSel.deep_research : (leadCaps?.deep_research ?? false);
+      setLeadDeepResearch(isDr);
+      const chosenModel = leadSel?.model_id || leadCaps?.selected_model_id || (leadCaps?.available_models?.[0]?.id ?? "m3");
+      setLeadModel(chosenModel);
+      return;
+    }
+
+    if (selectedLead === "zhipu") {
+      setLeadThinkingLevel("");
+      const chosenModel = leadSel?.model_id || leadCaps?.selected_model_id || (leadCaps?.available_models?.[0]?.id ?? "glm-5.3");
+      setLeadModel(chosenModel);
+      setLeadMode(leadSel?.mode_id || leadCaps?.selected_mode_id || "high");
       return;
     }
 

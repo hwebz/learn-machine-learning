@@ -64,6 +64,7 @@ export interface Message {
   lead_provider?: string;
   tone?: string;
   orchestrator_dispatch?: AgentDispatchPlanItem[];
+  delegated_providers?: string[];
 }
 
 export interface AgentDispatchPlanItem {
@@ -97,6 +98,7 @@ export interface ChatSession {
   lead_provider?: string;
   tone?: string;
   orchestrator_dispatch?: AgentDispatchPlanItem[];
+  delegated_providers?: string[];
 }
 
 export interface ProviderInfo {

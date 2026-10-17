@@ -549,6 +549,7 @@ interface ChatAreaProps {
   onToggleRightSidebar: () => void;
   isGenerating: boolean;
   onOpenProvidersModal: () => void;
+  onOpenAgentConfig?: () => void;
   activeSteps?: StepLog[];
   onSelectThinking?: (provider?: string, message?: Message) => void;
   onStopResearch?: () => void;
@@ -572,6 +573,7 @@ export function ChatArea({
   onToggleRightSidebar,
   isGenerating,
   onOpenProvidersModal,
+  onOpenAgentConfig,
   activeSteps = [],
   onSelectThinking,
   onStopResearch,
@@ -803,8 +805,15 @@ export function ChatArea({
     }
   };
 
+  const isAgentSession = Boolean(
+    session?.job_type === "agent" ||
+    Boolean(session?.orchestrator_provider) ||
+    session?.messages?.some((m) => m.job_type === "agent" || Boolean(m.orchestrator_provider)) ||
+    activeSteps.some((st) => st.data?.role || st.data?.dispatch)
+  );
+
   const handleSend = () => {
-    if (selectedCount === 0) {
+    if (!isAgentSession && selectedCount === 0) {
       onOpenProvidersModal();
       return;
     }
@@ -848,15 +857,45 @@ export function ChatArea({
         <div className="chat-title-group">
           {/* <h1 className="chat-title">{session.title}</h1> */}
 
-          {/* Model Selector Pill / Multi-Model Dropdown */}
+          {/* Model Selector Pill / Agent Orchestrator Trigger */}
           <div style={{ position: "relative" }} ref={modelDropdownRef}>
             <button
               className="model-badge-trigger"
-              // onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
-              onClick={() => onOpenProvidersModal()}
-              title="Chọn mô hình / Thêm nhiều nhà cung cấp"
+              onClick={() => {
+                if (isAgentSession && onOpenAgentConfig) {
+                  onOpenAgentConfig();
+                } else {
+                  onOpenProvidersModal();
+                }
+              }}
+              title={isAgentSession ? "Mở cấu hình Deep Research Orchestrator" : "Chọn mô hình / Thêm nhiều nhà cung cấp"}
             >
-              {selectedCount > 1 ? (
+              {isAgentSession ? (
+                <>
+                  <span style={{ display: "inline-flex", gap: 5, alignItems: "center" }}>
+                    <span style={{ fontSize: 13.5 }}>🤖</span>
+                    {session.orchestrator_provider && (
+                      <ModelBadgeLogo type={session.orchestrator_provider} size={15} />
+                    )}
+                    {session.lead_provider && session.lead_provider !== session.orchestrator_provider && (
+                      <ModelBadgeLogo type={session.lead_provider} size={15} />
+                    )}
+                  </span>
+                  <span style={{ fontWeight: 600 }}>Deep Research Orchestrator</span>
+                  <span
+                    style={{
+                      fontSize: 9.5,
+                      padding: "1px 5px",
+                      borderRadius: 4,
+                      backgroundColor: "var(--brand-blue-light, #eff6ff)",
+                      color: "var(--brand-blue, #2563eb)",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Agent
+                  </span>
+                </>
+              ) : selectedCount > 1 ? (
                 <>
                   <span style={{ display: "inline-flex", gap: 3, alignItems: "center" }}>
                     {selectedProviders.slice(0, 3).map((p) => (
@@ -2037,8 +2076,9 @@ export function ChatArea({
           )}
 
           {/* Provider Options Bar for selected provider(s) (Models, Deep Research toggle, Reasoning, DOM Sync) */}
-          {selectedCount === 1 && (
-            <div style={{ padding: "0 0 4px 0", borderBottom: "1px solid var(--border-subtle, #f1f5f9)" }}>
+          {/* In an Agent conversation, no model selection is shown at the textbox area */}
+          {!isAgentSession && selectedCount === 1 && (
+            <div style={{ padding: "0 0 4px 0", borderBottom: "1px solid var(--border-subtle, #f1f5f9)" }} className='hidden'>
               <ProviderOptionsBar
                 providerName={(selectedProviders[0] || selectedProvider).name}
                 providerId={(selectedProviders[0] || selectedProvider).id}
@@ -2051,7 +2091,7 @@ export function ChatArea({
             </div>
           )}
 
-          {selectedCount > 1 && (
+          {!isAgentSession && selectedCount > 1 && (
             <div style={{ padding: "6px 12px 4px 12px", borderBottom: "1px solid var(--border-subtle, #f1f5f9)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, overflowX: "auto" }}>
                 <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-muted, #64748b)", whiteSpace: "nowrap" }}>
@@ -2098,7 +2138,7 @@ export function ChatArea({
             </div>
           )}
 
-          {selectedCount === 0 && (
+          {!isAgentSession && selectedCount === 0 && (
             <div
               style={{
                 padding: "6px 12px",
@@ -2208,9 +2248,11 @@ export function ChatArea({
             placeholder={
               isRecording
                 ? "Đang lắng nghe giọng nói từ micro của bạn..."
-                : selectedCount === 0
-                  ? "Vui lòng chọn nhà cung cấp AI để bắt đầu..."
-                  : `Đặt câu hỏi nghiên cứu tới ${selectedCount} mô hình AI (${selectedProviders.map((p) => p.name.split(" ")[0]).join(", ")})...`
+                : isAgentSession
+                  ? "Đặt câu hỏi nghiên cứu tiếp theo tới hệ thống Deep Research Orchestrator..."
+                  : selectedCount === 0
+                    ? "Vui lòng chọn nhà cung cấp AI để bắt đầu..."
+                    : `Đặt câu hỏi nghiên cứu tới ${selectedCount} mô hình AI (${selectedProviders.map((p) => p.name.split(" ")[0]).join(", ")})...`
             }
             rows={1}
             value={inputText}

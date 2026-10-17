@@ -33,6 +33,10 @@ export interface ResearchResponseData {
   lead_provider?: string;
   tone?: string;
   orchestrator_dispatch?: any[];
+  delegated_providers?: string[];
+  orchestrator_config?: Record<string, any>;
+  lead_config?: Record<string, any>;
+  providerConfigurations?: Record<string, any>;
 }
 
 export interface ResearchHistoryItem {
@@ -54,6 +58,10 @@ export interface ResearchHistoryItem {
   lead_provider?: string;
   tone?: string;
   orchestrator_dispatch?: any[];
+  delegated_providers?: string[];
+  orchestrator_config?: Record<string, any>;
+  lead_config?: Record<string, any>;
+  providerConfigurations?: Record<string, any>;
   created_at?: string;
   finished_at?: string;
 }
