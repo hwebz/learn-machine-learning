@@ -1,0 +1,466 @@
+{
+  "dialogs": [
+    {
+      "tag": "span",
+      "className": "pointer-events-none absolute left-1 top-0 block size-px ant-popover-open mavis-popover ",
+      "text": ""
+    },
+    {
+      "tag": "button",
+      "className": "relative flex size-8 flex-shrink-0 items-center justify-center rounded-[8px] border-0 bg-transparent p-0 text-icon_default_primary transition-colors duration-150 hover:bg-bg_interaction_tertiary_hover disabled:cursor-default disabled:opacity-40  mavis-popover ",
+      "text": ""
+    }
+  ],
+  "deepElements": [
+    {
+      "tag": "html",
+      "text": "New task\nSearch\nPlugins · Skills\nScheduled\nAssets\nConnect mobile\nMore\nMaxHermes\nMaxClaw\nProjects\nAdd",
+      "className": "notranslate light",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 900,
+        "top": 0,
+        "right": 1280,
+        "bottom": 900,
+        "left": 0
+      }
+    },
+    {
+      "tag": "body",
+      "text": "New task\nSearch\nPlugins · Skills\nScheduled\nAssets\nConnect mobile\nMore\nMaxHermes\nMaxClaw\nProjects\nAdd",
+      "className": "",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 900,
+        "top": 0,
+        "right": 1280,
+        "bottom": 900,
+        "left": 0
+      }
+    },
+    {
+      "tag": "div",
+      "text": "New task\nSearch\nPlugins · Skills\nScheduled\nAssets\nConnect mobile\nMore\nMaxHermes\nMaxClaw\nProjects\nAdd",
+      "className": "w-full h-screen relative",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 900,
+        "top": 0,
+        "right": 1280,
+        "bottom": 900,
+        "left": 0
+      }
+    },
+    {
+      "tag": "div",
+      "text": "New task\nSearch\nPlugins · Skills\nScheduled\nAssets\nConnect mobile\nMore\nMaxHermes\nMaxClaw\nProjects\nAdd",
+      "className": "relative flex h-[var(--desktop-content-height,100vh)] overflow-hidden bg-bg_grouped_secondary",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 900,
+        "top": 0,
+        "right": 1280,
+        "bottom": 900,
+        "left": 0
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Plugins\nSkills\nManage\nCreate\nPlugins\nFeatured\nOffice\nStudio\nDesign & sites\nCode\nBiz\nProd\nSci & healt",
+      "className": "relative flex min-h-0 min-w-0 flex-1 flex-col",
+      "rect": {
+        "x": 260,
+        "y": 0,
+        "width": 1020,
+        "height": 900,
+        "top": 0,
+        "right": 1280,
+        "bottom": 900,
+        "left": 260
+      }
+    },
+    {
+      "tag": "section",
+      "text": "Plugins\nSkills\nManage\nCreate\nPlugins\nFeatured\nOffice\nStudio\nDesign & sites\nCode\nBiz\nProd\nSci & healt",
+      "className": "bg-bg_grouped_secondary flex h-full min-h-0 flex-col overflow-hidden",
+      "rect": {
+        "x": 260,
+        "y": 0,
+        "width": 1020,
+        "height": 900,
+        "top": 0,
+        "right": 1280,
+        "bottom": 900,
+        "left": 260
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Plugins\nFeatured\nOffice\nStudio\nDesign & sites\nCode\nBiz\nProd\nSci & health\nPlugins\nFeatured\nExcel\nCrea",
+      "className": "min-h-0 flex-1 overflow-y-auto",
+      "rect": {
+        "x": 260,
+        "y": 56,
+        "width": 1020,
+        "height": 844,
+        "top": 56,
+        "right": 1280,
+        "bottom": 900,
+        "left": 260
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Plugins\nFeatured\nExcel\nCreate, edit, analyze, and convert Excel workbooks and delimited spreadsheet ",
+      "className": "mx-auto w-full max-w-[832px] px-8 pb-10",
+      "rect": {
+        "x": 354,
+        "y": 280,
+        "width": 832,
+        "height": 2152,
+        "top": 280,
+        "right": 1186,
+        "bottom": 2432,
+        "left": 354
+      }
+    },
+    {
+      "tag": "section",
+      "text": "Plugins\nFeatured\nExcel\nCreate, edit, analyze, and convert Excel workbooks and delimited spreadsheet ",
+      "className": "mt-10",
+      "rect": {
+        "x": 386,
+        "y": 280,
+        "width": 768,
+        "height": 2112,
+        "top": 280,
+        "right": 1154,
+        "bottom": 2392,
+        "left": 386
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Featured\nExcel\nCreate, edit, analyze, and convert Excel workbooks and delimited spreadsheet files wi",
+      "className": "space-y-10",
+      "rect": {
+        "x": 386,
+        "y": 280,
+        "width": 768,
+        "height": 2112,
+        "top": 280,
+        "right": 1154,
+        "bottom": 2392,
+        "left": 386
+      }
+    },
+    {
+      "tag": "section",
+      "text": "Featured\nExcel\nCreate, edit, analyze, and convert Excel workbooks and delimited spreadsheet files wi",
+      "className": "scroll-mt-6",
+      "rect": {
+        "x": 386,
+        "y": 280,
+        "width": 768,
+        "height": 412,
+        "top": 280,
+        "right": 1154,
+        "bottom": 692,
+        "left": 386
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Excel\nCreate, edit, analyze, and convert Excel workbooks and delimited spreadsheet files with live f",
+      "className": "scrollbar-hover-reveal overflow-x-hidden max-h-none overflow-y-visible md:relative md:left-1/2 md:w-[788px] md:-translate-x-1/2",
+      "rect": {
+        "x": 376,
+        "y": 316,
+        "width": 788,
+        "height": 332,
+        "top": 316,
+        "right": 1164,
+        "bottom": 648,
+        "left": 376
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Excel\nCreate, edit, analyze, and convert Excel workbooks and delimited spreadsheet files with live f",
+      "className": "mx-auto grid w-full grid-cols-1 gap-x-6 gap-y-2 md:grid-cols-2 max-w-[788px]",
+      "rect": {
+        "x": 376,
+        "y": 316,
+        "width": 788,
+        "height": 332,
+        "top": 316,
+        "right": 1164,
+        "bottom": 648,
+        "left": 376
+      }
+    },
+    {
+      "tag": "article",
+      "text": "Notion\nConnect your Notion workspace to capture knowledge, prepare meetings, research across documen",
+      "className": "group flex min-w-0 items-center gap-4 rounded-[10px] p-2.5 transition-colors hover:bg-bg_interaction_tertiary_hover",
+      "rect": {
+        "x": 376,
+        "y": 520,
+        "width": 382,
+        "height": 60,
+        "top": 520,
+        "right": 758,
+        "bottom": 580,
+        "left": 376
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Notion\nConnect your Notion workspace to capture knowledge, prepare meetings, research across documen",
+      "className": "flex min-w-0 flex-1 items-center gap-4 text-left",
+      "rect": {
+        "x": 386,
+        "y": 530,
+        "width": 282,
+        "height": 40,
+        "top": 530,
+        "right": 668,
+        "bottom": 570,
+        "left": 386
+      }
+    },
+    {
+      "tag": "span",
+      "text": "Notion\nConnect your Notion workspace to capture knowledge, prepare meetings, research across documen",
+      "className": "min-w-0 flex-1",
+      "rect": {
+        "x": 442,
+        "y": 532,
+        "width": 226,
+        "height": 36,
+        "top": 532,
+        "right": 668,
+        "bottom": 568,
+        "left": 442
+      }
+    },
+    {
+      "tag": "span",
+      "text": "Connect your Notion workspace to capture knowledge, prepare meetings, research across documents, and",
+      "className": "desktop-text-ui-small block truncate text-[12px] leading-4 text-text_default_secondary",
+      "rect": {
+        "x": 442,
+        "y": 552,
+        "width": 226,
+        "height": 16,
+        "top": 552,
+        "right": 668,
+        "bottom": 568,
+        "left": 442
+      }
+    },
+    {
+      "tag": "section",
+      "text": "Biz\nCoinMarketCap\nConnect CoinMarketCap to look up live crypto prices, global derivatives metrics, h",
+      "className": "scroll-mt-6",
+      "rect": {
+        "x": 386,
+        "y": 1752,
+        "width": 768,
+        "height": 164,
+        "top": 1752,
+        "right": 1154,
+        "bottom": 1916,
+        "left": 386
+      }
+    },
+    {
+      "tag": "div",
+      "text": "CoinMarketCap\nConnect CoinMarketCap to look up live crypto prices, global derivatives metrics, holde",
+      "className": "scrollbar-hover-reveal overflow-x-hidden max-h-none overflow-y-visible md:relative md:left-1/2 md:w-[788px] md:-translate-x-1/2",
+      "rect": {
+        "x": 376,
+        "y": 1788,
+        "width": 788,
+        "height": 128,
+        "top": 1788,
+        "right": 1164,
+        "bottom": 1916,
+        "left": 376
+      }
+    },
+    {
+      "tag": "div",
+      "text": "CoinMarketCap\nConnect CoinMarketCap to look up live crypto prices, global derivatives metrics, holde",
+      "className": "mx-auto grid w-full grid-cols-1 gap-x-6 gap-y-2 md:grid-cols-2 max-w-[788px]",
+      "rect": {
+        "x": 376,
+        "y": 1788,
+        "width": 788,
+        "height": 128,
+        "top": 1788,
+        "right": 1164,
+        "bottom": 1916,
+        "left": 376
+      }
+    },
+    {
+      "tag": "article",
+      "text": "Marketing Skills\nSelected marketing workflows covering planning, customer research, competitor profi",
+      "className": "group flex min-w-0 items-center gap-4 rounded-[10px] p-2.5 transition-colors hover:bg-bg_interaction_tertiary_hover",
+      "rect": {
+        "x": 376,
+        "y": 1856,
+        "width": 382,
+        "height": 60,
+        "top": 1856,
+        "right": 758,
+        "bottom": 1916,
+        "left": 376
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Marketing Skills\nSelected marketing workflows covering planning, customer research, competitor profi",
+      "className": "flex min-w-0 flex-1 items-center gap-4 text-left",
+      "rect": {
+        "x": 386,
+        "y": 1866,
+        "width": 282,
+        "height": 40,
+        "top": 1866,
+        "right": 668,
+        "bottom": 1906,
+        "left": 386
+      }
+    },
+    {
+      "tag": "span",
+      "text": "Marketing Skills\nSelected marketing workflows covering planning, customer research, competitor profi",
+      "className": "min-w-0 flex-1",
+      "rect": {
+        "x": 442,
+        "y": 1868,
+        "width": 226,
+        "height": 36,
+        "top": 1868,
+        "right": 668,
+        "bottom": 1904,
+        "left": 442
+      }
+    },
+    {
+      "tag": "span",
+      "text": "Selected marketing workflows covering planning, customer research, competitor profiling, copywriting",
+      "className": "desktop-text-ui-small block truncate text-[12px] leading-4 text-text_default_secondary",
+      "rect": {
+        "x": 442,
+        "y": 1888,
+        "width": 226,
+        "height": 16,
+        "top": 1888,
+        "right": 668,
+        "bottom": 1904,
+        "left": 442
+      }
+    },
+    {
+      "tag": "section",
+      "text": "Prod\nEverMe\nConnect EverMe to read, search, and save your personal long-term memory, helping the age",
+      "className": "scroll-mt-6",
+      "rect": {
+        "x": 386,
+        "y": 1956,
+        "width": 768,
+        "height": 300,
+        "top": 1956,
+        "right": 1154,
+        "bottom": 2256,
+        "left": 386
+      }
+    },
+    {
+      "tag": "div",
+      "text": "EverMe\nConnect EverMe to read, search, and save your personal long-term memory, helping the agent ca",
+      "className": "scrollbar-hover-reveal overflow-x-hidden max-h-none overflow-y-visible md:relative md:left-1/2 md:w-[788px] md:-translate-x-1/2",
+      "rect": {
+        "x": 376,
+        "y": 1992,
+        "width": 788,
+        "height": 264,
+        "top": 1992,
+        "right": 1164,
+        "bottom": 2256,
+        "left": 376
+      }
+    },
+    {
+      "tag": "div",
+      "text": "EverMe\nConnect EverMe to read, search, and save your personal long-term memory, helping the agent ca",
+      "className": "mx-auto grid w-full grid-cols-1 gap-x-6 gap-y-2 md:grid-cols-2 max-w-[788px]",
+      "rect": {
+        "x": 376,
+        "y": 1992,
+        "width": 788,
+        "height": 264,
+        "top": 1992,
+        "right": 1164,
+        "bottom": 2256,
+        "left": 376
+      }
+    },
+    {
+      "tag": "article",
+      "text": "Notion\nConnect your Notion workspace to capture knowledge, prepare meetings, research across documen",
+      "className": "group flex min-w-0 items-center gap-4 rounded-[10px] p-2.5 transition-colors hover:bg-bg_interaction_tertiary_hover",
+      "rect": {
+        "x": 376,
+        "y": 2060,
+        "width": 382,
+        "height": 60,
+        "top": 2060,
+        "right": 758,
+        "bottom": 2120,
+        "left": 376
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Notion\nConnect your Notion workspace to capture knowledge, prepare meetings, research across documen",
+      "className": "flex min-w-0 flex-1 items-center gap-4 text-left",
+      "rect": {
+        "x": 386,
+        "y": 2070,
+        "width": 282,
+        "height": 40,
+        "top": 2070,
+        "right": 668,
+        "bottom": 2110,
+        "left": 386
+      }
+    },
+    {
+      "tag": "span",
+      "text": "Notion\nConnect your Notion workspace to capture knowledge, prepare meetings, research across documen",
+      "className": "min-w-0 flex-1",
+      "rect": {
+        "x": 442,
+        "y": 2072,
+        "width": 226,
+        "height": 36,
+        "top": 2072,
+        "right": 668,
+        "bottom": 2108,
+        "left": 442
+      }
+    }
+  ]
+}

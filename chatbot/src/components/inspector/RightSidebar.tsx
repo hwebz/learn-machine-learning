@@ -30,6 +30,8 @@ function normalizeProvider(name: string): string {
   if (s.includes("perplexity")) return "perplexity";
   if (s.includes("kimi") || s.includes("moonshot")) return "kimi";
   if (s.includes("mistral")) return "mistral";
+  if (s.includes("zhipu") || s.includes("glm")) return "zhipu";
+  if (s.includes("minimax") || s.includes("hailuo")) return "minimax";
   return s;
 }
 
@@ -37,7 +39,7 @@ function extractProvider(st: StepLog): string {
   if (st.provider) return normalizeProvider(st.provider);
   if (st.data?.provider) return normalizeProvider(String(st.data.provider));
   const match = st.message.match(
-    /\b(qwen|copilot|gemini|deepseek|chatgpt|openai|grok|perplexity|claude|kimi|moonshot|mistral)\b/i
+    /\b(qwen|copilot|gemini|deepseek|chatgpt|openai|grok|perplexity|claude|kimi|moonshot|mistral|zhipu|glm|minimax|hailuo)\b/i
   );
   if (match) return normalizeProvider(match[1]);
   return "";
@@ -1472,11 +1474,11 @@ export function RightSidebar({
 
             {/* Citations from DOM */}
             {activeDetail.citations.length > 0 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 4 }}>
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--brand-blue)" }}>
+              <details style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 4 }} className="hidden">
+                <summary style={{ fontSize: 11.5, fontWeight: 700, color: "var(--brand-blue)" }}>
                   ✦ Nguồn trích dẫn từ DOM ({activeDetail.citations.length}):
-                </span>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                </summary>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5, maxHeight: 300, overflow: "hidden", overflowY: "visible" }}>
                   {activeDetail.citations.map((c, cIdx) => (
                     <a
                       key={cIdx}
@@ -1491,7 +1493,7 @@ export function RightSidebar({
                         color: "var(--brand-blue)",
                         border: "1px solid #cbd5e1",
                         textDecoration: "none",
-                        maxWidth: 240,
+                        maxWidth: '30%',
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
@@ -1502,7 +1504,7 @@ export function RightSidebar({
                     </a>
                   ))}
                 </div>
-              </div>
+              </details>
             )}
 
             {/* Provider Pipeline Trace Log */}

@@ -1,0 +1,32 @@
+[
+  {
+    "tag": "span",
+    "text": "Add files or photos",
+    "className": "min-w-0 flex-1 truncate",
+    "parentClass": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover"
+  },
+  {
+    "tag": "span",
+    "text": "Add to project",
+    "className": "min-w-0 flex-1 truncate text-text_default_primary",
+    "parentClass": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover min-h-8 overflow-hidden"
+  },
+  {
+    "tag": "span",
+    "text": "Skills",
+    "className": "min-w-0 flex-1 truncate",
+    "parentClass": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover min-h-8 overflow-hidden"
+  },
+  {
+    "tag": "span",
+    "text": "Add plugins",
+    "className": "text-text_default_primary",
+    "parentClass": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover min-h-8 overflow-hidden"
+  },
+  {
+    "tag": "span",
+    "text": "Environment variables",
+    "className": "min-w-0 flex-1 truncate",
+    "parentClass": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover"
+  }
+]

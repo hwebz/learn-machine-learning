@@ -1,0 +1,223 @@
+{
+  "snapshots": [
+    {
+      "t_sec": 0.0,
+      "time": 1792174258866,
+      "hasContainer": false,
+      "hasStopBtn": false,
+      "copyBtnCount": 0,
+      "bodySnippet": "New task\nSearch\nPlugins · Skills\nScheduled\nAssets\nConnect mobile\nMore\nMaxHermes\nMaxClaw\nProjects\nAdd new project\nRecents\nUnnamed session\nUse agent\nTổng hợp tri thức và kiểm chứng AI\nChat history with Verifier\nChat history with Coder\nChat history with General\nShow more\nhwebz\nMiniMax makes your work e"
+    },
+    {
+      "t_sec": 1.5,
+      "time": 1792174260416,
+      "hasContainer": true,
+      "containerClass": "relative flex min-h-0 flex-1 flex-col overflow-hidden",
+      "childCount": 2,
+      "hasStopBtn": true,
+      "copyBtnCount": 3,
+      "children": [
+        {
+          "index": 0,
+          "tag": "DIV",
+          "className": "min-h-0 flex-1 overflow-hidden  ",
+          "testId": "chat-panel-messages-surface",
+          "role": null,
+          "textSnippet": "Say hello in 5 words\n01:11\nThinking...",
+          "hasCopyBtn": true,
+          "copyBtnCount": 2,
+          "thoughts": [],
+          "mds": [
+            {
+              "className": "message-container-viewport scrollbar-hide relative h-full w-full overflow-y-scroll overflow-x-hidden",
+              "textSnippet": "Say hello in 5 words\n01:11\nThinking..."
+            },
+            {
+              "className": "mavis-chat-content-width message-container-chat-content max-w-[768px] mx-auto px-4",
+              "textSnippet": "Say hello in 5 words\n01:11\nThinking..."
+            },
+            {
+              "className": "w-full flex justify-end message-animate-in group",
+              "textSnippet": "Say hello in 5 words\n01:11"
+            },
+            {
+              "className": "desktop-text-chat-body message-container-user-text whitespace-pre-wrap break-words text-base leading-6 text-text_default_primary",
+              "textSnippet": "Say hello in 5 words"
+            },
+            {
+              "className": "mavis-user-message-actions relative isolate -mt-0.5 flex items-center justify-end gap-1.5",
+              "textSnippet": "01:11"
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "tag": "DIV",
+          "className": "mavis-chat-composer relative shrink-0 z-30 w-full bg-bg_grouped_secondary px-4 pb-1 sm:px-6",
+          "testId": "chat-composer-overlay",
+          "role": null,
+          "textSnippet": "Fewer than 1,000 Credits remain.\n\nBuy Credits\nSubscribe\n\n\n\n\nM3\n\nMiniMax Agent is AI and can make mistakes",
+          "hasCopyBtn": true,
+          "copyBtnCount": 1,
+          "thoughts": [],
+          "mds": [
+            {
+              "className": "mavis-message-input-card w-full border border-border_default bg-bg_grouped_secondary_elevated p-2 rounded-[20px] mavis-message-input-card-en shadow-[0_0_20px_rgba(10,10,10,0.08)]",
+              "textSnippet": "\n\n\nM3"
+            },
+            {
+              "className": "message-input-container relative transition-colors undefined",
+              "textSnippet": "\n\n\nM3"
+            },
+            {
+              "className": "contents",
+              "textSnippet": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "t_sec": 3.0,
+      "time": 1792174261968,
+      "hasContainer": true,
+      "containerClass": "relative flex min-h-0 flex-1 flex-col overflow-hidden",
+      "childCount": 2,
+      "hasStopBtn": true,
+      "copyBtnCount": 3,
+      "children": [
+        {
+          "index": 0,
+          "tag": "DIV",
+          "className": "min-h-0 flex-1 overflow-hidden  ",
+          "testId": "chat-panel-messages-surface",
+          "role": null,
+          "textSnippet": "Say hello in 5 words\n01:11\nThinking...",
+          "hasCopyBtn": true,
+          "copyBtnCount": 2,
+          "thoughts": [],
+          "mds": [
+            {
+              "className": "message-container-viewport scrollbar-hide relative h-full w-full overflow-y-scroll overflow-x-hidden",
+              "textSnippet": "Say hello in 5 words\n01:11\nThinking..."
+            },
+            {
+              "className": "mavis-chat-content-width message-container-chat-content max-w-[768px] mx-auto px-4",
+              "textSnippet": "Say hello in 5 words\n01:11\nThinking..."
+            },
+            {
+              "className": "w-full flex justify-end message-animate-in group",
+              "textSnippet": "Say hello in 5 words\n01:11"
+            },
+            {
+              "className": "desktop-text-chat-body message-container-user-text whitespace-pre-wrap break-words text-base leading-6 text-text_default_primary",
+              "textSnippet": "Say hello in 5 words"
+            },
+            {
+              "className": "mavis-user-message-actions relative isolate -mt-0.5 flex items-center justify-end gap-1.5",
+              "textSnippet": "01:11"
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "tag": "DIV",
+          "className": "mavis-chat-composer relative shrink-0 z-30 w-full bg-bg_grouped_secondary px-4 pb-1 sm:px-6",
+          "testId": "chat-composer-overlay",
+          "role": null,
+          "textSnippet": "Fewer than 1,000 Credits remain.\n\nBuy Credits\nSubscribe\n\n\n\n\nM3\n\nMiniMax Agent is AI and can make mistakes",
+          "hasCopyBtn": true,
+          "copyBtnCount": 1,
+          "thoughts": [],
+          "mds": [
+            {
+              "className": "mavis-message-input-card w-full border border-border_default bg-bg_grouped_secondary_elevated p-2 rounded-[20px] mavis-message-input-card-en shadow-[0_0_20px_rgba(10,10,10,0.08)]",
+              "textSnippet": "\n\n\nM3"
+            },
+            {
+              "className": "message-input-container relative transition-colors undefined",
+              "textSnippet": "\n\n\nM3"
+            },
+            {
+              "className": "contents",
+              "textSnippet": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "t_sec": 4.5,
+      "time": 1792174263518,
+      "hasContainer": true,
+      "containerClass": "relative flex min-h-0 flex-1 flex-col overflow-hidden",
+      "childCount": 2,
+      "hasStopBtn": false,
+      "copyBtnCount": 5,
+      "children": [
+        {
+          "index": 0,
+          "tag": "DIV",
+          "className": "min-h-0 flex-1 overflow-hidden  ",
+          "testId": "chat-panel-messages-surface",
+          "role": null,
+          "textSnippet": "Say hello in 5 words\n01:11\nProcessed 1s\n\nHey, what are we building today?\n\n01:11",
+          "hasCopyBtn": true,
+          "copyBtnCount": 4,
+          "thoughts": [],
+          "mds": [
+            {
+              "className": "message-container-viewport scrollbar-hide relative h-full w-full overflow-y-scroll overflow-x-hidden",
+              "textSnippet": "Say hello in 5 words\n01:11\nProcessed 1s\n\nHey, what are we building today?\n\n01:11"
+            },
+            {
+              "className": "mavis-chat-content-width message-container-chat-content max-w-[768px] mx-auto px-4",
+              "textSnippet": "Say hello in 5 words\n01:11\nProcessed 1s\n\nHey, what are we building today?\n\n01:11"
+            },
+            {
+              "className": "w-full flex justify-end message-animate-in group",
+              "textSnippet": "Say hello in 5 words\n01:11"
+            },
+            {
+              "className": "desktop-text-chat-body message-container-user-text whitespace-pre-wrap break-words text-base leading-6 text-text_default_primary",
+              "textSnippet": "Say hello in 5 words"
+            },
+            {
+              "className": "mavis-user-message-actions relative isolate -mt-0.5 flex items-center justify-end gap-1.5",
+              "textSnippet": "01:11"
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "tag": "DIV",
+          "className": "mavis-chat-composer relative shrink-0 z-30 w-full bg-bg_grouped_secondary px-4 pb-1 sm:px-6",
+          "testId": "chat-composer-overlay",
+          "role": null,
+          "textSnippet": "Fewer than 1,000 Credits remain.\n\nBuy Credits\nSubscribe\n\n\n\n\nM3\n\nMiniMax Agent is AI and can make mistakes",
+          "hasCopyBtn": true,
+          "copyBtnCount": 1,
+          "thoughts": [],
+          "mds": [
+            {
+              "className": "mavis-message-input-card w-full border border-border_default bg-bg_grouped_secondary_elevated p-2 rounded-[20px] mavis-message-input-card-en shadow-[0_0_20px_rgba(10,10,10,0.08)]",
+              "textSnippet": "\n\n\nM3"
+            },
+            {
+              "className": "message-input-container relative transition-colors undefined",
+              "textSnippet": "\n\n\nM3"
+            },
+            {
+              "className": "contents",
+              "textSnippet": ""
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "last_child": {
+    "outerHTML": "<div class=\"mavis-chat-composer relative shrink-0 z-30 w-full bg-bg_grouped_secondary px-4 pb-1 sm:px-6\" data-testid=\"chat-composer-overlay\"><div class=\"mavis-chat-composer-inner mx-auto max-w-[768px]\"><div data-testid=\"conversation-usage-banner\" data-notice-kind=\"near\" class=\"usage-limit-banner mb-2 flex min-h-[54px] flex-wrap items-center gap-x-6 gap-y-2 rounded-2xl border border-border_default bg-bg_grouped_secondary_elevated py-2 pl-4 pr-2\"><div class=\"flex min-w-0 flex-[1_1_240px] items-center gap-2\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\" class=\"flex-none text-icon_default_primary\"><path d=\"M9.95703 1.85742C14.4305 1.85742 18.0566 5.48358 18.0566 9.95703C18.0566 14.4305 14.4305 18.0566 9.95703 18.0566C5.48358 18.0566 1.85742 14.4305 1.85742 9.95703C1.85748 5.48361 5.48361 1.85748 9.95703 1.85742ZM9.95703 3.05664C6.14636 3.0567 3.0567 6.14636 3.05664 9.95703C3.05664 13.7678 6.14632 16.8574 9.95703 16.8574C13.7678 16.8574 16.8574 13.7678 16.8574 9.95703C16.8574 6.14632 13.7678 3.05664 9.95703 3.05664ZM10 9.25C10.4142 9.25 10.75 9.58579 10.75 10V13.7529C10.7495 14.1667 10.4139 14.5029 10 14.5029C9.5861 14.5029 9.25051 14.1667 9.25 13.7529V10C9.25 9.58579 9.58579 9.25 10 9.25ZM10.0088 6.04297C10.4726 6.0431 10.8486 6.41897 10.8486 6.88281C10.8484 7.34644 10.4724 7.72253 10.0088 7.72266H9.99902C9.53536 7.72253 9.15943 7.34644 9.15918 6.88281C9.15918 6.41897 9.53521 6.04309 9.99902 6.04297H10.0088Z\" fill=\"currentColor\"></path></svg><div class=\"usage-limit-banner-copy min-w-0 flex-1\"><p class=\"desktop-text-ui-body-strong break-words text-[14px] font-medium leading-5 text-text_default_primary\">Fewer than 1,000 Credits remain.</p></div></div><div class=\"usage-limit-banner-actions ml-auto flex max-w-full flex-wrap items-center justify-end gap-2\"><button class=\"mavis-button gray  desktop-text-ui-body-strong usage-limit-banner-action \" data-testid=\"conversation-usage-action-buy_credits\">Buy Credits</button><button class=\"mavis-button black  desktop-text-ui-body-strong usage-limit-banner-action \" data-testid=\"conversation-usage-action-subscribe_plan\">Subscribe</button><button type=\"button\" aria-label=\"Dismiss usage notice\" data-testid=\"conversation-usage-dismiss\" class=\"flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg text-icon_default_tertiary hover:bg-bg_interaction_tertiary_hover\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 20 20\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M14.6584 4.34363C14.8927 4.10931 15.2727 4.10931 15.507 4.34363C15.7409 4.57787 15.7409 4.95706 15.507 5.19128L10.6975 9.99988L15.507 14.8085C15.7412 15.0428 15.7413 15.4229 15.507 15.6571C15.2728 15.8913 14.8927 15.8912 14.6584 15.6571L9.84981 10.8475L5.04121 15.6571C4.80699 15.891 4.42779 15.891 4.19356 15.6571C3.95924 15.4228 3.95924 15.0428 4.19356 14.8085L9.00118 9.99988L4.19356 5.19128C3.95925 4.95698 3.95926 4.57794 4.19356 4.34363C4.42787 4.10931 4.8069 4.10931 5.04121 4.34363L9.84981 9.15125L14.6584 4.34363Z\" fill=\"currentColor\"></path></svg></button></div></div><div class=\"mb-3\"></div><div data-testid=\"chat-panel-composer-container\" data-container-up=\"false\" class=\"\"><div data-input-card-variant=\"default\" class=\"mavis-message-input-card w-full border border-border_default bg-bg_grouped_secondary_elevated p-2 rounded-[20px] mavis-message-input-card-en shadow-[0_0_20px_rgba(10,10,10,0.08)]\"><div class=\"message-input-container relative transition-colors undefined\" data-testid=\"message-input\" data-message-input-root=\"\"><input multiple=\"\" class=\"hidden\" data-testid=\"file-input\" type=\"file\"><input multiple=\"\" class=\"hidden\" data-testid=\"video-reference-file-input\" type=\"file\"><div class=\"\"><div class=\"relative\"><div class=\"relative flex items-start bg-bg_grouped_secondary_elevated px-1 pb-1 pt-1\"><div class=\"rich-text-wrapper peer min-w-[2px] flex-1 basis-0  \"><div class=\"relative \" data-testid=\"rich-text-scroll-fade\"><div class=\"\" data-testid=\"rich-text-scroll-fade-viewport\"><div class=\"\"><div><div contenteditable=\"true\" aria-label=\"Ask anything\" spellcheck=\"false\" data-testid=\"message-textarea\" translate=\"no\" class=\"tiptap ProseMirror rich-text-editor ProseMirror-focused\" tabindex=\"0\" style=\"min-height: 38px; max-height: 240px;\" data-markdown-display=\"false\"><p class=\"rich-text-paragraph is-empty is-editor-empty\" data-placeholder=\"Ask anything\"><br class=\"ProseMirror-trailingBreak\"></p></div></div></div></div></div></div></div><fieldset data-message-input-toolbar=\"true\" class=\"m-0 flex w-full min-w-0 items-center justify-between gap-1 border-0 p-0 \"><div data-message-input-toolbar-left=\"true\" class=\"flex min-w-0 flex-1 items-center gap-1 overflow-hidden\"><div class=\"mavis-dropdown flex-shrink-0\" data-sidebar-keep-open=\"true\"><div role=\"button\" tabindex=\"0\" class=\"select-none ant-dropdown-trigger flex h-[30px] w-[30px] items-center justify-center text-icon_default_primary hover:bg-bg_interaction_tertiary_hover rounded-full transition-colors cursor-pointer\" aria-label=\"Add attachment\" data-testid=\"attach-button\"><span class=\"contents\" style=\"stroke: currentcolor; stroke-width: 0.12px;\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 20 20\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\" class=\"[&amp;_path]:[vector-effect:non-scaling-stroke]\"><path d=\"M10 2.5C10.3312 2.5 10.5994 2.76842 10.5996 3.09961V9.40039H16.9004C17.2316 9.4006 17.5 9.66876 17.5 10C17.5 10.3312 17.2316 10.5994 16.9004 10.5996H10.5996V16.9004C10.5994 17.2316 10.3312 17.5 10 17.5C9.66876 17.5 9.4006 17.2316 9.40039 16.9004V10.5996H3.09961C2.76842 10.5994 2.5 10.3312 2.5 10C2.5 9.66876 2.76842 9.4006 3.09961 9.40039H9.40039V3.09961C9.4006 2.76842 9.66876 2.5 10 2.5Z\" fill=\"currentColor\"></path></svg></span></div></div></div><div data-message-input-toolbar-right=\"true\" class=\"flex min-w-0 shrink items-center gap-1\"><div data-testid=\"composer-context-model-controls\" class=\"flex min-w-0 items-center gap-1\"><div class=\"relative flex min-w-0 items-center\"><button aria-label=\"Select model · M3\" title=\"Select model · M3\" aria-expanded=\"false\" data-composer-model-trigger=\"true\" type=\"button\" data-testid=\"model-selector-trigger\" class=\"mavis-model-selector-trigger mavis-control-surface flex h-[30px] min-w-0 items-center gap-1 rounded-[10px] pl-2 pr-2 text-sm text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover\"><span data-composer-model-expanded=\"true\" aria-hidden=\"true\"><span data-composer-model-label=\"true\" title=\"M3\" dir=\"rtl\" class=\"min-w-0 text-left min-w-0 flex-1 truncate whitespace-nowrap text-left\"><bdi dir=\"ltr\">M3</bdi></span><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\" class=\"flex-shrink-0 text-icon_default_tertiary\"><path d=\"M12 6L8 10L4 6\" stroke=\"currentColor\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></svg></span><span data-composer-model-icon=\"true\" aria-hidden=\"true\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 20 20\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M12.2226 1.89661C13.6678 1.89681 14.8568 2.98324 15.0224 4.38391C15.4085 4.52956 15.7683 4.74034 16.084 5.00891C16.4999 5.3628 16.8298 5.80749 17.0488 6.30774C17.2678 6.80802 17.3698 7.35194 17.3476 7.89758C17.3317 8.28891 17.2495 8.67323 17.1103 9.03723C17.7641 9.69726 18.1563 10.6162 18.1201 11.6193C18.0783 12.7717 17.4815 13.7726 16.5967 14.3761C16.6096 14.753 16.5646 15.1306 16.4599 15.4943C16.3239 15.9671 16.092 16.4074 15.7793 16.7872C15.4666 17.167 15.0794 17.479 14.6416 17.7032C14.2038 17.9275 13.7243 18.059 13.2334 18.0909C12.7424 18.1228 12.2493 18.0537 11.7861 17.8878C11.3232 17.722 10.899 17.4631 10.54 17.1271C10.3355 16.9356 10.1551 16.7208 10.001 16.4884C9.84624 16.7224 9.66566 16.9394 9.45995 17.132C9.10097 17.4679 8.6767 17.7269 8.21385 17.8927C7.75067 18.0585 7.25751 18.1277 6.76659 18.0958C6.27572 18.0639 5.79618 17.9324 5.35838 17.7081C4.92061 17.4839 4.53336 17.1718 4.22069 16.7921C3.90804 16.4123 3.67607 15.9719 3.54002 15.4991C3.43543 15.1355 3.39044 14.7578 3.40331 14.381C2.51858 13.7775 1.92174 12.7765 1.87987 11.6241C1.84368 10.6212 2.23598 9.70213 2.88963 9.04211C2.75054 8.67821 2.66828 8.29369 2.65233 7.90247C2.63017 7.35694 2.7323 6.81281 2.95116 6.31262C3.17012 5.81245 3.5002 5.36766 3.916 5.01379C4.23166 4.74526 4.59157 4.53445 4.97752 4.38879C5.14321 2.98817 6.33221 1.90176 7.77733 1.90149C8.67978 1.90149 9.4814 2.32631 9.99803 2.98547C10.5145 2.32356 11.318 1.89663 12.2226 1.89661ZM7.77733 3.10071C6.88161 3.101 6.15526 3.82796 6.15526 4.72375C6.15509 4.82942 6.12523 4.92762 6.07713 5.01379C6.02057 5.21192 5.86532 5.37674 5.65135 5.43176C5.29909 5.52244 4.97143 5.69222 4.69432 5.92786C4.41721 6.16374 4.19671 6.46069 4.05077 6.79407C3.90495 7.12745 3.8358 7.49005 3.85057 7.85364C3.8654 8.21727 3.96326 8.57321 4.13573 8.89368C4.19995 9.01307 4.21844 9.14431 4.1992 9.26868C4.1831 9.42699 4.10553 9.57887 3.96971 9.68372C3.40364 10.1206 3.05045 10.8144 3.07811 11.5812C3.12429 12.8437 4.18564 13.8305 5.44823 13.7853C5.77938 13.7733 6.05737 14.0322 6.06932 14.3634C6.08087 14.6941 5.82295 14.9724 5.49217 14.9845C5.19813 14.9951 4.91096 14.968 4.63573 14.9093C4.65054 14.9959 4.66897 15.0824 4.69334 15.1671C4.78405 15.4822 4.93903 15.7762 5.14745 16.0294C5.35577 16.2823 5.61366 16.4903 5.90526 16.6398C6.19717 16.7893 6.51742 16.8773 6.84471 16.8986C7.17173 16.9198 7.50002 16.8741 7.80858 16.7638C8.11728 16.6533 8.4012 16.48 8.64061 16.256C8.87983 16.032 9.07052 15.7606 9.20116 15.4601C9.33177 15.1593 9.39996 14.8339 9.40038 14.506V4.75208C9.40038 4.74622 9.40119 4.74032 9.40135 4.7345C9.40121 4.7293 9.40038 4.7241 9.40038 4.71887C9.3979 3.825 8.67178 3.10071 7.77733 3.10071ZM12.2226 3.09583C11.3267 3.09587 10.5996 3.82292 10.5996 4.71887C10.5996 4.7204 10.5996 4.72223 10.5996 4.72375C10.5996 4.72867 10.5978 4.73352 10.5976 4.7384C10.5977 4.74294 10.5996 4.74752 10.5996 4.75208V14.5011C10.6 14.8291 10.6682 15.1544 10.7988 15.4552C10.9295 15.7559 11.1201 16.027 11.3594 16.2511C11.5988 16.4752 11.8826 16.6483 12.1914 16.7589C12.5 16.8693 12.8282 16.9149 13.1553 16.8937C13.4826 16.8724 13.8028 16.7844 14.0947 16.6349C14.3863 16.4854 14.6442 16.2775 14.8525 16.0245C15.061 15.7713 15.2159 15.4774 15.3066 15.1622C15.331 15.0774 15.3494 14.9911 15.3642 14.9044C15.089 14.9631 14.8019 14.9902 14.5078 14.9796C14.177 14.9675 13.9189 14.6894 13.9306 14.3585C13.9426 14.0274 14.2206 13.7685 14.5517 13.7804C15.8145 13.8258 16.8758 12.839 16.9219 11.5763C16.9495 10.8094 16.5965 10.1157 16.0303 9.67883C15.8944 9.57392 15.8168 9.4222 15.8008 9.26379C15.7815 9.13938 15.8 9.00822 15.8642 8.88879C16.0368 8.56824 16.1346 8.21249 16.1494 7.84875C16.1642 7.48505 16.0951 7.12265 15.9492 6.78918C15.8032 6.45573 15.5829 6.15888 15.3056 5.92297C15.0285 5.68731 14.7009 5.51754 14.3486 5.42688C14.1346 5.37181 13.9793 5.20716 13.9228 5.00891C13.8747 4.92266 13.8448 4.82464 13.8447 4.71887C13.8447 3.82303 13.1184 3.09605 12.2226 3.09583Z\" fill=\"currentColor\"></path></svg></span></button></div></div><div role=\"button\" tabindex=\"-1\" class=\"select-none flex size-[30px] shrink-0 items-center justify-center text-icon_interaction_primary_default transition-colors rounded-full bg-bg_interaction_primary_inactive cursor-not-allowed\" aria-label=\"Send message\" data-testid=\"send-button\" aria-disabled=\"true\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 20 20\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M10.0795 16V4M16.159 9.47515L10.0795 4L4 9.47515\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"></path></svg></div></div></fieldset></div></div></div></div></div><div class=\"px-3 pt-1\" data-testid=\"ai-generated-content-disclaimer-wrap\"><p class=\"desktop-text-composer-disclaimer px-3 text-center text-[10px] leading-[14px] text-text_default_tertiary\" data-testid=\"ai-generated-content-disclaimer\">MiniMax Agent is AI and can make mistakes</p></div></div></div>",
+    "innerText": "Fewer than 1,000 Credits remain.\n\nBuy Credits\nSubscribe\n\n\n\n\nM3\n\nMiniMax Agent is AI and can make mistakes"
+  }
+}

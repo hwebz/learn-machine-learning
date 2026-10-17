@@ -545,6 +545,14 @@ export function AgentConfigScreen({
         { id: "glm-4-plus", label: "GLM-4 Plus", badge: "GLM" },
       ];
     }
+    if (selectedOrchestrator === "minimax") {
+      return [
+        { id: "m3", label: "M3 (Toàn diện)", badge: "M3" },
+        { id: "m3.1-flash", label: "M3.1-Flash-Preview", badge: "Flash" },
+        { id: "m2.7", label: "M2.7", badge: "2.7" },
+        { id: "m2.7-highspeed", label: "M2.7 HighSpeed", badge: "HighSpeed" },
+      ];
+    }
     if (selectedOrchestrator === "kimi") {
       const kimiFallbackModels: AgentOption[] = [
         { id: "instant", label: "Instant (Phản hồi nhanh)", badge: "Fast" },
@@ -710,6 +718,14 @@ export function AgentConfigScreen({
       return [
         { id: "glm-5.3", label: "GLM-5.3", badge: "GLM" },
         { id: "glm-4-plus", label: "GLM-4 Plus", badge: "GLM" },
+      ];
+    }
+    if (selectedLead === "minimax") {
+      return [
+        { id: "m3", label: "M3 (Toàn diện)", badge: "M3" },
+        { id: "m3.1-flash", label: "M3.1-Flash-Preview", badge: "Flash" },
+        { id: "m2.7", label: "M2.7", badge: "2.7" },
+        { id: "m2.7-highspeed", label: "M2.7 HighSpeed", badge: "HighSpeed" },
       ];
     }
     if (selectedLead === "kimi") {
@@ -958,6 +974,10 @@ export function AgentConfigScreen({
     } else if (selectedOrchestrator === "zhipu") {
       orchConfig.model = orchModel || "glm-5.3";
       orchConfig.mode = orchMode || "high";
+    } else if (selectedOrchestrator === "minimax") {
+      orchConfig.model = orchModel || "m3";
+      orchConfig.model_id = orchModel || "m3";
+      orchConfig.deep_research = orchDeepResearch;
     }
 
     // Build comprehensive lead config matching both string matching and DOM models
@@ -1029,6 +1049,10 @@ export function AgentConfigScreen({
       leadConfig.thinking_level_id = "";
       leadConfig.mode = "";
       leadConfig.mode_id = "";
+    } else if (selectedLead === "minimax") {
+      leadConfig.model = leadModel || "m3";
+      leadConfig.model_id = leadModel || "m3";
+      leadConfig.deep_research = leadDeepResearch;
     }
 
     onStartAgentResearch({
@@ -1767,6 +1791,48 @@ export function AgentConfigScreen({
                             padding: "1px 6px",
                             borderRadius: 10,
                             backgroundColor: orchDeepResearch ? "#ea580c" : "#e2e8f0",
+                            color: orchDeepResearch ? "#ffffff" : "#64748b",
+                          }}
+                        >
+                          {orchDeepResearch ? "BẬT" : "TẮT"}
+                        </span>
+                      </button>
+                    )}
+
+                    {/* MiniMax Deep Research Toggle for Orchestrator */}
+                    {selectedOrchestrator === "minimax" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = !orchDeepResearch;
+                          setOrchDeepResearch(nextVal);
+                          onUpdateSelection?.(selectedOrchestrator, { deep_research: nextVal });
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-sm, 6px)",
+                          border: `1.5px solid ${orchDeepResearch ? "#e2167e" : "var(--border-default, #cbd5e1)"}`,
+                          backgroundColor: orchDeepResearch ? "#fdf2f8" : "#ffffff",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: orchDeepResearch ? "#e2167e" : "var(--text-secondary, #475569)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Bật/Tắt chế độ Deep Research trên MiniMax (+ button -> Skills -> deep-research)"
+                      >
+                        <SparklesIcon size={14} color={orchDeepResearch ? "#e2167e" : "#64748b"} />
+                        <span>Deep Research</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 10,
+                            backgroundColor: orchDeepResearch ? "#e2167e" : "#e2e8f0",
                             color: orchDeepResearch ? "#ffffff" : "#64748b",
                           }}
                         >
@@ -2565,6 +2631,48 @@ export function AgentConfigScreen({
                             padding: "1px 6px",
                             borderRadius: 10,
                             backgroundColor: leadDeepResearch ? "#ea580c" : "#e2e8f0",
+                            color: leadDeepResearch ? "#ffffff" : "#64748b",
+                          }}
+                        >
+                          {leadDeepResearch ? "BẬT" : "TẮT"}
+                        </span>
+                      </button>
+                    )}
+
+                    {/* MiniMax Deep Research Toggle for Lead */}
+                    {selectedLead === "minimax" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = !leadDeepResearch;
+                          setLeadDeepResearch(nextVal);
+                          onUpdateSelection?.(selectedLead, { deep_research: nextVal });
+                        }}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-sm, 6px)",
+                          border: `1.5px solid ${leadDeepResearch ? "#e2167e" : "var(--border-default, #cbd5e1)"}`,
+                          backgroundColor: leadDeepResearch ? "#fdf2f8" : "#ffffff",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: leadDeepResearch ? "#e2167e" : "var(--text-secondary, #475569)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Bật/Tắt chế độ Deep Research trên MiniMax (+ button -> Skills -> deep-research)"
+                      >
+                        <SparklesIcon size={14} color={leadDeepResearch ? "#e2167e" : "#64748b"} />
+                        <span>Deep Research</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: "1px 6px",
+                            borderRadius: 10,
+                            backgroundColor: leadDeepResearch ? "#e2167e" : "#e2e8f0",
                             color: leadDeepResearch ? "#ffffff" : "#64748b",
                           }}
                         >

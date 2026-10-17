@@ -1,0 +1,11 @@
+{
+  "foundMain": false,
+  "candidates": [
+    {
+      "tag": "DIV",
+      "className": "mx-auto flex w-fit max-w-full flex-nowrap items-center justify-start gap-3 overflow-visible pb-1 animate-fade-in",
+      "testId": "chat-scene-tabs",
+      "childCount": 5
+    }
+  ]
+}

@@ -251,12 +251,20 @@ export function ProviderModal({
               const isGrok = p.id === "grok";
               const isMistral = p.id === "mistral";
               const isZhipu = p.id === "zhipu";
+              const isMinimax = p.id === "minimax";
 
               const isDeepThinking = sel.deep_thinking !== undefined ? sel.deep_thinking : (caps?.deep_thinking ?? false);
               const isWebSearch = sel.web_search !== undefined ? sel.web_search : (caps?.web_search ?? true);
               const isDeepResearch = sel.deep_research !== undefined ? sel.deep_research : (caps?.deep_research ?? false);
               const researchMode = sel.research_mode || caps?.research_mode || "normal";
               const isResearchAdvanced = researchMode === "advanced";
+
+              const minimaxFallbackModels = [
+                { id: "m3", label: "M3", description: "Mô hình cờ đầu toàn diện của MiniMax, xử lý tác vụ phức tạp", selected: true, badge: "M3", disabled: false },
+                { id: "m3.1-flash", label: "M3.1-Flash-Preview", description: "Mô hình tốc độ cao, phản hồi tức thì cho tác vụ nhanh", selected: false, badge: "Flash", disabled: false },
+                { id: "m2.7", label: "M2.7", description: "Mô hình tiêu chuẩn ổn định", selected: false, badge: "2.7", disabled: false },
+                { id: "m2.7-highspeed", label: "M2.7 HighSpeed", description: "Phiên bản tốc độ cao", selected: false, badge: "HighSpeed", disabled: false },
+              ];
 
               const zhipuFallbackModels = [
                 { id: "glm-5.3-flash", label: "GLM-5.3-Flash", description: "Lightweight flagship model, instant response (Mô hình cờ đầu gọn nhẹ, phản hồi tức thì)", selected: true, badge: "Flash", disabled: false },
@@ -351,7 +359,11 @@ export function ProviderModal({
                               ? (caps?.available_models && caps.available_models.length > 0 && !caps.available_models.some((m) => m.id === "default")
                                 ? caps.available_models
                                 : zhipuFallbackModels)
-                              : [
+                              : p.id === "minimax"
+                                ? (caps?.available_models && caps.available_models.length > 0 && !caps.available_models.some((m) => m.id === "default")
+                                  ? caps.available_models
+                                  : minimaxFallbackModels)
+                                : [
                                 {
                                   id: "auto",
                                   label: "Auto (Tự động)",
@@ -400,9 +412,9 @@ export function ProviderModal({
                               ])
                             : [];
 
-              // 3. Modes: Copilot (All 5 options). Gemini, Qwen, Claude, DeepSeek, ChatGPT, Perplexity, Kimi, and Grok have no modes.
+              // 3. Modes: Copilot (All 5 options). Gemini, Qwen, Claude, DeepSeek, ChatGPT, Perplexity, Kimi, Grok, Zhipu, and Minimax have no modes.
               const modes =
-                p.id === "gemini" || p.id === "qwen" || isClaude || isDeepSeek || isChatGPT || isPerplexity || isKimi || isGrok || isMistral || isZhipu
+                p.id === "gemini" || p.id === "qwen" || isClaude || isDeepSeek || isChatGPT || isPerplexity || isKimi || isGrok || isMistral || isZhipu || isMinimax
                   ? []
                   : isCopilot && (!caps?.modes || caps.modes.length === 0)
                     ? [
@@ -464,7 +476,13 @@ export function ProviderModal({
                         : caps?.selected_model_id && caps.selected_model_id !== "glm-5" && models.some((m) => m.id === caps.selected_model_id && !m.disabled)
                           ? caps.selected_model_id
                           : "glm-5.3-flash")
-                      : sel.model_id && models.some((m) => m.id === sel.model_id && !m.disabled)
+                      : isMinimax
+                        ? (sel.model_id && models.some((m) => m.id === sel.model_id && !m.disabled)
+                          ? sel.model_id
+                          : caps?.selected_model_id && models.some((m) => m.id === caps.selected_model_id && !m.disabled)
+                            ? caps.selected_model_id
+                            : "m3")
+                        : sel.model_id && models.some((m) => m.id === sel.model_id && !m.disabled)
                         ? sel.model_id
                         : caps?.selected_model_id && models.some((m) => m.id === caps.selected_model_id && !m.disabled)
                           ? caps.selected_model_id
@@ -1881,6 +1899,114 @@ export function ProviderModal({
                               padding: "2px 8px",
                               borderRadius: 10,
                               backgroundColor: isDeepResearch ? "#ea580c" : "#e2e8f0",
+                              color: isDeepResearch ? "#ffffff" : "#64748b",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {isDeepResearch ? "BẬT" : "TẮT"}
+                          </span>
+                        </div>
+                      </div>
+                    ) : isMinimax ? (
+                      /* MiniMax Hailuo: AI Model dropdown + Deep Research toggle (+ button -> Skills -> deep-research) */
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 10,
+                          flexGrow: 1,
+                        }}
+                      >
+                        {/* Row 1: Model Selector */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <label
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: "var(--text-secondary)",
+                                letterSpacing: "0.4px",
+                              }}
+                            >
+                              Mô hình AI (Model)
+                            </label>
+                            <span
+                              style={{
+                                fontSize: 9.5,
+                                padding: "1px 5px",
+                                borderRadius: 3,
+                                backgroundColor: "#fdf2f8",
+                                color: "#e2167e",
+                                fontWeight: 700,
+                              }}
+                            >
+                              {currentModel?.badge || "M3"}
+                            </span>
+                          </div>
+                          <select
+                            value={currentModelId || "m3"}
+                            onChange={(e) => {
+                              onUpdateSelection?.(p.id, { model_id: e.target.value });
+                            }}
+                            style={{
+                              width: "100%",
+                              padding: "6px 8px",
+                              borderRadius: 6,
+                              border: "1px solid var(--border-default, #cbd5e1)",
+                              backgroundColor: "#ffffff",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: "var(--text-primary, #0f172a)",
+                              cursor: "pointer",
+                              outline: "none",
+                            }}
+                            title="Chọn mô hình AI MiniMax (M3, M3.1 Flash Preview, M2.7, M2.7 HighSpeed)"
+                          >
+                            {models.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.label}
+                              </option>
+                            ))}
+                          </select>
+                          <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
+                            {currentModel?.description || "Mô hình cờ đầu toàn diện của MiniMax, xử lý tác vụ phức tạp"}
+                          </span>
+                        </div>
+
+                        {/* Row 2: Deep Research Toggle */}
+                        <div
+                          onClick={() => onUpdateSelection?.(p.id, { deep_research: !isDeepResearch })}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "8px 12px",
+                            borderRadius: 6,
+                            border: `1.5px solid ${isDeepResearch ? "#e2167e" : "var(--border-default, #cbd5e1)"}`,
+                            backgroundColor: isDeepResearch ? "#fdf2f8" : "#ffffff",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                          }}
+                          title="Bật/Tắt chế độ Deep Research trên MiniMax (+ button -> Skills -> deep-research)"
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <SparklesIcon size={16} color={isDeepResearch ? "#e2167e" : "#64748b"} />
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: isDeepResearch ? "#e2167e" : "var(--text-primary, #0f172a)" }}>
+                                Deep Research
+                              </div>
+                              <div style={{ fontSize: 10.5, color: "var(--text-muted, #64748b)" }}>
+                                Kích hoạt skill deep-research (+ button &rarr; Skills &rarr; deep-research)
+                              </div>
+                            </div>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: "2px 8px",
+                              borderRadius: 10,
+                              backgroundColor: isDeepResearch ? "#e2167e" : "#e2e8f0",
                               color: isDeepResearch ? "#ffffff" : "#64748b",
                               flexShrink: 0,
                             }}

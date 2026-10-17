@@ -1426,6 +1426,134 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
         } catch (e) {}
     }
 
+    // 2.7. Minimax-specific: Extract structured thinking steps and thinking text from [data-testid="chat-main-conversation"]
+    if (provider === "minimax" || !provider) {
+        try {
+            const root = document.querySelector("[data-testid='chat-main-conversation']");
+            if (root) {
+                // Check if stop button is present inside chat-main-conversation or document
+                const stopBtn = root.querySelector("[data-testid='stop-button'], button[aria-label*='Stop' i], div[aria-label*='Stop' i]") ||
+                                document.querySelector("[data-testid='stop-button'], button[aria-label*='Stop' i], div[aria-label*='Stop' i]");
+                const isMinimaxGenerating = stopBtn && (stopBtn.offsetParent !== null || stopBtn.getAttribute("aria-disabled") !== "true");
+                if (isMinimaxGenerating) {
+                    isThinking = true;
+                }
+
+                // Look for assistant messages inside chat-main-conversation
+                const asstEls = root.querySelectorAll("[data-message-role='assistant'], [data-role='assistant'], div.mb-4.mavis-assistant-reading-row");
+                if (asstEls.length > 0) {
+                    const lastAsst = asstEls[asstEls.length - 1];
+
+                    // Look for thinking disclosure inside lastAsst (or root)
+                    const disclosure = lastAsst.querySelector("[data-testid='turn-process-disclosure'], section.mavis-turn-process-disclosure") ||
+                                       root.querySelector("[data-testid='turn-process-disclosure'], section.mavis-turn-process-disclosure");
+
+                    if (disclosure) {
+                        isThinking = true;
+
+                        // Summary header (e.g. "Processing 1m 28s" or "Processed 25s")
+                        let overallSummary = "";
+                        const summaryEl = disclosure.querySelector("[data-testid='turn-process-summary']");
+                        if (summaryEl) {
+                            overallSummary = clean(summaryEl.innerText || summaryEl.textContent || "");
+                        }
+
+                        // Activity groups (thinking / search / tool execution steps)
+                        const activityGroups = disclosure.querySelectorAll("[data-testid='activity-group']");
+
+                        for (let agIdx = 0; agIdx < activityGroups.length; agIdx++) {
+                            const ag = activityGroups[agIdx];
+
+                            let stepTitle = "";
+                            const summaryHeader = ag.querySelector("[data-testid='activity-group-header-summary']");
+                            if (summaryHeader) {
+                                stepTitle = clean(summaryHeader.getAttribute("title") || summaryHeader.innerText || summaryHeader.textContent || "");
+                            }
+                            if (!stepTitle) {
+                                const headerBtn = ag.querySelector("[data-testid='activity-group-header']");
+                                if (headerBtn) {
+                                    stepTitle = clean(headerBtn.getAttribute("aria-label") || headerBtn.innerText || headerBtn.textContent || "");
+                                }
+                            }
+                            if (!stepTitle) {
+                                stepTitle = overallSummary || "Thinking Step";
+                            }
+
+                            // Extract description from inner markdown or following siblings
+                            let stepDesc = "";
+                            const innerMd = ag.querySelector(".matrix-markdown, .mavis-markdown-blocks, p");
+                            if (innerMd) {
+                                stepDesc = clean(innerMd.innerText || innerMd.textContent || "");
+                            }
+                            if (!stepDesc) {
+                                let sib = ag.nextElementSibling;
+                                while (sib && sib.getAttribute("data-testid") !== "activity-group") {
+                                    if (sib.matches && (sib.matches(".matrix-markdown, [data-selection-anchor='text'], [class*='markdown']") || sib.querySelector(".matrix-markdown, p"))) {
+                                        const pTags = Array.from(sib.querySelectorAll("p")).map(p => clean(p.innerText || p.textContent)).filter(Boolean);
+                                        const txt = pTags.join("\\n\\n") || clean(sib.innerText || sib.textContent || "");
+                                        if (txt) {
+                                            stepDesc = (stepDesc ? stepDesc + "\\n\\n" : "") + txt;
+                                        }
+                                    }
+                                    sib = sib.nextElementSibling;
+                                }
+                            }
+
+                            const isLastGroup = agIdx === activityGroups.length - 1;
+                            const stepStatus = (isMinimaxGenerating && isLastGroup) ? "running" : "completed";
+
+                            const dedupeKey = stepTitle + "::" + stepDesc;
+                            if (!seenStepKeys.has(dedupeKey)) {
+                                seenStepKeys.add(dedupeKey);
+                                thinkingSteps.push({
+                                    title: stepTitle,
+                                    description: stepDesc,
+                                    status: stepStatus
+                                });
+                            }
+                            if (stepDesc) {
+                                thinkingText = (thinkingText ? thinkingText + "\\n\\n" : "") + stepDesc;
+                            } else if (stepTitle) {
+                                thinkingText = (thinkingText ? thinkingText + "\\n\\n" : "") + stepTitle;
+                            }
+                        }
+
+                        // Fallback if disclosure exists but no activity groups yet
+                        if (thinkingSteps.length === 0 && (overallSummary || isMinimaxGenerating)) {
+                            const title = overallSummary || "Thinking Process";
+                            const desc = "Đang suy luận...";
+                            const dedupeKey = title + "::" + desc;
+                            if (!seenStepKeys.has(dedupeKey)) {
+                                seenStepKeys.add(dedupeKey);
+                                thinkingSteps.push({
+                                    title: title,
+                                    description: desc,
+                                    status: isMinimaxGenerating ? "running" : "completed"
+                                });
+                            }
+                            thinkingText = title;
+                        }
+                    } else if (isMinimaxGenerating) {
+                        const fallbackKey = "Thinking::Minimax";
+                        if (!seenStepKeys.has(fallbackKey)) {
+                            seenStepKeys.add(fallbackKey);
+                            thinkingSteps.push({
+                                title: "Thinking Process",
+                                description: "Đang suy luận...",
+                                status: "running"
+                            });
+                        }
+                    }
+
+                    // Sequential completion: all steps prior to the latest active are completed
+                    for (let sIdx = 0; sIdx < thinkingSteps.length - 1; sIdx++) {
+                        thinkingSteps[sIdx].status = "completed";
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
     // 3. Fallback: query general thinking containers across other providers
     if (!thinkingText && thinkingSteps.length === 0) {
         const thinkingSelectors = [
@@ -1660,7 +1788,9 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
         "[aria-label='Sources'] a[href^='http']",
         "[aria-label*='Sources' i] a[href^='http']",
         "div.chat-assistant a[href^='http']",
-        ".chat-assistant a[href^='http']"
+        ".chat-assistant a[href^='http']",
+        "div[data-testid='chat-main-conversation'] div[data-message-role='assistant'] a[href^='http']",
+        "div[data-testid='chat-main-conversation'] a[href^='http']"
     ];
 
     for (const sel of linkSelectors) {
@@ -1669,7 +1799,7 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
             for (const a of links) {
                 const href = a.href || a.getAttribute("href");
                 if (href && href.startsWith("http") && !seenUrls.has(href)) {
-                    if (!href.includes("login") && !href.includes("auth") && !href.includes("accounts.google") && !href.includes("chatgpt.com") && !href.includes("openai.com")) {
+                    if (!href.includes("login") && !href.includes("auth") && !href.includes("accounts.google") && !href.includes("chatgpt.com") && !href.includes("openai.com") && !href.includes("minimax.io")) {
                         seenUrls.add(href);
                         let title = (a.innerText || a.textContent || a.getAttribute("title") || "").trim();
                         citations.push({

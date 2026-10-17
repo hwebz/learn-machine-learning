@@ -333,6 +333,40 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
         cachedSelections["zhipu"].model_id = "glm-5.3-flash";
       }
     }
+    if (cachedCaps["minimax"]) {
+      cachedCaps["minimax"].modes = [];
+      cachedCaps["minimax"].selected_mode_id = undefined;
+      cachedCaps["minimax"].thinking_levels = [];
+      cachedCaps["minimax"].selected_thinking_level_id = undefined;
+      cachedCaps["minimax"].deep_thinking = false;
+      cachedCaps["minimax"].web_search = false;
+      if (cachedCaps["minimax"].deep_research === undefined) cachedCaps["minimax"].deep_research = false;
+      const hasBadMinimaxModels =
+        !cachedCaps["minimax"].available_models ||
+        cachedCaps["minimax"].available_models.length === 0 ||
+        cachedCaps["minimax"].available_models.some((m) => m.id === "default");
+      if (hasBadMinimaxModels) {
+        cachedCaps["minimax"].available_models = [
+          { id: "m3", label: "M3", description: "Mô hình cờ đầu toàn diện của MiniMax, xử lý tác vụ phức tạp", selected: true, badge: "M3" },
+          { id: "m3.1-flash", label: "M3.1-Flash-Preview", description: "Mô hình tốc độ cao, phản hồi tức thì cho tác vụ nhanh", selected: false, badge: "Flash" },
+          { id: "m2.7", label: "M2.7", description: "Mô hình tiêu chuẩn ổn định", selected: false, badge: "2.7" },
+          { id: "m2.7-highspeed", label: "M2.7 HighSpeed", description: "Phiên bản tốc độ cao", selected: false, badge: "HighSpeed" },
+        ];
+        cachedCaps["minimax"].selected_model_id = "m3";
+      }
+    }
+    if (cachedSelections["minimax"]) {
+      cachedSelections["minimax"].thinking_level_id = "";
+      cachedSelections["minimax"].mode_id = "";
+      cachedSelections["minimax"].deep_thinking = false;
+      cachedSelections["minimax"].web_search = false;
+      if (cachedSelections["minimax"].deep_research === undefined) {
+        cachedSelections["minimax"].deep_research = false;
+      }
+      if (!cachedSelections["minimax"].model_id || cachedSelections["minimax"].model_id === "default") {
+        cachedSelections["minimax"].model_id = "m3";
+      }
+    }
     saveStorage(CAPS_STORAGE_KEY, cachedCaps);
     saveStorage(SELECTIONS_STORAGE_KEY, cachedSelections);
     setCapabilitiesMap(cachedCaps);
@@ -490,6 +524,27 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
             caps.selected_model_id = "glm-5.3-flash";
           }
         }
+        if (p === "minimax" && caps) {
+          caps.modes = [];
+          caps.selected_mode_id = undefined;
+          caps.thinking_levels = [];
+          caps.selected_thinking_level_id = undefined;
+          caps.deep_thinking = false;
+          caps.web_search = false;
+          const hasBadMinimaxModels =
+            !caps.available_models ||
+            caps.available_models.length === 0 ||
+            caps.available_models.some((m) => m.id === "default");
+          if (hasBadMinimaxModels) {
+            caps.available_models = [
+              { id: "m3", label: "M3", description: "Mô hình cờ đầu toàn diện của MiniMax, xử lý tác vụ phức tạp", selected: true, badge: "M3" },
+              { id: "m3.1-flash", label: "M3.1-Flash-Preview", description: "Mô hình tốc độ cao, phản hồi tức thì cho tác vụ nhanh", selected: false, badge: "Flash" },
+              { id: "m2.7", label: "M2.7", description: "Mô hình tiêu chuẩn ổn định", selected: false, badge: "2.7" },
+              { id: "m2.7-highspeed", label: "M2.7 HighSpeed", description: "Phiên bản tốc độ cao", selected: false, badge: "HighSpeed" },
+            ];
+            caps.selected_model_id = "m3";
+          }
+        }
         setCapabilitiesMap((prev) => {
           const updated = { ...prev, [p]: caps };
           saveStorage(CAPS_STORAGE_KEY, updated);
@@ -510,6 +565,7 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           const isGrok = p === "grok";
           const isMistral = p === "mistral";
           const isZhipu = p === "zhipu";
+          const isMinimax = p === "minimax";
 
           // Safe model for Claude & Kimi
           const isKimiDeepResearch = isKimi && (existing.deep_research !== undefined ? existing.deep_research : (caps.deep_research ?? false));
@@ -523,6 +579,8 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
             ? "instant"
             : isZhipu && (!rawModelId || rawModelId === "default" || rawModelId === "glm-5")
             ? "glm-5.3-flash"
+            : isMinimax && (!rawModelId || rawModelId === "default")
+            ? "m3"
             : rawModelId;
 
           // Safe thinking for Claude, Kimi & Qwen
@@ -543,29 +601,29 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
                 : (isDeepSeek || isCopilot || isChatGPT || isGrok || isMistral)
                 ? ""
                 : safeModelId,
-              thinking_level_id: (isDeepSeek || isCopilot || isChatGPT || isPerplexity || isGrok || isZhipu)
+              thinking_level_id: (isDeepSeek || isCopilot || isChatGPT || isPerplexity || isGrok || isZhipu || isMinimax)
                 ? ""
                 : isMistral
                 ? (existing.thinking_level_id || caps.selected_thinking_level_id || "fast")
                 : safeThinking,
-              mode_id: (isDeepSeek || isChatGPT || isPerplexity || isKimi || isQwen || isGemini || isGrok || isMistral || isZhipu)
+              mode_id: (isDeepSeek || isChatGPT || isPerplexity || isKimi || isQwen || isGemini || isGrok || isMistral || isZhipu || isMinimax)
                 ? ""
                 : existing.mode_id || caps.selected_mode_id || caps.modes[0]?.id || (isCopilot ? "auto" : ""),
-              deep_thinking: (isPerplexity || isZhipu)
+              deep_thinking: (isPerplexity || isZhipu || isMinimax)
                 ? false
                 : (isDeepSeek || isChatGPT)
                 ? (existing.deep_thinking !== undefined ? existing.deep_thinking : (caps.deep_thinking ?? false))
                 : existing.deep_thinking,
               web_search: isPerplexity || isKimi
                 ? true
-                : isZhipu
+                : (isZhipu || isMinimax)
                 ? false
                 : (isDeepSeek || isChatGPT || isQwen)
                 ? (existing.web_search !== undefined ? existing.web_search : (caps.web_search ?? true))
                 : existing.web_search,
               deep_research: isZhipu
                 ? false
-                : (isChatGPT || isKimi || isQwen || isGemini || isMistral)
+                : (isChatGPT || isKimi || isQwen || isGemini || isMistral || isMinimax)
                 ? (existing.deep_research !== undefined ? existing.deep_research : (caps.deep_research ?? false))
                 : existing.deep_research,
               research_mode: isQwen
@@ -664,6 +722,8 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           safeUpdates = { ...updates, model_id: "", thinking_level_id: "", mode_id: "" };
         } else if (p === "zhipu") {
           safeUpdates = { ...updates, thinking_level_id: "", mode_id: "", deep_thinking: false, deep_research: false, web_search: false };
+        } else if (p === "minimax") {
+          safeUpdates = { ...updates, thinking_level_id: "", mode_id: "", deep_thinking: false, web_search: false };
         }
         const updated = {
           ...prev,

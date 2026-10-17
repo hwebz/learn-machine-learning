@@ -19,6 +19,7 @@ from app.adapters.capabilities.kimi import KimiCapabilitiesStrategy
 from app.adapters.capabilities.grok import GrokCapabilitiesStrategy
 from app.adapters.capabilities.mistral import MistralCapabilitiesStrategy
 from app.adapters.capabilities.zhipu import ZhipuCapabilitiesStrategy
+from app.adapters.capabilities.minimax import MinimaxCapabilitiesStrategy
 from app.adapters.capabilities.models import (
     OptionItem,
     ProviderLiveCapabilities,
@@ -132,6 +133,8 @@ class CapabilitiesRegistry:
         self.register(mistral_strat)
         zhipu_strat = ZhipuCapabilitiesStrategy()
         self.register(zhipu_strat)
+        minimax_strat = MinimaxCapabilitiesStrategy()
+        self.register(minimax_strat)
 
     def register(self, strategy: BaseProviderCapabilitiesStrategy) -> None:
         self._strategies[strategy.provider_name.lower()] = strategy

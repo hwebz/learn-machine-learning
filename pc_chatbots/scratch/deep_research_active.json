@@ -1,0 +1,245 @@
+{
+  "chips": [
+    {
+      "tag": "div",
+      "text": "New task\nSearch\nPlugins · Skills\nScheduled\nAssets\nConnect mobile\nMore\nMaxHermes\nMaxClaw\nProjects\nAdd",
+      "className": "w-full h-screen relative",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "New task\nSearch\nPlugins · Skills\nScheduled\nAssets\nConnect mobile\nMore\nMaxHermes\nMaxClaw\nProjects\nAdd",
+      "className": "contents",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "New task\nSearch\nPlugins · Skills\nScheduled\nAssets\nConnect mobile\nMore\nMaxHermes\nMaxClaw\nProjects\nAdd",
+      "className": "relative flex h-[var(--desktop-content-height,100vh)] overflow-hidden bg-bg_grouped_secondary",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "MiniMax makes your work easier\n\ndeep-research\n \n\nM3\nVideo generation\nDocument\nWebsite\nImage Generati",
+      "className": "relative flex min-h-0 min-w-0 flex-1 flex-col",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "MiniMax makes your work easier\n\ndeep-research\n \n\nM3\nVideo generation\nDocument\nWebsite\nImage Generati",
+      "className": "relative flex h-full min-w-0 flex-1 flex-col",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "MiniMax makes your work easier\n\ndeep-research\n \n\nM3\nVideo generation\nDocument\nWebsite\nImage Generati",
+      "className": "relative h-full overflow-y-auto [scrollbar-gutter:stable]",
+      "testId": "mavis-home-content"
+    },
+    {
+      "tag": "div",
+      "text": "MiniMax makes your work easier\n\ndeep-research\n \n\nM3\nVideo generation\nDocument\nWebsite\nImage Generati",
+      "className": "flex min-h-full w-full items-start justify-center pb-8 pt-[max(24px,calc(38.4615dvh-115px))]",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "MiniMax makes your work easier\n\ndeep-research\n \n\nM3\nVideo generation\nDocument\nWebsite\nImage Generati",
+      "className": "flex w-full min-w-0 relative z-[2] max-w-[768px] flex-col items-center px-4 gap-5 sm:gap-8",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "deep-research\n \n\nM3\nVideo generation\nDocument\nWebsite\nImage Generation\nMore",
+      "className": "relative flex w-full flex-col gap-6 sm:gap-8 ",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "deep-research\n \n\nM3",
+      "className": "",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "deep-research\n \n\nM3",
+      "className": "message-input-home-container flex flex-col items-center rounded-[var(--mavis-radius-composer,20px)] bg-bg_default_scrim",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "deep-research\n \n\nM3",
+      "className": "mavis-message-input-card w-full border border-border_default bg-bg_grouped_secondary_elevated p-2 rounded-[20px] mavis-message-input-card-en shadow-none sm:shadow-[0_0_10px_0_var(--shadow\\_default)]",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "deep-research\n \n\nM3",
+      "className": "message-input-container relative transition-colors undefined",
+      "testId": "message-input"
+    },
+    {
+      "tag": "div",
+      "text": "deep-research\n \n\nM3",
+      "className": "",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "deep-research\n \n\nM3",
+      "className": "relative",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "deep-research",
+      "className": "relative flex items-start bg-bg_grouped_secondary_elevated px-1 pb-1 pt-1",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "deep-research",
+      "className": "rich-text-wrapper peer min-w-[2px] flex-1 basis-0  ",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "deep-research",
+      "className": "relative ",
+      "testId": "rich-text-scroll-fade"
+    },
+    {
+      "tag": "div",
+      "text": "deep-research",
+      "className": "",
+      "testId": "rich-text-scroll-fade-viewport"
+    },
+    {
+      "tag": "div",
+      "text": "deep-research",
+      "className": "",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "deep-research",
+      "className": "",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "deep-research",
+      "className": "tiptap ProseMirror rich-text-editor ProseMirror-focused",
+      "testId": "message-textarea"
+    },
+    {
+      "tag": "span",
+      "text": "deep-research",
+      "className": "react-renderer node-skillCommand",
+      "testId": null
+    },
+    {
+      "tag": "span",
+      "text": "deep-research",
+      "className": "rich-text-skill-command-chip",
+      "testId": "skill-command-chip"
+    },
+    {
+      "tag": "span",
+      "text": "deep-research",
+      "className": "rich-text-skill-command-content",
+      "testId": null
+    },
+    {
+      "tag": "span",
+      "text": "deep-research",
+      "className": "rich-text-skill-command-label",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "Add files or photosAdd to projectNo projectAdd new projectSkillsworktree-managementdeep-researchdocx",
+      "className": "",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "Add files or photosAdd to projectNo projectAdd new projectSkillsworktree-managementdeep-researchdocx",
+      "className": "ant-dropdown ant-dropdown-hidden mavis-dropdown plus-menu-dropdown  mavis-dropdown-compact mavis-dropdown-custom-content css-loobri ant-dropdown-placement-bottomLeft",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "Add files or photosAdd to projectNo projectAdd new projectSkillsworktree-managementdeep-researchdocx",
+      "className": "",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "Add files or photosAdd to projectNo projectAdd new projectSkillsworktree-managementdeep-researchdocx",
+      "className": "desktop-text-ui-body",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "Add files or photosAdd to projectNo projectAdd new projectSkillsworktree-managementdeep-researchdocx",
+      "className": "mavis-menu-surface z-[300] flex w-[200px] flex-col gap-px rounded-[12px] border-[0.5px] border-border_default bg-bg_grouped_secondary_elevated p-1 shadow-[0_0_20px_rgba(10,10,10,0.08)] animate-dropdown-in",
+      "testId": "message-plus-menu"
+    },
+    {
+      "tag": "div",
+      "text": "Skillsworktree-managementdeep-researchdocxmcode-tools-masterpdfpptxteamvisual-pagexlsxplan-modeskill",
+      "className": "relative",
+      "testId": "plus-menu-skills-trigger"
+    },
+    {
+      "tag": "div",
+      "text": "worktree-managementdeep-researchdocxmcode-tools-masterpdfpptxteamvisual-pagexlsxplan-modeskill-creat",
+      "className": "absolute left-full z-10 pl-px top-0 -mt-1",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "worktree-managementdeep-researchdocxmcode-tools-masterpdfpptxteamvisual-pagexlsxplan-modeskill-creat",
+      "className": "mavis-menu-surface flex max-h-[283px] w-[200px] flex-col gap-px overflow-hidden rounded-[12px] border-[0.5px] border-border_default bg-bg_grouped_secondary_elevated p-1 shadow-[0_0_20px_rgba(10,10,10,0.08)]",
+      "testId": "plus-menu-skills-submenu"
+    },
+    {
+      "tag": "div",
+      "text": "worktree-managementdeep-researchdocxmcode-tools-masterpdfpptxteamvisual-pagexlsxplan-modeskill-creat",
+      "className": "flex max-h-[220px] flex-col gap-px overflow-y-auto scrollbar-hide",
+      "testId": "plus-menu-skills-list"
+    },
+    {
+      "tag": "button",
+      "text": "deep-research",
+      "className": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover min-h-8 overflow-hidden",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "deep-research",
+      "className": "",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "deep-research",
+      "className": "ant-tooltip ant-tooltip-hidden css-loobri ant-tooltip-placement-right",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "deep-research",
+      "className": "ant-tooltip-content",
+      "testId": null
+    },
+    {
+      "tag": "div",
+      "text": "deep-research",
+      "className": "ant-tooltip-inner",
+      "testId": null
+    }
+  ],
+  "composerText": "deep-research\n \n\nM3"
+}

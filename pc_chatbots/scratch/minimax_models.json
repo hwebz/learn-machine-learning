@@ -1,0 +1,422 @@
+[
+  {
+    "text": "Use agent",
+    "className": "mavis-sidebar-item w-full flex items-center gap-2 pl-2 pr-0.5 h-[30px] text-left transition-colors rounded-lg text-text_default_primary hover:bg-bg_interaction_tertiary_hover group-hover:bg-bg_interaction_tertiary_hover ",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Use agent",
+    "className": "flex items-center gap-2",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Use agent",
+    "className": "mavis-sidebar-item w-full flex items-center gap-2 pl-2 pr-0.5 h-[30px] text-left transition-colors rounded-lg text-text_default_primary hover:bg-bg_interaction_tertiary_hover group-hover:bg-bg_interaction_tertiary_hover ",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Use agent",
+    "className": "flex items-center gap-2",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Tổng hợp tri thức và kiểm chứng AI",
+    "className": "mavis-sidebar-item w-full flex items-center gap-2 pl-2 pr-0.5 h-[30px] text-left transition-colors rounded-lg text-text_default_primary hover:bg-bg_interaction_tertiary_hover group-hover:bg-bg_interaction_tertiary_hover ",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Tổng hợp tri thức và kiểm chứng AI",
+    "className": "flex items-center gap-2",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Tổng hợp tri thức và kiểm chứng AI",
+    "className": "mavis-sidebar-item w-full flex items-center gap-2 pl-2 pr-0.5 h-[30px] text-left transition-colors rounded-lg text-text_default_primary hover:bg-bg_interaction_tertiary_hover group-hover:bg-bg_interaction_tertiary_hover ",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Tổng hợp tri thức và kiểm chứng AI",
+    "className": "flex items-center gap-2",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Chat history with Verifier",
+    "className": "mavis-sidebar-item w-full flex items-center gap-2 pl-2 pr-0.5 h-[30px] text-left transition-colors rounded-lg text-text_default_primary hover:bg-bg_interaction_tertiary_hover group-hover:bg-bg_interaction_tertiary_hover ",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Chat history with Verifier",
+    "className": "flex items-center gap-2",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Chat history with Verifier",
+    "className": "mavis-sidebar-item w-full flex items-center gap-2 pl-2 pr-0.5 h-[30px] text-left transition-colors rounded-lg text-text_default_primary hover:bg-bg_interaction_tertiary_hover group-hover:bg-bg_interaction_tertiary_hover ",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Chat history with Verifier",
+    "className": "flex items-center gap-2",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Chat history with Coder",
+    "className": "mavis-sidebar-item w-full flex items-center gap-2 pl-2 pr-0.5 h-[30px] text-left transition-colors rounded-lg text-text_default_primary hover:bg-bg_interaction_tertiary_hover group-hover:bg-bg_interaction_tertiary_hover ",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Chat history with Coder",
+    "className": "flex items-center gap-2",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Chat history with Coder",
+    "className": "mavis-sidebar-item w-full flex items-center gap-2 pl-2 pr-0.5 h-[30px] text-left transition-colors rounded-lg text-text_default_primary hover:bg-bg_interaction_tertiary_hover group-hover:bg-bg_interaction_tertiary_hover ",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Chat history with Coder",
+    "className": "flex items-center gap-2",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Chat history with General",
+    "className": "mavis-sidebar-item w-full flex items-center gap-2 pl-2 pr-0.5 h-[30px] text-left transition-colors rounded-lg text-text_default_primary hover:bg-bg_interaction_tertiary_hover group-hover:bg-bg_interaction_tertiary_hover ",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Chat history with General",
+    "className": "flex items-center gap-2",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Chat history with General",
+    "className": "mavis-sidebar-item w-full flex items-center gap-2 pl-2 pr-0.5 h-[30px] text-left transition-colors rounded-lg text-text_default_primary hover:bg-bg_interaction_tertiary_hover group-hover:bg-bg_interaction_tertiary_hover ",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Chat history with General",
+    "className": "flex items-center gap-2",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Chat history with Mavis",
+    "className": "mavis-sidebar-item w-full flex items-center gap-2 pl-2 pr-0.5 h-[30px] text-left transition-colors rounded-lg text-text_default_primary hover:bg-bg_interaction_tertiary_hover group-hover:bg-bg_interaction_tertiary_hover ",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Chat history with Mavis",
+    "className": "flex items-center gap-2",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Chat history with Mavis",
+    "className": "mavis-sidebar-item w-full flex items-center gap-2 pl-2 pr-0.5 h-[30px] text-left transition-colors rounded-lg text-text_default_primary hover:bg-bg_interaction_tertiary_hover group-hover:bg-bg_interaction_tertiary_hover ",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "Chat history with Mavis",
+    "className": "flex items-center gap-2",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "hwebz",
+    "className": "ant-dropdown-trigger flex w-full min-w-0 cursor-pointer items-center justify-between gap-2 px-4 h-[60px]",
+    "testId": "sidebar-user-menu-trigger",
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "",
+    "className": "flex size-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-border_light",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "hwebz",
+    "className": "flex min-w-0 flex-1 animate-sidebar-expand-fade items-center gap-2",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "",
+    "className": "flex flex-shrink-0 items-center gap-2",
+    "testId": "sidebar-footer-actions",
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "",
+    "className": "relative flex size-8 flex-shrink-0 items-center justify-center rounded-[8px] border-0 bg-transparent p-0 text-icon_default_primary transition-colors duration-150 hover:bg-bg_interaction_tertiary_hover disabled:cursor-default disabled:opacity-40  mavis-popover ",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "",
+    "className": "flex size-8 flex-shrink-0 items-center justify-center rounded-[8px] border-0 bg-transparent p-0 text-icon_default_primary hover:bg-bg_interaction_tertiary_hover",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "",
+    "className": "flex size-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border border-border_light",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "hwebz",
+    "className": "flex min-w-0 flex-1 animate-sidebar-expand-fade items-center gap-2",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "",
+    "className": "flex flex-shrink-0 items-center gap-2",
+    "testId": "sidebar-footer-actions",
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "",
+    "className": "relative flex size-8 flex-shrink-0 items-center justify-center rounded-[8px] border-0 bg-transparent p-0 text-icon_default_primary transition-colors duration-150 hover:bg-bg_interaction_tertiary_hover disabled:cursor-default disabled:opacity-40  mavis-popover ",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "",
+    "className": "flex size-8 flex-shrink-0 items-center justify-center rounded-[8px] border-0 bg-transparent p-0 text-icon_default_primary hover:bg-bg_interaction_tertiary_hover",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "",
+    "className": "select-none ant-dropdown-trigger flex h-[30px] w-[30px] items-center justify-center text-icon_default_primary hover:bg-bg_interaction_tertiary_hover rounded-full transition-colors cursor-pointer",
+    "testId": "attach-button",
+    "role": "button",
+    "ariaSelected": null
+  },
+  {
+    "text": "M3.1-Flash-Preview\nM3.1-Flash\n-Preview",
+    "className": "mavis-menu-item flex min-h-[30px] w-full items-center gap-[6px] rounded-[8px] p-1.5 text-left transition-colors hover:bg-bg_interaction_tertiary_hover",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "M3.1-Flash-Preview\nM3.1-Flash\n-Preview",
+    "className": "flex min-w-0 flex-1 items-center gap-[6px] text-left",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "",
+    "className": "flex size-4 shrink-0 items-center justify-center",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "M3\nM\n3",
+    "className": "mavis-menu-item flex min-h-[30px] w-full items-center gap-[6px] rounded-[8px] p-1.5 text-left transition-colors hover:bg-bg_interaction_tertiary_hover",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "M3\nM\n3",
+    "className": "flex min-w-0 flex-1 items-center gap-[6px] text-left",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "",
+    "className": "flex size-4 shrink-0 items-center justify-center",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "M2.7\nM2\n.7",
+    "className": "mavis-menu-item flex min-h-[30px] w-full items-center gap-[6px] rounded-[8px] p-1.5 text-left transition-colors hover:bg-bg_interaction_tertiary_hover",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "M2.7\nM2\n.7",
+    "className": "flex min-w-0 flex-1 items-center gap-[6px] text-left",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "",
+    "className": "flex size-4 shrink-0 items-center justify-center",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "M2.7 HighSpeed\nM2.7 Hi\nghSpeed",
+    "className": "mavis-menu-item flex min-h-[30px] w-full items-center gap-[6px] rounded-[8px] p-1.5 text-left transition-colors hover:bg-bg_interaction_tertiary_hover",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "M2.7 HighSpeed\nM2.7 Hi\nghSpeed",
+    "className": "flex min-w-0 flex-1 items-center gap-[6px] text-left",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "",
+    "className": "flex size-4 shrink-0 items-center justify-center",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "M3.1-Flash-Preview\nM3.1-Flash\n-Preview",
+    "className": "mavis-menu-item flex min-h-[30px] w-full items-center gap-[6px] rounded-[8px] p-1.5 text-left transition-colors hover:bg-bg_interaction_tertiary_hover",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "M3.1-Flash-Preview\nM3.1-Flash\n-Preview",
+    "className": "flex min-w-0 flex-1 items-center gap-[6px] text-left",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "",
+    "className": "flex size-4 shrink-0 items-center justify-center",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "M3\nM\n3",
+    "className": "mavis-menu-item flex min-h-[30px] w-full items-center gap-[6px] rounded-[8px] p-1.5 text-left transition-colors hover:bg-bg_interaction_tertiary_hover",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "M3\nM\n3",
+    "className": "flex min-w-0 flex-1 items-center gap-[6px] text-left",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "",
+    "className": "flex size-4 shrink-0 items-center justify-center",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "M2.7\nM2\n.7",
+    "className": "mavis-menu-item flex min-h-[30px] w-full items-center gap-[6px] rounded-[8px] p-1.5 text-left transition-colors hover:bg-bg_interaction_tertiary_hover",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "M2.7\nM2\n.7",
+    "className": "flex min-w-0 flex-1 items-center gap-[6px] text-left",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "",
+    "className": "flex size-4 shrink-0 items-center justify-center",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "M2.7 HighSpeed\nM2.7 Hi\nghSpeed",
+    "className": "mavis-menu-item flex min-h-[30px] w-full items-center gap-[6px] rounded-[8px] p-1.5 text-left transition-colors hover:bg-bg_interaction_tertiary_hover",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "M2.7 HighSpeed\nM2.7 Hi\nghSpeed",
+    "className": "flex min-w-0 flex-1 items-center gap-[6px] text-left",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  },
+  {
+    "text": "",
+    "className": "flex size-4 shrink-0 items-center justify-center",
+    "testId": null,
+    "role": null,
+    "ariaSelected": null
+  }
+]

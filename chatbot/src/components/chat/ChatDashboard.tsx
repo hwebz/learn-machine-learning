@@ -1507,6 +1507,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         onRetryProvider={handleRetryProvider}
         supportedDataTypes={capsHook.supportedDataTypes}
         voiceChatSupport={capsHook.voiceChatSupport}
+        capabilitiesMap={capsHook.capabilitiesMap}
+        selectionsMap={capsHook.selectionsMap}
+        onUpdateSelection={capsHook.updateSelection}
+        onSyncProvider={capsHook.syncProvider}
+        loadingProvider={capsHook.loadingProvider}
       />
 
       {/* 3. Right Sidebar (Inspection & Details) */}

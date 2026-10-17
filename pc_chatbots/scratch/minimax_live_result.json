@@ -1,0 +1,31 @@
+{
+  "step_a_caps": {
+    "models": [
+      "M3.1-Flash-Preview",
+      "M3",
+      "M2.7",
+      "M2.7 HighSpeed"
+    ],
+    "selected_model": "m3",
+    "deep_research": false
+  },
+  "step_b_deep_research_on": {
+    "triggerText": "M3",
+    "hasChip": true,
+    "chipText": "deep-research"
+  },
+  "step_c_prompt_with_chip": {
+    "hasChip": true,
+    "fullText": "deep-research\n  Thử nghiệm câu hỏi: Giải thích cơ chế Deep Research?",
+    "sendBtnDisabled": false
+  },
+  "step_d_deep_research_off": {
+    "triggerText": "M3",
+    "hasChip": false
+  },
+  "step_e_standard_prompt": {
+    "hasChip": false,
+    "fullText": "Thử nghiệm câu hỏi thông thường không có Deep Research",
+    "sendBtnDisabled": false
+  }
+}

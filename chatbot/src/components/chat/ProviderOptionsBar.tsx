@@ -62,6 +62,14 @@ export function ProviderOptionsBar({
   const isGrok = providerId === "grok";
   const isMistral = providerId === "mistral";
   const isZhipu = providerId === "zhipu";
+  const isMinimax = providerId === "minimax";
+
+  const minimaxFallbackModels: OptionItem[] = [
+    { id: "m3", label: "M3", description: "Mô hình cờ đầu toàn diện của MiniMax, xử lý tác vụ phức tạp", selected: true, badge: "M3" },
+    { id: "m3.1-flash", label: "M3.1-Flash-Preview", description: "Mô hình tốc độ cao, phản hồi tức thì cho tác vụ nhanh", selected: false, badge: "Flash" },
+    { id: "m2.7", label: "M2.7", description: "Mô hình tiêu chuẩn ổn định", selected: false, badge: "2.7" },
+    { id: "m2.7-highspeed", label: "M2.7 HighSpeed", description: "Phiên bản tốc độ cao", selected: false, badge: "HighSpeed" },
+  ];
 
   const zhipuFallbackModels: OptionItem[] = [
     { id: "glm-5.3-flash", label: "GLM-5.3-Flash", description: "Lightweight flagship model, instant response (Mô hình cờ đầu gọn nhẹ, phản hồi tức thì)", selected: true, badge: "Flash" },
@@ -161,9 +169,13 @@ export function ProviderOptionsBar({
                   ? (capabilities?.available_models && capabilities.available_models.length > 0 && !capabilities.available_models.some((m) => m.id === "default")
                     ? capabilities.available_models
                     : zhipuFallbackModels)
+                  : isMinimax
+                    ? (capabilities?.available_models && capabilities.available_models.length > 0 && !capabilities.available_models.some((m) => m.id === "default")
+                      ? capabilities.available_models
+                      : minimaxFallbackModels)
                   : [];
 
-  const thinkingLevels: OptionItem[] = isDeepSeek || isCopilot || isChatGPT || isPerplexity || isGrok || isZhipu
+  const thinkingLevels: OptionItem[] = isDeepSeek || isCopilot || isChatGPT || isPerplexity || isGrok || isZhipu || isMinimax
     ? []
     : isClaude
       ? (capabilities?.thinking_levels && capabilities.thinking_levels.length > 0 && !capabilities.thinking_levels.some((t) => t.id === "auto")
@@ -240,7 +252,7 @@ export function ProviderOptionsBar({
     },
   ];
 
-  const modes = (providerId === "gemini" || providerId === "qwen" || providerId === "claude" || providerId === "deepseek" || providerId === "chatgpt" || providerId === "perplexity" || providerId === "kimi" || providerId === "grok" || providerId === "mistral" || providerId === "zhipu")
+  const modes = (providerId === "gemini" || providerId === "qwen" || providerId === "claude" || providerId === "deepseek" || providerId === "chatgpt" || providerId === "perplexity" || providerId === "kimi" || providerId === "grok" || providerId === "mistral" || providerId === "zhipu" || providerId === "minimax")
     ? []
     : capabilities?.modes && capabilities.modes.length > 0
       ? capabilities.modes
@@ -1053,6 +1065,44 @@ export function ProviderOptionsBar({
                 padding: "1px 4px",
                 borderRadius: 3,
                 backgroundColor: isDeepResearch ? "#ea580c" : "#f1f5f9",
+                color: isDeepResearch ? "#ffffff" : "#64748b",
+                fontWeight: 700,
+              }}
+            >
+              {isDeepResearch ? "ON" : "OFF"}
+            </span>
+          </button>
+        )}
+
+        {/* MiniMax Deep Research Toggle Button */}
+        {isMinimax && (
+          <button
+            type="button"
+            onClick={() => onUpdateSelection({ deep_research: !isDeepResearch })}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "4px 9px",
+              borderRadius: "var(--radius-sm, 6px)",
+              border: `1px solid ${isDeepResearch ? "#e2167e" : "var(--border-subtle, #cbd5e1)"}`,
+              backgroundColor: isDeepResearch ? "#fdf2f8" : "#ffffff",
+              fontSize: 12,
+              fontWeight: 600,
+              color: isDeepResearch ? "#e2167e" : "var(--text-secondary, #475569)",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+            title="Bật/Tắt chế độ Deep Research trên MiniMax (+ button -> Skills -> deep-research)"
+          >
+            <SparklesIcon size={13} color={isDeepResearch ? "#e2167e" : "#64748b"} />
+            <span>Deep Research</span>
+            <span
+              style={{
+                fontSize: 9.5,
+                padding: "1px 4px",
+                borderRadius: 3,
+                backgroundColor: isDeepResearch ? "#e2167e" : "#f1f5f9",
                 color: isDeepResearch ? "#ffffff" : "#64748b",
                 fontWeight: 700,
               }}

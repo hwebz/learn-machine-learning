@@ -1,0 +1,122 @@
+[
+  {
+    "tag": "span",
+    "text": "Download",
+    "className": "",
+    "testId": null
+  },
+  {
+    "tag": "button",
+    "text": "Add files or photos",
+    "className": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover",
+    "testId": null
+  },
+  {
+    "tag": "div",
+    "text": "Add to project",
+    "className": "relative",
+    "testId": null
+  },
+  {
+    "tag": "button",
+    "text": "Skills",
+    "className": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover min-h-8 overflow-hidden bg-bg_interaction_tertiary_hover",
+    "testId": null
+  },
+  {
+    "tag": "button",
+    "text": "worktree-management",
+    "className": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover min-h-8 overflow-hidden",
+    "testId": null
+  },
+  {
+    "tag": "button",
+    "text": "deep-research",
+    "className": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover min-h-8 overflow-hidden",
+    "testId": null
+  },
+  {
+    "tag": "button",
+    "text": "docx",
+    "className": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover min-h-8 overflow-hidden",
+    "testId": null
+  },
+  {
+    "tag": "button",
+    "text": "mcode-tools-master",
+    "className": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover min-h-8 overflow-hidden",
+    "testId": null
+  },
+  {
+    "tag": "button",
+    "text": "pdf",
+    "className": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover min-h-8 overflow-hidden",
+    "testId": null
+  },
+  {
+    "tag": "button",
+    "text": "pptx",
+    "className": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover min-h-8 overflow-hidden",
+    "testId": null
+  },
+  {
+    "tag": "button",
+    "text": "team",
+    "className": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover min-h-8 overflow-hidden",
+    "testId": null
+  },
+  {
+    "tag": "button",
+    "text": "visual-page",
+    "className": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover min-h-8 overflow-hidden",
+    "testId": null
+  },
+  {
+    "tag": "button",
+    "text": "xlsx",
+    "className": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover min-h-8 overflow-hidden",
+    "testId": null
+  },
+  {
+    "tag": "button",
+    "text": "plan-mode",
+    "className": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover min-h-8 overflow-hidden",
+    "testId": null
+  },
+  {
+    "tag": "button",
+    "text": "skill-creator",
+    "className": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover min-h-8 overflow-hidden",
+    "testId": null
+  },
+  {
+    "tag": "div",
+    "text": "Manage skills\nAdd skill",
+    "className": "flex flex-shrink-0 flex-col gap-px",
+    "testId": "plus-menu-skills-actions"
+  },
+  {
+    "tag": "button",
+    "text": "Manage skills",
+    "className": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover min-h-8 overflow-hidden",
+    "testId": "plus-menu-skills-manage"
+  },
+  {
+    "tag": "button",
+    "text": "Add skill",
+    "className": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover min-h-8 overflow-hidden",
+    "testId": "plus-menu-skills-add"
+  },
+  {
+    "tag": "button",
+    "text": "Add plugins",
+    "className": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover min-h-8 overflow-hidden",
+    "testId": "plus-menu-add-plugins"
+  },
+  {
+    "tag": "button",
+    "text": "Environment variables",
+    "className": "desktop-text-ui-body mavis-menu-item flex w-full items-center gap-1.5 rounded-[8px] px-1.5 py-1.5 text-left text-sm font-normal text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover",
+    "testId": "plus-menu-env-vars"
+  }
+]

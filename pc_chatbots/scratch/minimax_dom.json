@@ -1,0 +1,1185 @@
+{
+  "url": "https://agent.minimax.io/",
+  "title": "MiniMax Agent: Minimize Effort, Maximize Intelligence",
+  "elements": [
+    {
+      "tag": "div",
+      "text": "New task\nSearch\nPlugins · Skills\nScheduled\nAssets\nConnect mobile\nMore\nMaxHermes\nMaxClaw\nProjects\nAdd",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-sidebar-card flex flex-col bg-bg_grouped_secondary overflow-hidden z-50 relative select-none",
+      "testId": "sidebar-base-card",
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 0,
+        "bottom": 900,
+        "left": 0,
+        "right": 260,
+        "width": 260,
+        "height": 900
+      }
+    },
+    {
+      "tag": "button",
+      "text": "",
+      "ariaLabel": "Back to home",
+      "title": "Back to home",
+      "id": "",
+      "className": "flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-[8px] text-icon_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover [-webkit-app-region:no-drag]",
+      "testId": "sidebar-home-logo",
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 12,
+        "bottom": 44,
+        "left": 9,
+        "right": 41,
+        "width": 32,
+        "height": 32
+      }
+    },
+    {
+      "tag": "button",
+      "text": "",
+      "ariaLabel": null,
+      "title": "Collapse sidebar",
+      "id": "",
+      "className": "flex size-8 shrink-0 items-center justify-center rounded-[8px] text-text_default_tertiary transition-colors hover:bg-bg_interaction_tertiary_hover hover:text-text_default_secondary [-webkit-app-region:no-drag]",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 12,
+        "bottom": 44,
+        "left": 219,
+        "right": 251,
+        "width": 32,
+        "height": 32
+      }
+    },
+    {
+      "tag": "button",
+      "text": "New task",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-sidebar-item flex h-[34px] w-full items-center gap-2 rounded-[8px] pl-2 pr-2.5 text-left text-sm leading-5 text-text_default_primary transition-colors focus:outline-none focus-visible:bg-bg_interaction_tertiary_hover bg-bg_grouped_tertiary_elevated",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 64,
+        "bottom": 98,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 34
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Search",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-sidebar-item flex h-[34px] w-full items-center gap-2 rounded-[8px] pl-2 pr-2.5 text-left text-sm leading-5 text-text_default_primary transition-colors focus:outline-none focus-visible:bg-bg_interaction_tertiary_hover hover:bg-bg_interaction_tertiary_hover",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 99,
+        "bottom": 133,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 34
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Plugins · Skills",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-sidebar-item flex h-[34px] w-full items-center gap-2 rounded-[8px] pl-2 pr-2.5 text-left text-sm leading-5 text-text_default_primary transition-colors focus:outline-none focus-visible:bg-bg_interaction_tertiary_hover hover:bg-bg_interaction_tertiary_hover",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 135,
+        "bottom": 169,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 34
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Scheduled",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-sidebar-item flex h-[34px] w-full items-center gap-2 rounded-[8px] pl-2 pr-2.5 text-left text-sm leading-5 text-text_default_primary transition-colors focus:outline-none focus-visible:bg-bg_interaction_tertiary_hover hover:bg-bg_interaction_tertiary_hover",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 170,
+        "bottom": 204,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 34
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Assets",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-sidebar-item flex h-[34px] w-full items-center gap-2 rounded-[8px] pl-2 pr-2.5 text-left text-sm leading-5 text-text_default_primary transition-colors focus:outline-none focus-visible:bg-bg_interaction_tertiary_hover hover:bg-bg_interaction_tertiary_hover",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 205,
+        "bottom": 239,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 34
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Connect mobile",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-sidebar-item flex h-[34px] w-full items-center gap-2 rounded-[8px] pl-2 pr-2.5 text-left text-sm leading-5 text-text_default_primary transition-colors focus:outline-none focus-visible:bg-bg_interaction_tertiary_hover hover:bg-bg_interaction_tertiary_hover",
+      "testId": "web-connect-mobile-nav",
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 240,
+        "bottom": 274,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 34
+      }
+    },
+    {
+      "tag": "button",
+      "text": "More",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "group/more flex h-8 items-center gap-1 px-2 pb-1.5 pt-2 text-left",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 286,
+        "bottom": 318,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 32
+      }
+    },
+    {
+      "tag": "button",
+      "text": "MaxHermes",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "w-full flex items-center gap-2 pl-2 pr-0.5 h-[34px] rounded-lg text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 318,
+        "bottom": 352,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 34
+      }
+    },
+    {
+      "tag": "button",
+      "text": "MaxClaw",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "w-full flex items-center gap-2 pl-2 pr-0.5 h-[34px] rounded-lg text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 353,
+        "bottom": 387,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 34
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Projects",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "flex items-center gap-1 flex-1 min-w-0 text-left",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 324,
+        "bottom": 344,
+        "left": 16,
+        "right": 243,
+        "width": 227,
+        "height": 20
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Add new project",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "flex h-[34px] w-full items-center gap-2 rounded-[8px] pl-2 pr-0.5 text-left text-text_default_secondary transition-colors hover:bg-bg_interaction_tertiary_hover",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 351,
+        "bottom": 385,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 34
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Recents",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "flex items-center gap-1 flex-1 min-w-0 text-left",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 356,
+        "bottom": 376,
+        "left": 16,
+        "right": 243,
+        "width": 227,
+        "height": 20
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Use agent",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "[-webkit-app-region:no-drag]",
+      "testId": null,
+      "role": "button",
+      "placeholder": null,
+      "rect": {
+        "top": 383,
+        "bottom": 413,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Use agent",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-dropdown undefined",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 383,
+        "bottom": 413,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Use agent",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "ant-dropdown-trigger group relative rounded-lg",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 383,
+        "bottom": 413,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Use agent",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-sidebar-item w-full flex items-center gap-2 pl-2 pr-0.5 h-[30px] text-left transition-colors rounded-lg text-text_default_primary hover:bg-bg_interaction_tertiary_hover group-hover:bg-bg_interaction_tertiary_hover ",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 383,
+        "bottom": 413,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Tổng hợp tri thức và kiểm chứng AI",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "[-webkit-app-region:no-drag]",
+      "testId": null,
+      "role": "button",
+      "placeholder": null,
+      "rect": {
+        "top": 414,
+        "bottom": 444,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Tổng hợp tri thức và kiểm chứng AI",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-dropdown undefined",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 414,
+        "bottom": 444,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Tổng hợp tri thức và kiểm chứng AI",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "ant-dropdown-trigger group relative rounded-lg",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 414,
+        "bottom": 444,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Tổng hợp tri thức và kiểm chứng AI",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-sidebar-item w-full flex items-center gap-2 pl-2 pr-0.5 h-[30px] text-left transition-colors rounded-lg text-text_default_primary hover:bg-bg_interaction_tertiary_hover group-hover:bg-bg_interaction_tertiary_hover ",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 414,
+        "bottom": 444,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Chat history with Verifier",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "[-webkit-app-region:no-drag]",
+      "testId": null,
+      "role": "button",
+      "placeholder": null,
+      "rect": {
+        "top": 445,
+        "bottom": 475,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Chat history with Verifier",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-dropdown undefined",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 445,
+        "bottom": 475,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Chat history with Verifier",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "ant-dropdown-trigger group relative rounded-lg",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 445,
+        "bottom": 475,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Chat history with Verifier",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-sidebar-item w-full flex items-center gap-2 pl-2 pr-0.5 h-[30px] text-left transition-colors rounded-lg text-text_default_primary hover:bg-bg_interaction_tertiary_hover group-hover:bg-bg_interaction_tertiary_hover ",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 445,
+        "bottom": 475,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Chat history with Coder",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "[-webkit-app-region:no-drag]",
+      "testId": null,
+      "role": "button",
+      "placeholder": null,
+      "rect": {
+        "top": 476,
+        "bottom": 506,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Chat history with Coder",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-dropdown undefined",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 476,
+        "bottom": 506,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Chat history with Coder",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "ant-dropdown-trigger group relative rounded-lg",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 476,
+        "bottom": 506,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Chat history with Coder",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-sidebar-item w-full flex items-center gap-2 pl-2 pr-0.5 h-[30px] text-left transition-colors rounded-lg text-text_default_primary hover:bg-bg_interaction_tertiary_hover group-hover:bg-bg_interaction_tertiary_hover ",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 476,
+        "bottom": 506,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Chat history with General",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "[-webkit-app-region:no-drag]",
+      "testId": null,
+      "role": "button",
+      "placeholder": null,
+      "rect": {
+        "top": 507,
+        "bottom": 537,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Chat history with General",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-dropdown undefined",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 507,
+        "bottom": 537,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Chat history with General",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "ant-dropdown-trigger group relative rounded-lg",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 507,
+        "bottom": 537,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Chat history with General",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-sidebar-item w-full flex items-center gap-2 pl-2 pr-0.5 h-[30px] text-left transition-colors rounded-lg text-text_default_primary hover:bg-bg_interaction_tertiary_hover group-hover:bg-bg_interaction_tertiary_hover ",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 507,
+        "bottom": 537,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Chat history with Mavis",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "[-webkit-app-region:no-drag]",
+      "testId": null,
+      "role": "button",
+      "placeholder": null,
+      "rect": {
+        "top": 538,
+        "bottom": 568,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Chat history with Mavis",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-dropdown undefined",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 538,
+        "bottom": 568,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "div",
+      "text": "Chat history with Mavis",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "ant-dropdown-trigger group relative rounded-lg",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 538,
+        "bottom": 568,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Chat history with Mavis",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-sidebar-item w-full flex items-center gap-2 pl-2 pr-0.5 h-[30px] text-left transition-colors rounded-lg text-text_default_primary hover:bg-bg_interaction_tertiary_hover group-hover:bg-bg_interaction_tertiary_hover ",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 538,
+        "bottom": 568,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Show more",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "group flex h-[34px] w-full items-center gap-2 rounded-lg px-2 text-sm leading-5 text-text_default_tertiary transition-colors hover:text-text_default_secondary disabled:opacity-50 ",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 569,
+        "bottom": 603,
+        "left": 8,
+        "right": 251,
+        "width": 243,
+        "height": 34
+      }
+    },
+    {
+      "tag": "div",
+      "text": "hwebz",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-dropdown flex-1 cursor-pointer",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 841,
+        "bottom": 900,
+        "left": 0,
+        "right": 259,
+        "width": 259,
+        "height": 59
+      }
+    },
+    {
+      "tag": "div",
+      "text": "hwebz",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "ant-dropdown-trigger flex w-full min-w-0 cursor-pointer items-center justify-between gap-2 px-4 h-[60px]",
+      "testId": "sidebar-user-menu-trigger",
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 841,
+        "bottom": 901,
+        "left": 0,
+        "right": 259,
+        "width": 259,
+        "height": 60
+      }
+    },
+    {
+      "tag": "button",
+      "text": "",
+      "ariaLabel": "Inbox, 9 unread messages",
+      "title": null,
+      "id": "",
+      "className": "relative flex size-8 flex-shrink-0 items-center justify-center rounded-[8px] border-0 bg-transparent p-0 text-icon_default_primary transition-colors duration-150 hover:bg-bg_interaction_tertiary_hover disabled:cursor-default disabled:opacity-40  mavis-popover ",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 855,
+        "bottom": 887,
+        "left": 171,
+        "right": 203,
+        "width": 32,
+        "height": 32
+      }
+    },
+    {
+      "tag": "button",
+      "text": "",
+      "ariaLabel": "Download desktop",
+      "title": null,
+      "id": "",
+      "className": "flex size-8 flex-shrink-0 items-center justify-center rounded-[8px] border-0 bg-transparent p-0 text-icon_default_primary hover:bg-bg_interaction_tertiary_hover",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 855,
+        "bottom": 887,
+        "left": 211,
+        "right": 243,
+        "width": 32,
+        "height": 32
+      }
+    },
+    {
+      "tag": "div",
+      "text": "",
+      "ariaLabel": "Enter message... (use / for commands)",
+      "title": null,
+      "id": "",
+      "className": "tiptap ProseMirror rich-text-editor ProseMirror-focused",
+      "testId": "message-textarea",
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 319,
+        "bottom": 373,
+        "left": 415,
+        "right": 1125,
+        "width": 710,
+        "height": 54
+      }
+    },
+    {
+      "tag": "div",
+      "text": "",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-dropdown flex-shrink-0",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 377,
+        "bottom": 407,
+        "left": 411,
+        "right": 441,
+        "width": 30,
+        "height": 30
+      }
+    },
+    {
+      "tag": "div",
+      "text": "",
+      "ariaLabel": "Add attachment",
+      "title": null,
+      "id": "",
+      "className": "select-none ant-dropdown-trigger flex h-[30px] w-[30px] items-center justify-center text-icon_default_primary hover:bg-bg_interaction_tertiary_hover rounded-full transition-colors cursor-pointer",
+      "testId": "attach-button",
+      "role": "button",
+      "placeholder": null,
+      "rect": {
+        "top": 377,
+        "bottom": 407,
+        "left": 411,
+        "right": 441,
+        "width": 30,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "text": "M3",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-model-selector-trigger mavis-control-surface flex h-[30px] min-w-0 items-center gap-1 rounded-[10px] pl-2 pr-2 text-sm text-text_default_primary transition-colors hover:bg-bg_interaction_tertiary_hover",
+      "testId": "model-selector-trigger",
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 377,
+        "bottom": 407,
+        "left": 1039,
+        "right": 1095,
+        "width": 56,
+        "height": 30
+      }
+    },
+    {
+      "tag": "div",
+      "text": "",
+      "ariaLabel": "Send message",
+      "title": null,
+      "id": "",
+      "className": "select-none flex size-[30px] shrink-0 items-center justify-center text-icon_interaction_primary_default transition-colors rounded-full bg-bg_interaction_primary_inactive cursor-not-allowed",
+      "testId": "send-button",
+      "role": "button",
+      "placeholder": null,
+      "rect": {
+        "top": 377,
+        "bottom": 407,
+        "left": 1099,
+        "right": 1129,
+        "width": 30,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Video generation",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-button videoGeneration   desktop-text-ui-body group relative flex h-[30px] w-fit min-w-[70px] shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-border_tertiary_default bg-bg_grouped_secondary !px-2 !py-1.5 text-sm !transition-colors !duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-border_accent text-text_default_primary hover:text-text_default_inverted_static  ",
+      "testId": "scene-chip-video",
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 448,
+        "bottom": 478,
+        "left": 451,
+        "right": 631,
+        "width": 180,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Document",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "desktop-text-ui-body flex h-[30px] flex-none cursor-pointer items-center justify-center gap-1 overflow-hidden rounded-[10px] border border-border_default mavis-suggestion-button pl-2 pr-2.5 text-sm font-normal leading-5 transition-colors",
+      "testId": "scene-chip-document",
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 448,
+        "bottom": 478,
+        "left": 643,
+        "right": 752,
+        "width": 108,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Website",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "desktop-text-ui-body flex h-[30px] flex-none cursor-pointer items-center justify-center gap-1 overflow-hidden rounded-[10px] border border-border_default mavis-suggestion-button pl-2 pr-2.5 text-sm font-normal leading-5 transition-colors",
+      "testId": "scene-chip-website",
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 448,
+        "bottom": 478,
+        "left": 764,
+        "right": 857,
+        "width": 93,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Image Generation",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "desktop-text-ui-body flex h-[30px] flex-none cursor-pointer items-center justify-center gap-1 overflow-hidden rounded-[10px] border border-border_default mavis-suggestion-button pl-2 pr-2.5 text-sm font-normal leading-5 transition-colors",
+      "testId": "scene-chip-image",
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 448,
+        "bottom": 478,
+        "left": 869,
+        "right": 1024,
+        "width": 155,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "text": "More",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "desktop-text-ui-body flex h-[30px] cursor-pointer items-center justify-center overflow-hidden rounded-[10px] border border-border_default mavis-suggestion-button pl-2 pr-2.5 text-sm font-normal leading-5 text-text_default_primary transition-colors",
+      "testId": "scene-chip-more",
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 448,
+        "bottom": 478,
+        "left": 1036,
+        "right": 1089,
+        "width": 53,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Upgrade plan",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "pointer-events-auto cursor-pointer !flex !min-h-9 !items-center !gap-1.5 !rounded-full !border-0 !bg-transparent !py-2 !pl-3 !pr-0 !text-sm !font-normal !leading-5 !text-text_default_accent [-webkit-app-region:no-drag]",
+      "testId": "home-upgrade-button",
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 16,
+        "bottom": 52,
+        "left": 692,
+        "right": 814,
+        "width": 122,
+        "height": 36
+      }
+    },
+    {
+      "tag": "div",
+      "text": "",
+      "ariaLabel": "Close",
+      "title": null,
+      "id": "",
+      "className": "select-none md:hover:bg-bg_interaction_tertiary_hover flex items-center justify-center rounded-[8px] size-[30px] min-h-[30px] min-w-[30px] shrink-0 rounded-full text-text_default_accent active:bg-bg_interaction_tertiary_press [-webkit-app-region:no-drag] cursor-pointer",
+      "testId": null,
+      "role": "button",
+      "placeholder": null,
+      "rect": {
+        "top": 19,
+        "bottom": 49,
+        "left": 814,
+        "right": 844,
+        "width": 30,
+        "height": 30
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Download desktop",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "mavis-button black  desktop-text-ui-body-strong h-9 w-full px-3 text-[14px] font-medium leading-[20px] ",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 831,
+        "bottom": 867,
+        "left": 1061,
+        "right": 1247,
+        "width": 186,
+        "height": 36
+      }
+    },
+    {
+      "tag": "div",
+      "text": "",
+      "ariaLabel": "关闭",
+      "title": null,
+      "id": "",
+      "className": "absolute -right-1.5 -top-[11px] flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[28px] border border-border_default bg-bg_grouped_secondary text-icon_default_tertiary transition-all hover:bg-bg_grouped_secondary hover:text-icon_default_primary focus:visible focus-visible:visible md:invisible md:group-hover:visible md:focus:visible md:focus-visible:visible",
+      "testId": null,
+      "role": "button",
+      "placeholder": null,
+      "rect": {
+        "top": 604,
+        "bottom": 628,
+        "left": 1237,
+        "right": 1261,
+        "width": 24,
+        "height": 24
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Download",
+      "ariaLabel": null,
+      "title": null,
+      "id": "",
+      "className": "flex h-8 items-center justify-center gap-[2px] rounded-[8px] border border-border_default bg-bg_grouped_secondary py-[6px] pl-[10px] pr-[14px] text-sm leading-5 text-text_default_primary hover:bg-bg_interaction_tertiary_hover mavis-popover ",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 16,
+        "bottom": 48,
+        "left": 1155,
+        "right": 1264,
+        "width": 109,
+        "height": 32
+      }
+    },
+    {
+      "tag": "button",
+      "text": "",
+      "ariaLabel": "Close check-in",
+      "title": null,
+      "id": "",
+      "className": "absolute right-2 top-2 z-10 flex size-6 items-center justify-center rounded-md border-0 bg-transparent p-0 text-icon_default_tertiary hover:bg-bg_interaction_tertiary_hover",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 627,
+        "bottom": 651,
+        "left": 310,
+        "right": 334,
+        "width": 24,
+        "height": 24
+      }
+    },
+    {
+      "tag": "button",
+      "text": "",
+      "ariaLabel": "About check-in Credits",
+      "title": null,
+      "id": "",
+      "className": "inline-flex size-4 shrink-0 cursor-pointer items-center justify-center border-0 bg-transparent p-0 text-icon_default_tertiary transition-colors hover:text-icon_default_primary focus-visible:outline-none focus-visible:text-icon_default_primary",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 631,
+        "bottom": 647,
+        "left": 234,
+        "right": 250,
+        "width": 16,
+        "height": 16
+      }
+    },
+    {
+      "tag": "button",
+      "text": "Check in for\n400",
+      "ariaLabel": "Check in for 400 Credits",
+      "title": null,
+      "id": "",
+      "className": "mavis-button black   desktop-text-ui-small-strong signin-claim-button h-8 w-full rounded-lg text-sm font-medium ",
+      "testId": null,
+      "role": null,
+      "placeholder": null,
+      "rect": {
+        "top": 795,
+        "bottom": 827,
+        "left": 17,
+        "right": 330,
+        "width": 313,
+        "height": 32
+      }
+    }
+  ],
+  "composerHtml": "<div aria-hidden=\"true\" data-testid=\"sidebar-top-scroll-divider\" class=\"pointer-events-none absolute inset-x-0 bottom-0 h-[0.6px] bg-border_default transition-opacity duration-150 ease-out opacity-0\" style=\"box-shadow: rgba(0, 0, 0, 0.04) 0px 4px 8px;\"></div>"
+}

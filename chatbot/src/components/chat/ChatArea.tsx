@@ -13,7 +13,10 @@ import { useVoiceRecording } from "../../lib/useVoiceRecording";
 import {
   SupportedDataTypes,
   VoiceChatSupport,
+  ProviderLiveCapabilities,
+  ProviderSelectionConfig,
 } from "../../types/capabilities";
+import { ProviderOptionsBar } from "./ProviderOptionsBar";
 import {
   PlusIcon,
   SettingsIcon,
@@ -51,6 +54,7 @@ function normalizeProvider(name: string): string {
   if (s.includes("mistral")) return "mistral";
   if (s.includes("kimi") || s.includes("moonshot")) return "kimi";
   if (s.includes("zhipu") || s.includes("glm")) return "zhipu";
+  if (s.includes("minimax") || s.includes("hailuo")) return "minimax";
   return s;
 }
 
@@ -58,7 +62,7 @@ function extractProvider(st: StepLog): string {
   if (st.provider) return normalizeProvider(st.provider);
   if (st.data?.provider) return normalizeProvider(String(st.data.provider));
   const match = st.message.match(
-    /\b(qwen|copilot|gemini|deepseek|chatgpt|openai|grok|perplexity|claude|mistral|kimi|moonshot|zhipu|glm)\b/i
+    /\b(qwen|copilot|gemini|deepseek|chatgpt|openai|grok|perplexity|claude|mistral|kimi|moonshot|zhipu|glm|minimax|hailuo)\b/i
   );
   if (match) return normalizeProvider(match[1]);
   return "";
@@ -551,6 +555,11 @@ interface ChatAreaProps {
   onRetryProvider?: (provider: string, jobId?: string) => void;
   supportedDataTypes?: SupportedDataTypes;
   voiceChatSupport?: VoiceChatSupport;
+  capabilitiesMap?: Record<string, ProviderLiveCapabilities>;
+  selectionsMap?: Record<string, ProviderSelectionConfig>;
+  onUpdateSelection?: (providerId: string, updates: Partial<ProviderSelectionConfig>) => void;
+  onSyncProvider?: (providerId: string) => void;
+  loadingProvider?: string | null;
 }
 
 export function ChatArea({
@@ -569,11 +578,17 @@ export function ChatArea({
   onRetryProvider,
   supportedDataTypes,
   voiceChatSupport,
+  capabilitiesMap,
+  selectionsMap,
+  onUpdateSelection,
+  onSyncProvider,
+  loadingProvider,
 }: ChatAreaProps) {
   const [inputText, setInputText] = useState("");
   const [isCopied, setIsCopied] = useState<string | null>(null);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<{ id: string; name: string; size: string; type: string }[]>([]);
+  const [activeOptionsProviderId, setActiveOptionsProviderId] = useState<string>("");
   const modelDropdownRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -814,6 +829,17 @@ export function ChatArea({
   };
 
   const selectedCount = selectedProviders.length;
+
+  const currentActiveOptionsId = useMemo(() => {
+    if (selectedProviders.some((p) => p.id === activeOptionsProviderId)) {
+      return activeOptionsProviderId;
+    }
+    return selectedProviders[0]?.id || selectedProvider.id;
+  }, [selectedProviders, activeOptionsProviderId, selectedProvider.id]);
+
+  const currentActiveProvider = useMemo(() => {
+    return selectedProviders.find((p) => p.id === currentActiveOptionsId) || selectedProviders[0] || selectedProvider;
+  }, [selectedProviders, currentActiveOptionsId, selectedProvider]);
 
   return (
     <main className="main-chat-area">
@@ -2007,6 +2033,102 @@ export function ChatArea({
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Provider Options Bar for selected provider(s) (Models, Deep Research toggle, Reasoning, DOM Sync) */}
+          {selectedCount === 1 && (
+            <div style={{ padding: "6px 12px 4px 12px", borderBottom: "1px solid var(--border-subtle, #f1f5f9)" }}>
+              <ProviderOptionsBar
+                providerName={(selectedProviders[0] || selectedProvider).name}
+                providerId={(selectedProviders[0] || selectedProvider).id}
+                capabilities={capabilitiesMap?.[(selectedProviders[0] || selectedProvider).id] || null}
+                selection={selectionsMap?.[(selectedProviders[0] || selectedProvider).id] || {}}
+                isLoading={loadingProvider === (selectedProviders[0] || selectedProvider).id}
+                onUpdateSelection={(updates) => onUpdateSelection?.((selectedProviders[0] || selectedProvider).id, updates)}
+                onSyncProvider={() => onSyncProvider?.((selectedProviders[0] || selectedProvider).id)}
+              />
+            </div>
+          )}
+
+          {selectedCount > 1 && (
+            <div style={{ padding: "6px 12px 4px 12px", borderBottom: "1px solid var(--border-subtle, #f1f5f9)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, overflowX: "auto" }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-muted, #64748b)", whiteSpace: "nowrap" }}>
+                  TÙY CHỌN ({selectedCount}):
+                </span>
+                {selectedProviders.map((sp) => {
+                  const isActive = sp.id === currentActiveOptionsId;
+                  return (
+                    <button
+                      key={sp.id}
+                      type="button"
+                      onClick={() => setActiveOptionsProviderId(sp.id)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "2px 8px",
+                        borderRadius: 12,
+                        border: `1px solid ${isActive ? "var(--brand-blue, #2563eb)" : "var(--border-subtle, #cbd5e1)"}`,
+                        backgroundColor: isActive ? "var(--brand-blue-light, #eff6ff)" : "#ffffff",
+                        color: isActive ? "var(--brand-blue, #2563eb)" : "var(--text-secondary, #475569)",
+                        fontSize: 11,
+                        fontWeight: isActive ? 700 : 500,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <ModelBadgeLogo type={sp.iconType} size={12} />
+                      <span>{sp.name.split(" ")[0]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <ProviderOptionsBar
+                providerName={currentActiveProvider.name}
+                providerId={currentActiveProvider.id}
+                capabilities={capabilitiesMap?.[currentActiveProvider.id] || null}
+                selection={selectionsMap?.[currentActiveProvider.id] || {}}
+                isLoading={loadingProvider === currentActiveProvider.id}
+                onUpdateSelection={(updates) => onUpdateSelection?.(currentActiveProvider.id, updates)}
+                onSyncProvider={() => onSyncProvider?.(currentActiveProvider.id)}
+              />
+            </div>
+          )}
+
+          {selectedCount === 0 && (
+            <div
+              style={{
+                padding: "6px 12px",
+                borderBottom: "1px solid var(--border-subtle, #f1f5f9)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                fontSize: 11.5,
+                color: "var(--text-muted, #64748b)",
+                backgroundColor: "#f8fafc",
+              }}
+            >
+              <span>Chưa chọn mô hình AI. Vui lòng chọn mô hình (MiniMax, Gemini, ChatGPT...) để kích hoạt Deep Research và tùy chọn.</span>
+              <button
+                type="button"
+                onClick={onOpenProvidersModal}
+                style={{
+                  border: "none",
+                  backgroundColor: "var(--brand-blue, #2563eb)",
+                  color: "#ffffff",
+                  borderRadius: 4,
+                  padding: "3px 8px",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                + Chọn mô hình
+              </button>
             </div>
           )}
 

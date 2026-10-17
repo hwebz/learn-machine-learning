@@ -606,36 +606,65 @@ providers:
     new_chat_url: "https://agent.minimax.io/"
     question_input:
       - { css: "div.tiptap.ProseMirror[contenteditable='true']" }
+      - { testid: message-textarea }
+      - { css: "[data-testid='message-textarea']" }
       - { css: "[contenteditable='true']" }
       - { css: "textarea" }
       - { role: textbox }
     submit:
+      - { testid: send-button }
+      - { css: "div[data-testid='send-button']" }
+      - { css: "[data-testid='send-button']" }
       - { css: "button[aria-label*='Send' i]" }
       - { role: button, name: "Send" }
       - { css: "button[class*='send']" }
     mode_selectors:
       model_dropdown:
+        - { testid: model-selector-trigger }
         - { css: "button[data-testid='model-selector-trigger']" }
-        - { css: "button[data-composer-model-trigger='true']" }
+        - { css: ".mavis-model-selector-trigger" }
+      attach_button:
+        - { testid: attach-button }
+        - { css: "div[data-testid='attach-button']" }
+        - { css: "div[aria-label='Add attachment']" }
       deep_model:
-        - { css: "[role='menuitem']:has-text('Pro')" }
-        - { css: "[role='menuitem']:has-text('M3.1-Pro')" }
+        - { css: ".mavis-menu-item:has-text('M3'):not(:has-text('Flash'))" }
+        - { css: "[role='menuitem']:has-text('M3')" }
       standard_model:
-        - { css: "[role='menuitem']:has-text('Flash')" }
-        - { css: "[role='menuitem']:has-text('M3.1-Flash-Preview')" }
+        - { css: ".mavis-menu-item:has-text('M3.1-Flash-Preview')" }
+        - { css: ".mavis-menu-item:has-text('Flash')" }
 
     generating_indicator:
+      - { testid: stop-button }
+      - { css: "[data-testid='chat-main-conversation'] [data-testid='stop-button']" }
+      - { css: "div[data-testid='stop-button']" }
+      - { css: "button[data-testid='stop-button']" }
       - { css: "button[aria-label*='Stop' i]" }
+      - { css: "div[aria-label*='Stop' i]" }
       - { role: button, name: "Stop" }
+      - { css: "button[class*='stop']" }
     done_indicator:
+      - { css: "[data-testid='chat-main-conversation'] [data-message-role='assistant'] [data-testid='message-actions'] [aria-label*='Copy' i]" }
+      - { css: "[data-testid='chat-main-conversation'] [data-role='assistant'] [data-testid='message-actions'] [aria-label*='Copy' i]" }
+      - { css: "[data-testid='chat-main-conversation'] [data-message-role='assistant'] [aria-label*='Copy' i]" }
+      - { css: "[data-testid='chat-main-conversation'] [data-role='assistant'] [aria-label*='Copy' i]" }
+      - { css: "[data-testid='chat-main-conversation'] [data-testid='message-actions'] [aria-label*='Copy' i]" }
       - { css: "button[aria-label*='Copy' i]" }
+      - { css: "div[aria-label*='Copy' i]" }
+      - { css: "button[class*='copy']" }
     answer_container:
+      - { css: "[data-testid='chat-main-conversation'] [data-message-role='assistant'] .matrix-markdown" }
+      - { css: "[data-testid='chat-main-conversation'] [data-role='assistant'] .matrix-markdown" }
+      - { css: "[data-testid='chat-main-conversation'] [data-message-role='assistant']" }
+      - { css: "[data-testid='chat-main-conversation'] [data-role='assistant']" }
       - { css: "div.matrix-markdown" }
       - { css: "[data-testid='message-item'][data-role='assistant'] .markdown" }
       - { css: "div[class*='message'] .markdown" }
       - { css: ".markdown-body" }
       - { css: "div[class*='response']" }
     source_links:
+      - { css: "[data-testid='chat-main-conversation'] [data-message-role='assistant'] a[href^='http'][target='_blank']" }
+      - { css: "[data-testid='chat-main-conversation'] a[href^='http'][target='_blank']" }
       - { css: "a[href^='http'][target='_blank']" }
 
   # ─────────────────────────────────────── Meta AI
