@@ -43,6 +43,8 @@ class AgentResearchRequest(BaseModel):
     tone: str = Field(default="professional")
     max_minutes: int = Field(default=30, ge=1, le=180)
     delegated_providers: list[ProviderName] | None = Field(default=None)
+    provider_configs: dict[str, Any] | None = Field(default_factory=dict)
+    provider_capabilities: dict[str, Any] | None = Field(default_factory=dict)
 
     @field_validator("query")
     @classmethod

@@ -75,6 +75,8 @@ export interface AgentResearchRequestPayload {
   tone: string;
   max_minutes?: number;
   delegated_providers?: string[];
+  provider_configs?: Record<string, any>;
+  provider_capabilities?: Record<string, any>;
 }
 
 export async function createAgentResearchJob(

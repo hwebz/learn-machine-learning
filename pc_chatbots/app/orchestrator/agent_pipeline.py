@@ -21,6 +21,7 @@ from app.orchestrator.pipeline import (
     TERMINAL_STATUSES,
     create_adapter,
 )
+from app.adapters.capabilities.registry import CapabilitiesRegistry
 from app.api.schemas import OrchestratorOutput
 
 logger = structlog.get_logger(__name__)
@@ -136,18 +137,251 @@ PROVIDER_CATALOG: dict[str, dict[str, str]] = {
 }
 
 
-def build_orchestrator_prompt(research_topic: str, allowed_providers: list[str] | None = None) -> str:
+def resolve_provider_live_prompt_info(
+    pid: str,
+    user_config: dict[str, Any] | None = None,
+    caps_data: Any | None = None,
+) -> dict[str, Any]:
+    """Resolves live DOM capabilities and user choices into rich metadata for prompt construction."""
+    p = pid.lower()
+    pcfg = user_config or {}
+
+    caps_dict: dict[str, Any] = {}
+    if caps_data is not None:
+        if isinstance(caps_data, dict):
+            caps_dict = caps_data
+        elif hasattr(caps_data, "model_dump"):
+            caps_dict = caps_data.model_dump()
+        else:
+            try:
+                caps_dict = dict(caps_data)
+            except Exception:
+                caps_dict = {}
+
+    if not caps_dict:
+        try:
+            reg = CapabilitiesRegistry.instance()
+            cached_caps = reg._cache.get(p)
+            if cached_caps is not None:
+                caps_dict = cached_caps.model_dump()
+            else:
+                caps_dict = reg.get_strategy(p).get_default_capabilities().model_dump()
+        except Exception as exc:
+            logger.warning("resolve_live_caps_fallback", provider=p, error=str(exc))
+            caps_dict = {}
+
+    is_live_dom = bool(caps_dict.get("is_live_dom", False))
+    available_models = [
+        m.get("id") for m in caps_dict.get("available_models", [])
+        if isinstance(m, dict) and m.get("id") and not m.get("disabled")
+    ]
+    selected_model_id = caps_dict.get("selected_model_id")
+    thinking_levels = [
+        t.get("id") for t in caps_dict.get("thinking_levels", [])
+        if isinstance(t, dict) and t.get("id")
+    ]
+    selected_thinking_level_id = caps_dict.get("selected_thinking_level_id")
+    modes = [
+        m.get("id") for m in caps_dict.get("modes", [])
+        if isinstance(m, dict) and m.get("id")
+    ]
+    selected_mode_id = caps_dict.get("selected_mode_id")
+
+    deep_thinking_cap = caps_dict.get("deep_thinking")
+    deep_research_cap = caps_dict.get("deep_research")
+    web_search_cap = caps_dict.get("web_search")
+
+    chosen_model = (
+        pcfg.get("model_id")
+        or pcfg.get("model")
+        or selected_model_id
+        or (available_models[0] if available_models else None)
+    )
+    chosen_thinking = (
+        pcfg.get("thinking_level_id")
+        or (pcfg.get("thinking") if isinstance(pcfg.get("thinking"), str) else None)
+        or selected_thinking_level_id
+        or (thinking_levels[0] if thinking_levels else None)
+    )
+    chosen_mode = (
+        pcfg.get("mode_id")
+        or pcfg.get("mode")
+        or selected_mode_id
+        or (modes[0] if modes else None)
+    )
+
+    is_dr = (
+        bool(pcfg["deep_research"])
+        if pcfg.get("deep_research") is not None
+        else (bool(deep_research_cap) if deep_research_cap is not None else False)
+    )
+    is_dt = (
+        bool(pcfg["deep_thinking"])
+        if pcfg.get("deep_thinking") is not None
+        else (bool(deep_thinking_cap) if deep_thinking_cap is not None else False)
+    )
+    is_ws = (
+        bool(pcfg["web_search"])
+        if pcfg.get("web_search") is not None
+        else (bool(web_search_cap) if web_search_cap is not None else True)
+    )
+
+    base_info = PROVIDER_CATALOG.get(p, {})
+    name = base_info.get("name") or p.capitalize()
+
+    # Per-provider fine-grained resolution
+    if p == "gemini":
+        active_model = chosen_model or "gemini-3.1-pro"
+        active_thinking = chosen_thinking or "high"
+        avail_str = " | ".join(f'"{m}"' for m in (available_models or ["gemini-3.1-pro", "gemini-3.8-flash", "gemini-4-argon"]))
+        config_schema = f'{{"model": {avail_str}, "thinking": "low" | "medium" | "high", "deep_research": boolean}}'
+        active_summary = f'Model="{active_model}", Thinking Level="{active_thinking}", Deep Research={"Active" if is_dr else "Off"}'
+        role = "Deep conceptual reasoning, cross-domain multimodal synthesis, theoretical foundations and math."
+        default_cfg = {"model": active_model, "thinking": active_thinking, "deep_research": is_dr}
+
+    elif p == "minimax":
+        active_model = chosen_model or "m3.1-flash"
+        avail_str = " | ".join(f'"{m}"' for m in (available_models or ["m3.1-flash", "m3", "m2.7"]))
+        config_schema = f'{{"model": {avail_str}, "deep_research": boolean}}'
+        active_summary = f'Model="{active_model}", Deep Research={"Active" if is_dr else "Off"}'
+        role = "Document deep processing, high-speed long-form extraction, comprehensive data retrieval and practical execution."
+        default_cfg = {"model": active_model, "deep_research": is_dr}
+
+    elif p == "meta":
+        is_meta_thinking = True if (
+            chosen_thinking == "thinking"
+            or is_dt
+            or pcfg.get("thinking") is True
+            or pcfg.get("thinking") == "thinking"
+        ) else False
+        active_meta_thinking = "thinking" if is_meta_thinking else "instant"
+        config_schema = '{"thinking": "thinking" | "instant"}'
+        active_summary = f'Thinking Mode="{active_meta_thinking}" (DOM toggle: Thinking vs Instant; no model dropdown)'
+        role = "Open foundation models synthesis, open science perspectives, HTML/code representations and structured knowledge extraction."
+        default_cfg = {"thinking": active_meta_thinking}
+
+    elif p == "chatgpt":
+        active_thinking_bool = bool(pcfg.get("deep_thinking", pcfg.get("thinking", True)))
+        config_schema = '{"thinking": boolean, "deep_research": boolean, "web_search": boolean}'
+        active_summary = f'Thinking={"Active" if active_thinking_bool else "Off"}, Deep Research={"Active" if is_dr else "Off"}, Web Search={"Active" if is_ws else "Off"}'
+        role = "Software architecture, algorithmic engineering, multi-step structured reasoning, reproducible code."
+        default_cfg = {"thinking": active_thinking_bool, "deep_research": is_dr, "web_search": is_ws}
+
+    elif p == "qwen":
+        active_model = chosen_model or "qwen-3.8-max"
+        active_thinking = chosen_thinking or "auto"
+        avail_str = " | ".join(f'"{m}"' for m in (available_models or ["qwen-3.8-max", "qwen-3.7-plus"]))
+        config_schema = f'{{"model": {avail_str}, "thinking": "auto" | "thinking" | "fast", "deep_research": boolean, "web_search": boolean}}'
+        active_summary = f'Model="{active_model}", Thinking="{active_thinking}", Deep Research={"Active" if is_dr else "Off"}, Web Search={"Active" if is_ws else "Off"}'
+        role = "Frontier math and code benchmarks, multilingual Chinese/global scientific papers and technical specifications."
+        default_cfg = {"model": active_model, "thinking": active_thinking, "deep_research": is_dr, "web_search": is_ws}
+
+    elif p == "copilot":
+        avail_str = " | ".join(f'"{m}"' for m in (modes or ["auto", "quick", "think_deeper", "gpt_5_6_quick", "gpt_5_6_think"]))
+        active_mode = chosen_mode or "gpt_5_6_think"
+        config_schema = f'{{"mode": {avail_str}}}'
+        active_summary = f'Mode="{active_mode}" (Microsoft 365 Copilot reasoning with live web grounding)'
+        role = "Enterprise business impact, commercial viability, corporate governance, industry market trends and Microsoft ecosystem analysis."
+        default_cfg = {"mode": active_mode}
+
+    elif p == "deepseek":
+        active_dt = bool(pcfg.get("deep_thinking", deep_thinking_cap if deep_thinking_cap is not None else True))
+        config_schema = '{"deep_thinking": boolean, "web_search": boolean}'
+        active_summary = f'DeepThink R1={"Active" if active_dt else "Off"}, Web Search={"Active" if is_ws else "Off"}'
+        role = "Deep algorithmic proofs, formal mathematical logic, chain-of-thought verification and code optimization."
+        default_cfg = {"deep_thinking": active_dt, "web_search": is_ws}
+
+    elif p == "claude":
+        active_model = chosen_model or "claude-sonnet-5.5"
+        active_thinking = chosen_thinking or "high"
+        avail_str = " | ".join(f'"{m}"' for m in (available_models or ["claude-sonnet-5.5", "claude-haiku-5.5"]))
+        config_schema = f'{{"model": {avail_str}, "thinking": "low" | "medium" | "high" | "max"}}'
+        active_summary = f'Model="{active_model}", Thinking Budget="{active_thinking}"'
+        role = "Nuanced academic critique, formal methodology, scholarly writing and ethical considerations."
+        default_cfg = {"model": active_model, "thinking": active_thinking}
+
+    elif p == "perplexity":
+        config_schema = '{"web_search": true}'
+        active_summary = "Web Search=Active (Live online citations & sources)"
+        role = "Real-time 2026 data, factual verification, authoritative citations and academic references."
+        default_cfg = {"web_search": True}
+
+    elif p == "kimi":
+        active_model = chosen_model or "k3"
+        active_thinking = chosen_thinking or "high"
+        config_schema = '{"model": "k3" | "instant", "thinking": "high" | "medium" | "low", "deep_research": boolean}'
+        active_summary = f'Model="{active_model}", Thinking="{active_thinking}", Deep Research={"Active" if is_dr else "Off"}'
+        role = "Long-form document deep dives, comprehensive technical reports and policy cross-referencing."
+        default_cfg = {"model": active_model, "thinking": active_thinking, "deep_research": is_dr}
+
+    elif p == "mistral":
+        active_thinking = chosen_thinking or "think"
+        config_schema = '{"thinking": "think" | "fast", "deep_research": boolean}'
+        active_summary = f'Thinking="{active_thinking}", Deep Research={"Active" if is_dr else "Off"}'
+        role = "European multilingual benchmarks, fast analytical inference and concise technical reasoning."
+        default_cfg = {"thinking": active_thinking, "deep_research": is_dr}
+
+    elif p == "zhipu":
+        active_model = chosen_model or "glm-5.3"
+        active_mode = chosen_mode or "high"
+        avail_str = " | ".join(f'"{m}"' for m in (available_models or ["glm-5.3", "glm-5.3-flash"]))
+        config_schema = f'{{"model": {avail_str}, "mode": "low" | "high" | "max"}}'
+        active_summary = f'Model="{active_model}", Mode="{active_mode}"'
+        role = "Structured bilingual knowledge, ontology mapping, Asian technology developments."
+        default_cfg = {"model": active_model, "mode": active_mode}
+
+    elif p == "grok":
+        active_thinking_bool = bool(pcfg.get("deep_thinking", pcfg.get("thinking", True)))
+        config_schema = '{"thinking": boolean}'
+        active_summary = f'Thinking={"Active" if active_thinking_bool else "Off"}'
+        role = "Real-time pulse, contrarian angles, edge-case vulnerability assessment."
+        default_cfg = {"thinking": active_thinking_bool}
+
+    elif p == "pi":
+        config_schema = '{"thinking": boolean}'
+        active_summary = "Conversational dialogue mode"
+        role = "Pedagogic breakdown, accessible explanations, intuitive analogies."
+        default_cfg = {"thinking": True}
+
+    else:
+        config_schema = '{"thinking": boolean}'
+        active_summary = "Standard default configuration"
+        role = base_info.get("desc", "Specialized research synthesis.")
+        default_cfg = {"thinking": True}
+
+    return {
+        "id": p,
+        "name": name,
+        "is_live_dom": is_live_dom,
+        "active_summary": active_summary,
+        "config_schema": config_schema,
+        "role": role,
+        "default_config": default_cfg,
+    }
+
+
+def build_orchestrator_prompt(
+    research_topic: str,
+    allowed_providers: list[str] | None = None,
+    provider_configs: dict[str, Any] | None = None,
+    provider_capabilities: dict[str, Any] | None = None,
+) -> str:
     valid_allowed = [p.lower() for p in (allowed_providers or []) if p.lower() in PROVIDER_CATALOG]
     if not valid_allowed:
         valid_allowed = list(PROVIDER_CATALOG.keys())
 
+    pconfigs = provider_configs or {}
+    pcaps = provider_capabilities or {}
+
     provider_lines: list[str] = []
     for idx, pid in enumerate(valid_allowed, start=1):
-        info = PROVIDER_CATALOG[pid]
+        info = resolve_provider_live_prompt_info(pid, pconfigs.get(pid), pcaps.get(pid))
+        dom_badge = "[REAL DOM SYNCED]" if info.get("is_live_dom") else "[LATEST LIVE CONFIG]"
         provider_lines.append(
-            f'{idx}. {info["name"]} (id: "{pid}", name: "{info["name"]}")\n'
-            f'   - config: {info["config"]}\n'
-            f'   - Best for: {info["desc"]}'
+            f'{idx}. {info["name"]} (id: "{pid}") {dom_badge}\n'
+            f'   - Active DOM Setting: {info["active_summary"]}\n'
+            f'   - Expected "config" JSON Schema: {info["config_schema"]}\n'
+            f'   - Specialized Sub-topic Role: {info["role"]}'
         )
     providers_text = "\n".join(provider_lines)
     allowed_ids_str = ", ".join(f'"{pid}"' for pid in valid_allowed)
@@ -156,7 +390,7 @@ def build_orchestrator_prompt(research_topic: str, allowed_providers: list[str] 
 Your goal is to analyze the research topic provided by the user and intelligently decompose it into 2 to 5 specialized sub-tasks.
 Each sub-task must be assigned to the most appropriate AI provider from the ALLOWED providers list below.
 
-## Available Allowed Providers and Configurations:
+## Available Allowed Providers and Configurations (Live DOM Synced):
 {providers_text}
 
 ## STRICT REQUIREMENT: Allowed Delegation Providers
@@ -164,8 +398,9 @@ You are STRICTLY RESTRICTED to assigning sub-tasks ONLY to providers in this all
 DO NOT assign any sub-task to any provider outside this list. Every single item in "agents_dispatch" MUST have "id" strictly matching one of [{allowed_ids_str}].
 
 ## Rules:
-- Decompose the topic into 2 to 5 distinct, non-overlapping sub-topics.
-- Assign each sub-topic to the provider best suited for that angle among the allowed providers.
+- Decompose the topic into 2 to 5 distinct, non-overlapping specialized sub-topics.
+- Assign each sub-topic to the provider best suited for that angle among the allowed providers, matching their active capabilities and strengths described above.
+- In each "agents_dispatch" item, provide a valid "config" object that matches the provider's active DOM setting and expected schema.
 - Each "question" must be a self-contained, detailed prompt for that provider to investigate.
 - The output MUST be strictly valid JSON matching the schema below. Do not wrap in markdown or add explanations.
 
@@ -177,8 +412,8 @@ DO NOT assign any sub-task to any provider outside this list. Every single item 
       "id": "<provider_id>",
       "name": "<provider_name>",
       "config": {{ ... }},
-      "sub_topic": "<Brief sub-topic title>",
-      "question": "<Detailed research prompt for this provider>"
+      "sub_topic": "<Brief specialized sub-topic title>",
+      "question": "<Detailed research prompt tailored for this provider's capabilities>"
     }}
   ]
 }}
@@ -302,10 +537,14 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 lead_config = {}
 
             delegated_providers: list[str] = []
+            provider_configs: dict[str, Any] = {}
+            provider_capabilities: dict[str, Any] = {}
             try:
                 cfg_obj = json.loads(job.config_json) if job.config_json else {}
                 raw_delegated = cfg_obj.get("delegated_providers") or []
                 delegated_providers = [str(p).lower() for p in raw_delegated if str(p).lower() in PROVIDER_CATALOG]
+                provider_configs = cfg_obj.get("provider_configs") or {}
+                provider_capabilities = cfg_obj.get("provider_capabilities") or {}
             except Exception:
                 delegated_providers = []
 
@@ -325,7 +564,12 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
         )
 
         orch_adapter = create_adapter(orchestrator_prov)
-        orch_prompt = build_orchestrator_prompt(research_topic, allowed_providers=delegated_providers)
+        orch_prompt = build_orchestrator_prompt(
+            research_topic,
+            allowed_providers=delegated_providers,
+            provider_configs=provider_configs,
+            provider_capabilities=provider_capabilities,
+        )
 
         ask_kwargs: dict[str, Any] = {
             "timeout_s": 300,
@@ -371,21 +615,23 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             dispatch_items = [item.model_dump() for item in validated.agents_dispatch]
         except Exception as json_err:
             logger.warning("orchestrator_json_parse_failed", error=str(json_err), raw=orch_res.answer_markdown[:300])
-            # Fallback default plan using allowed delegated providers
+            # Fallback default plan using allowed delegated providers with live DOM configs
             p1 = delegated_providers[0] if delegated_providers else "deepseek"
             p2 = delegated_providers[1 % len(delegated_providers)] if delegated_providers else "perplexity"
+            p1_info = resolve_provider_live_prompt_info(p1, provider_configs.get(p1), provider_capabilities.get(p1))
+            p2_info = resolve_provider_live_prompt_info(p2, provider_configs.get(p2), provider_capabilities.get(p2))
             dispatch_items = [
                 {
                     "id": p1,
-                    "name": PROVIDER_CATALOG.get(p1, {}).get("name", p1.title()),
-                    "config": {"thinking": True},
+                    "name": p1_info["name"],
+                    "config": p1_info["default_config"],
                     "sub_topic": "Nền tảng lý thuyết & Giải thuật",
                     "question": f"Phân tích chuyên sâu về kiến trúc và thuật toán liên quan đến: {research_topic}",
                 },
                 {
                     "id": p2,
-                    "name": PROVIDER_CATALOG.get(p2, {}).get("name", p2.title()),
-                    "config": {"thinking": True},
+                    "name": p2_info["name"],
+                    "config": p2_info["default_config"],
                     "sub_topic": "Dữ liệu ứng dụng thực tế & Nguồn dẫn chứng",
                     "question": f"Tìm kiếm các số liệu, tài liệu học thuật và trường hợp ứng dụng thực tế mới nhất của: {research_topic}",
                 },
@@ -398,8 +644,11 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 pid = str(item.get("id", "")).lower()
                 if pid not in delegated_providers:
                     fallback_id = delegated_providers[len(sanitized_dispatch) % len(delegated_providers)]
+                    fallback_info = resolve_provider_live_prompt_info(fallback_id, provider_configs.get(fallback_id), provider_capabilities.get(fallback_id))
                     item["id"] = fallback_id
-                    item["name"] = PROVIDER_CATALOG.get(fallback_id, {}).get("name", fallback_id.title())
+                    item["name"] = fallback_info["name"]
+                    if not item.get("config"):
+                        item["config"] = fallback_info["default_config"]
                 sanitized_dispatch.append(item)
             dispatch_items = sanitized_dispatch
 

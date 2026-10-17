@@ -748,6 +748,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     lead_config: Record<string, any>;
     tone: string;
     delegated_providers?: string[];
+    provider_configs?: Record<string, any>;
+    provider_capabilities?: Record<string, any>;
   }) => {
     setIsAgentConfigOpen(false);
 
@@ -770,6 +772,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       tone: config.tone,
       delegated_providers: config.delegated_providers,
       provider_options: {
+        ...(config.provider_configs || {}),
         [config.orchestrator_provider]: config.orchestrator_config,
         [config.lead_provider]: config.lead_config,
       },
@@ -792,6 +795,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       tone: config.tone,
       delegated_providers: config.delegated_providers,
       providerConfigurations: {
+        ...(config.provider_configs || {}),
         [config.orchestrator_provider]: config.orchestrator_config,
         [config.lead_provider]: config.lead_config,
       },
@@ -815,6 +819,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         lead_config: config.lead_config,
         tone: config.tone,
         delegated_providers: config.delegated_providers,
+        provider_configs: config.provider_configs,
+        provider_capabilities: config.provider_capabilities,
       });
 
       if (isCancelledRef.current) {

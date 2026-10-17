@@ -7,6 +7,7 @@ import structlog
 
 from app.adapters.capabilities.base import BaseProviderCapabilitiesStrategy
 from app.adapters.capabilities.models import (
+    OptionItem,
     ProviderLiveCapabilities,
     ProviderSelectionRequest,
     SupportedDataTypes,
@@ -53,8 +54,11 @@ class MetaCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
             is_live_dom=False,
             available_models=[],
             selected_model_id=None,
-            thinking_levels=[],
-            selected_thinking_level_id=None,
+            thinking_levels=[
+                OptionItem(id="thinking", label="Thinking (Suy luận chuyên sâu)", selected=False),
+                OptionItem(id="instant", label="Instant (Phản hồi tức thì)", selected=True),
+            ],
+            selected_thinking_level_id="instant",
             modes=[],
             selected_mode_id=None,
             account_type="free",
@@ -110,8 +114,10 @@ class MetaCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
                 combined = f"{text} {aria}"
                 if "thinking" in combined:
                     caps.deep_thinking = True
+                    caps.selected_thinking_level_id = "thinking"
                 elif "instant" in combined:
                     caps.deep_thinking = False
+                    caps.selected_thinking_level_id = "instant"
         except Exception as exc:  # noqa: BLE001
             logger.warning("meta_inspect_dom_failed", error=str(exc))
 
@@ -119,10 +125,15 @@ class MetaCapabilitiesStrategy(BaseProviderCapabilitiesStrategy):
 
     async def apply_selection(self, page: Any, config: ProviderSelectionRequest) -> None:
         """Switch Meta AI composer mode between 'Thinking' (on) and 'Instant' (off)."""
-        if config.deep_thinking is None:
+        is_thinking = None
+        if config.deep_thinking is not None:
+            is_thinking = bool(config.deep_thinking)
+        elif config.thinking_level_id is not None:
+            is_thinking = config.thinking_level_id.lower() == "thinking"
+
+        if is_thinking is None:
             return
 
-        is_thinking = bool(config.deep_thinking)
         target_label = "Thinking" if is_thinking else "Instant"
 
         btn = await self._find_mode_button(page, timeout_s=5.0)

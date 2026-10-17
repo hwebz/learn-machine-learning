@@ -215,3 +215,56 @@ def test_agent_pipeline_same_provider_for_all_roles(monkeypatch: MonkeyPatch) ->
         assert "subtask:copilot_2" in role_keys_found
         assert "lead" in role_keys_found
 
+
+def test_build_orchestrator_prompt_with_live_dom_configs() -> None:
+    topic = "So sánh cơ chế Thinking & Deep Research giữa các mô hình AI 2026"
+    allowed = ["gemini", "minimax", "meta", "copilot", "qwen"]
+    provider_configs = {
+        "gemini": {"model_id": "gemini-3.1-pro", "thinking_level_id": "high", "deep_research": True},
+        "minimax": {"model_id": "m3.1-flash", "deep_research": True},
+        "meta": {"thinking": "thinking"},
+        "copilot": {"mode": "gpt_5_6_think"},
+        "qwen": {"model_id": "qwen-3.8-max", "thinking": "auto", "deep_research": True},
+    }
+    provider_caps = {
+        "minimax": {
+            "provider": "minimax",
+            "is_live_dom": True,
+            "available_models": [{"id": "m3.1-flash", "selected": True}],
+            "deep_research": True,
+        },
+        "meta": {
+            "provider": "meta",
+            "is_live_dom": True,
+            "deep_thinking": True,
+        },
+    }
+
+    prompt = agent_pipeline.build_orchestrator_prompt(
+        topic,
+        allowed_providers=allowed,
+        provider_configs=provider_configs,
+        provider_capabilities=provider_caps,
+    )
+
+    assert "Master Research Orchestrator" in prompt
+    assert topic in prompt
+    # Check MiniMax live DOM config and model
+    assert 'MiniMax (id: "minimax") [REAL DOM SYNCED]' in prompt
+    assert 'Model="m3.1-flash"' in prompt
+    assert 'Deep Research=Active' in prompt
+    # Check Meta AI live DOM config (no model dropdown, Thinking vs Instant)
+    assert 'Meta AI (id: "meta") [REAL DOM SYNCED]' in prompt
+    assert 'Thinking Mode="thinking"' in prompt
+    # Check Gemini config
+    assert 'Gemini (id: "gemini")' in prompt
+    assert 'Model="gemini-3.1-pro"' in prompt
+    assert 'Thinking Level="high"' in prompt
+    # Check Copilot config
+    assert 'Mode="gpt_5_6_think"' in prompt
+    # Check JSON output instructions
+    assert '"agents_dispatch"' in prompt
+    assert '"sub_topic"' in prompt
+    assert '"question"' in prompt
+
+
