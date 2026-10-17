@@ -27,6 +27,7 @@ from app.adapters.capabilities.grok import GrokCapabilitiesStrategy
 from app.adapters.capabilities.mistral import MistralCapabilitiesStrategy
 from app.adapters.capabilities.zhipu import ZhipuCapabilitiesStrategy
 from app.adapters.capabilities.minimax import MinimaxCapabilitiesStrategy
+from app.adapters.capabilities.meta import MetaCapabilitiesStrategy
 
 __all__ = [
     "OptionItem",
@@ -52,5 +53,6 @@ __all__ = [
     "MistralCapabilitiesStrategy",
     "ZhipuCapabilitiesStrategy",
     "MinimaxCapabilitiesStrategy",
+    "MetaCapabilitiesStrategy",
 ]
 

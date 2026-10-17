@@ -63,6 +63,7 @@ export function ProviderOptionsBar({
   const isMistral = providerId === "mistral";
   const isZhipu = providerId === "zhipu";
   const isMinimax = providerId === "minimax";
+  const isMeta = providerId === "meta";
 
   const minimaxFallbackModels: OptionItem[] = [
     { id: "m3", label: "M3", description: "Mô hình cờ đầu toàn diện của MiniMax, xử lý tác vụ phức tạp", selected: true, badge: "M3" },
@@ -118,7 +119,7 @@ export function ProviderOptionsBar({
     { id: "high", label: "High", description: "Suy luận chuyên sâu cao nhất", selected: true, disabled: false, badge: "High" },
   ];
 
-  const models: OptionItem[] = isDeepSeek || isCopilot || isChatGPT || isGrok || isMistral
+  const models: OptionItem[] = isDeepSeek || isCopilot || isChatGPT || isGrok || isMistral || isMeta
     ? []
     : isClaude
       ? (capabilities?.available_models && capabilities.available_models.length > 0 && !capabilities.available_models.some((m) => m.id === "default")
@@ -175,7 +176,7 @@ export function ProviderOptionsBar({
                       : minimaxFallbackModels)
                   : [];
 
-  const thinkingLevels: OptionItem[] = isDeepSeek || isCopilot || isChatGPT || isPerplexity || isGrok || isZhipu || isMinimax
+  const thinkingLevels: OptionItem[] = isDeepSeek || isCopilot || isChatGPT || isPerplexity || isGrok || isZhipu || isMinimax || isMeta
     ? []
     : isClaude
       ? (capabilities?.thinking_levels && capabilities.thinking_levels.length > 0 && !capabilities.thinking_levels.some((t) => t.id === "auto")
@@ -607,6 +608,114 @@ export function ProviderOptionsBar({
               OFF (LOCKED)
             </span>
           </button>
+        )}
+
+        {/* Meta AI Thinking Toggle (Dropdown with Thinking vs Instant) */}
+        {isMeta && (
+          <div ref={thinkingRef} style={{ position: "relative" }}>
+            <button
+              type="button"
+              onClick={() => setIsThinkingOpen(!isThinkingOpen)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "4px 9px",
+                borderRadius: "var(--radius-sm, 6px)",
+                border: `1px solid ${isDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--border-subtle, #cbd5e1)"}`,
+                backgroundColor: isDeepThinking ? "var(--brand-blue-light, #eff6ff)" : (isThinkingOpen ? "#f8fafc" : "#ffffff"),
+                fontSize: 12,
+                fontWeight: 600,
+                color: isDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--text-secondary, #475569)",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+              title="Meta AI: Chuyển đổi giữa chế độ Thinking (BẬT) và Instant (TẮT)"
+            >
+              <BrainIcon size={13} color={isDeepThinking ? "var(--brand-blue, #2563eb)" : "#64748b"} />
+              <span>{isDeepThinking ? "Thinking" : "Instant"}</span>
+              <span
+                style={{
+                  fontSize: 9.5,
+                  padding: "1px 4px",
+                  borderRadius: 3,
+                  backgroundColor: isDeepThinking ? "var(--brand-blue, #2563eb)" : "#f1f5f9",
+                  color: isDeepThinking ? "#ffffff" : "#64748b",
+                  fontWeight: 700,
+                }}
+              >
+                {isDeepThinking ? "ON" : "OFF"}
+              </span>
+              <span style={{ fontSize: 10, color: "var(--text-muted, #94a3b8)" }}>▼</span>
+            </button>
+
+            {isThinkingOpen && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  marginTop: 4,
+                  width: 230,
+                  backgroundColor: "#ffffff",
+                  border: "1px solid var(--border-default, #e2e8f0)",
+                  borderRadius: "var(--radius-md, 8px)",
+                  boxShadow: "0 8px 20px rgba(0,0,0,0.1)",
+                  zIndex: 60,
+                  padding: 4,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                }}
+              >
+                <div style={{ padding: "4px 8px", fontSize: 11, fontWeight: 700, color: "var(--text-muted, #64748b)", borderBottom: "1px solid #f1f5f9" }}>
+                  CHẾ ĐỘ TƯ DUY (THINKING MODE)
+                </div>
+                {[
+                  { id: "thinking", label: "Thinking", description: "Bật suy luận chuyên sâu đa bước (Thinking = ON)", active: isDeepThinking },
+                  { id: "instant", label: "Instant", description: "Phản hồi nhanh tức thì (Thinking = OFF)", active: !isDeepThinking },
+                ].map((opt) => (
+                  <div
+                    key={opt.id}
+                    onClick={() => {
+                      onUpdateSelection({ deep_thinking: opt.id === "thinking" });
+                      setIsThinkingOpen(false);
+                    }}
+                    style={{
+                      padding: "6px 8px",
+                      borderRadius: 6,
+                      backgroundColor: opt.active ? "var(--brand-blue-light, #eff6ff)" : "transparent",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: 12, fontWeight: opt.active ? 700 : 500, color: opt.active ? "var(--brand-blue, #2563eb)" : "var(--text-primary, #0f172a)" }}>
+                        {opt.label}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 9.5,
+                          padding: "1px 4px",
+                          borderRadius: 3,
+                          backgroundColor: opt.active ? "var(--brand-blue, #2563eb)" : "#f1f5f9",
+                          color: opt.active ? "#ffffff" : "#64748b",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {opt.id === "thinking" ? "ON" : "OFF"}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: 10.5, color: "var(--text-muted, #64748b)" }}>
+                      {opt.description}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {/* 1. Model Selector Dropdown */}

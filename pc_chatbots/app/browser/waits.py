@@ -1597,6 +1597,129 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
         } catch (e) {}
     }
 
+    // 2.8. Meta AI-specific: Extract thinking steps & sources from [data-testid="thinking-status"], right sidebar, and [data-testid="chat-main-conversation"]
+    if (provider === "meta" || !provider) {
+        try {
+            const root = document.querySelector("[data-testid='chat-main-conversation']") || document;
+            const stopBtn = document.querySelector(
+                "[data-testid='chat-main-conversation'] [data-testid='stop-button'], " +
+                "[data-testid='chat-main-conversation'] button[aria-label*='Stop' i], " +
+                "button[aria-label*='Stop' i]"
+            );
+            const isMetaGenerating = stopBtn && (stopBtn.offsetParent !== null || stopBtn.getAttribute("aria-disabled") !== "true");
+            if (isMetaGenerating) {
+                isThinking = true;
+            }
+
+            // Check element with data-testid="thinking-status"
+            const thinkingStatusEl = document.querySelector("[data-testid='thinking-status'], [data-testid*='thinking-status']");
+            if (thinkingStatusEl) {
+                isThinking = true;
+                const statusText = clean(thinkingStatusEl.innerText || thinkingStatusEl.textContent || "");
+
+                // Check and click to open the right sidebar showing detailed steps and Sources
+                const rightSidebar = document.querySelector(
+                    "[aria-label*='Thought' i], " +
+                    "[aria-label*='Thinking' i], " +
+                    "[data-testid*='thinking-panel'], " +
+                    "[data-testid*='sidebar'], " +
+                    "aside[role='complementary'], " +
+                    "aside, " +
+                    ".ecto-code-source-panel ~ aside"
+                );
+                if (!rightSidebar && thinkingStatusEl.click) {
+                    try {
+                        thinkingStatusEl.click();
+                    } catch (err) {}
+                }
+
+                const sidebarOrRoot = document.querySelector(
+                    "[aria-label*='Thought' i], " +
+                    "[aria-label*='Thinking' i], " +
+                    "[data-testid*='thinking-panel'], " +
+                    "[data-testid*='sidebar'], " +
+                    "aside"
+                ) || root;
+
+                // Extract thinking steps inside right sidebar or root
+                const stepEls = sidebarOrRoot.querySelectorAll(
+                    "[data-testid*='step'], " +
+                    "li, " +
+                    "[class*='step'], " +
+                    "[class*='timeline'], " +
+                    "[role='listitem']"
+                );
+                if (stepEls.length > 0) {
+                    for (let i = 0; i < stepEls.length; i++) {
+                        const sEl = stepEls[i];
+                        const titleEl = sEl.querySelector("[class*='title'], [class*='header'], strong, h3, h4, [data-testid*='title']") || sEl;
+                        const title = clean(titleEl.innerText || titleEl.textContent || `Step ${i + 1}`);
+                        let desc = "";
+                        const descEl = sEl.querySelector("[class*='desc'], [class*='body'], [class*='content'], p") || sEl;
+                        if (descEl && descEl !== titleEl) {
+                            desc = clean(descEl.innerText || descEl.textContent || "");
+                        }
+                        const isLast = i === stepEls.length - 1;
+                        const stepStatus = (isMetaGenerating && isLast) ? "running" : "completed";
+                        const dedupeKey = title + "::" + desc;
+                        if (!seenStepKeys.has(dedupeKey)) {
+                            seenStepKeys.add(dedupeKey);
+                            thinkingSteps.push({
+                                title: title || `Step ${i + 1}`,
+                                description: desc,
+                                status: stepStatus
+                            });
+                        }
+                    }
+                }
+
+                // If no individual step elements found, use thinkingStatus text
+                if (thinkingSteps.length === 0 && (statusText || isMetaGenerating)) {
+                    const title = statusText || "Thinking Process";
+                    const desc = isMetaGenerating ? "Đang suy luận..." : "Hoàn tất suy luận";
+                    const dedupeKey = title + "::" + desc;
+                    if (!seenStepKeys.has(dedupeKey)) {
+                        seenStepKeys.add(dedupeKey);
+                        thinkingSteps.push({
+                            title: title,
+                            description: desc,
+                            status: isMetaGenerating ? "running" : "completed"
+                        });
+                    }
+                    thinkingText = title;
+                }
+
+                // Also extract Sources from right sidebar / panel
+                const sourceLinks = sidebarOrRoot.querySelectorAll(
+                    "a[href^='http'], " +
+                    "[data-testid*='source'] a[href^='http'], " +
+                    "[aria-label*='source' i] a[href^='http'], " +
+                    "[aria-label*='Sources' i] a[href^='http']"
+                );
+                for (const a of sourceLinks) {
+                    const href = a.href || a.getAttribute("href");
+                    if (href && href.startsWith("http") && !seenUrls.has(href)) {
+                        if (
+                            !href.includes("meta.ai") &&
+                            !href.includes("facebook.com") &&
+                            !href.includes("instagram.com") &&
+                            !href.includes("login") &&
+                            !href.includes("auth")
+                        ) {
+                            seenUrls.add(href);
+                            const title = clean(a.innerText || a.textContent || a.getAttribute("title") || href);
+                            citations.push({
+                                url: href,
+                                title: title || href,
+                                snippet: ""
+                            });
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
     // 3. Fallback: query general thinking containers across other providers
     if (!thinkingText && thinkingSteps.length === 0) {
         const thinkingSelectors = [
@@ -1842,7 +1965,7 @@ DOM_SCAN_THINKING_AND_CITATIONS = """
             for (const a of links) {
                 const href = a.href || a.getAttribute("href");
                 if (href && href.startsWith("http") && !seenUrls.has(href)) {
-                    if (!href.includes("login") && !href.includes("auth") && !href.includes("accounts.google") && !href.includes("chatgpt.com") && !href.includes("openai.com") && !href.includes("minimax.io")) {
+                    if (!href.includes("login") && !href.includes("auth") && !href.includes("accounts.google") && !href.includes("chatgpt.com") && !href.includes("openai.com") && !href.includes("minimax.io") && !href.includes("meta.ai") && !href.includes("facebook.com") && !href.includes("instagram.com")) {
                         seenUrls.add(href);
                         let title = (a.innerText || a.textContent || a.getAttribute("title") || "").trim();
                         citations.push({

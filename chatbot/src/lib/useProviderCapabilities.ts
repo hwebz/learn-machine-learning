@@ -367,6 +367,25 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
         cachedSelections["minimax"].model_id = "m3";
       }
     }
+    if (cachedCaps["meta"]) {
+      cachedCaps["meta"].modes = [];
+      cachedCaps["meta"].selected_mode_id = undefined;
+      cachedCaps["meta"].available_models = [];
+      cachedCaps["meta"].selected_model_id = undefined;
+      cachedCaps["meta"].thinking_levels = [];
+      cachedCaps["meta"].selected_thinking_level_id = undefined;
+      if (cachedCaps["meta"].deep_thinking === undefined) cachedCaps["meta"].deep_thinking = false;
+      if (cachedCaps["meta"].web_search === undefined) cachedCaps["meta"].web_search = true;
+      if (cachedCaps["meta"].deep_research === undefined) cachedCaps["meta"].deep_research = false;
+    }
+    if (cachedSelections["meta"]) {
+      cachedSelections["meta"].model_id = "";
+      cachedSelections["meta"].thinking_level_id = "";
+      cachedSelections["meta"].mode_id = "";
+      if (cachedSelections["meta"].deep_thinking === undefined) cachedSelections["meta"].deep_thinking = false;
+      if (cachedSelections["meta"].web_search === undefined) cachedSelections["meta"].web_search = true;
+      if (cachedSelections["meta"].deep_research === undefined) cachedSelections["meta"].deep_research = false;
+    }
     saveStorage(CAPS_STORAGE_KEY, cachedCaps);
     saveStorage(SELECTIONS_STORAGE_KEY, cachedSelections);
     setCapabilitiesMap(cachedCaps);
@@ -566,6 +585,7 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           const isMistral = p === "mistral";
           const isZhipu = p === "zhipu";
           const isMinimax = p === "minimax";
+          const isMeta = p === "meta";
 
           // Safe model for Claude & Kimi
           const isKimiDeepResearch = isKimi && (existing.deep_research !== undefined ? existing.deep_research : (caps.deep_research ?? false));
@@ -598,30 +618,30 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
             [p]: {
               model_id: isPerplexity
                 ? "auto"
-                : (isDeepSeek || isCopilot || isChatGPT || isGrok || isMistral)
+                : (isDeepSeek || isCopilot || isChatGPT || isGrok || isMistral || isMeta)
                 ? ""
                 : safeModelId,
-              thinking_level_id: (isDeepSeek || isCopilot || isChatGPT || isPerplexity || isGrok || isZhipu || isMinimax)
+              thinking_level_id: (isDeepSeek || isCopilot || isChatGPT || isPerplexity || isGrok || isZhipu || isMinimax || isMeta)
                 ? ""
                 : isMistral
                 ? (existing.thinking_level_id || caps.selected_thinking_level_id || "fast")
                 : safeThinking,
-              mode_id: (isDeepSeek || isChatGPT || isPerplexity || isKimi || isQwen || isGemini || isGrok || isMistral || isZhipu || isMinimax)
+              mode_id: (isDeepSeek || isChatGPT || isPerplexity || isKimi || isQwen || isGemini || isGrok || isMistral || isZhipu || isMinimax || isMeta)
                 ? ""
                 : existing.mode_id || caps.selected_mode_id || caps.modes[0]?.id || (isCopilot ? "auto" : ""),
               deep_thinking: (isPerplexity || isZhipu || isMinimax)
                 ? false
-                : (isDeepSeek || isChatGPT)
+                : (isDeepSeek || isChatGPT || isMeta)
                 ? (existing.deep_thinking !== undefined ? existing.deep_thinking : (caps.deep_thinking ?? false))
                 : existing.deep_thinking,
-              web_search: isPerplexity || isKimi
+              web_search: isPerplexity || isKimi || isMeta
                 ? true
                 : (isZhipu || isMinimax)
                 ? false
                 : (isDeepSeek || isChatGPT || isQwen)
                 ? (existing.web_search !== undefined ? existing.web_search : (caps.web_search ?? true))
                 : existing.web_search,
-              deep_research: isZhipu
+              deep_research: (isZhipu || isMeta)
                 ? false
                 : (isChatGPT || isKimi || isQwen || isGemini || isMistral || isMinimax)
                 ? (existing.deep_research !== undefined ? existing.deep_research : (caps.deep_research ?? false))
@@ -724,6 +744,8 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           safeUpdates = { ...updates, thinking_level_id: "", mode_id: "", deep_thinking: false, deep_research: false, web_search: false };
         } else if (p === "minimax") {
           safeUpdates = { ...updates, thinking_level_id: "", mode_id: "", deep_thinking: false, web_search: false };
+        } else if (p === "meta") {
+          safeUpdates = { ...updates, model_id: "", thinking_level_id: "", mode_id: "", deep_research: false, web_search: true };
         }
         const updated = {
           ...prev,

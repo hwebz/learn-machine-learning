@@ -785,3 +785,45 @@ providers:
       - { css: "div[data-message-author-role='assistant'] a[href^='http']" }
       - { css: "div[class*='group/message'] a[href^='http']" }
       - { css: "a[href^='http'][target='_blank']" }
+
+  # ─────────────────────────────────────── Meta AI
+  meta:
+    new_chat_url: "https://www.meta.ai/"
+    question_input:
+      - { css: "[data-testid='chat-main-conversation'] ~ div [contenteditable='true']" }
+      - { css: "[contenteditable='true']" }
+      - { css: "textarea[placeholder*='Ask' i]" }
+      - { role: textbox }
+    submit:
+      - { css: "button[aria-label*='Send' i]" }
+      - { css: "button[data-testid='composer-send-button']" }
+      - { role: button, name: "Send" }
+    mode_selectors:
+      mode_dropdown:
+        - { css: "button[data-testid='composer-mode-dropdown-button']" }
+        - { css: "button:has-text('Thinking')" }
+        - { css: "button:has-text('Instant')" }
+      deep_mode:
+        - { css: "[role='menuitem']:has-text('Thinking')" }
+        - { css: "[role='option']:has-text('Thinking')" }
+        - { css: "button:has-text('Thinking')" }
+      standard_mode:
+        - { css: "[role='menuitem']:has-text('Instant')" }
+        - { css: "[role='option']:has-text('Instant')" }
+        - { css: "button:has-text('Instant')" }
+    generating_indicator:
+      - { css: "[data-testid='chat-main-conversation'] [data-testid='stop-button']" }
+      - { css: "[data-testid='chat-main-conversation'] button[aria-label*='Stop' i]" }
+      - { css: "button[aria-label*='Stop' i]" }
+      - { testid: stop-button }
+    done_indicator:
+      - { css: "[data-testid='chat-main-conversation'] button[aria-label*='Copy' i]" }
+      - { css: "[data-testid='chat-main-conversation'] [aria-label*='Copy' i]" }
+      - { css: "button[aria-label*='Copy' i]" }
+    answer_container:
+      - { css: "[data-testid='chat-main-conversation']" }
+      - { css: "div[class*='conversation']" }
+    source_links:
+      - { css: "[data-testid='chat-main-conversation'] a[href^='http']" }
+      - { css: "aside a[href^='http']" }
+      - { css: "a[href^='http'][target='_blank']" }

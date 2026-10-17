@@ -308,7 +308,7 @@ export function ProviderModal({
                 { id: "high", label: "High", description: "Suy luận chuyên sâu cao nhất", selected: true, disabled: false, badge: "High" },
               ];
 
-              const models = isChatGPT || isCopilot || isDeepSeek || isGrok || isMistral
+              const models = isChatGPT || isCopilot || isDeepSeek || isGrok || isMistral || p.id === "meta"
                 ? []
                 : isClaude
                   ? (caps?.available_models && caps.available_models.length > 0 && !caps.available_models.some((m) => m.id === "default")
@@ -372,8 +372,8 @@ export function ProviderModal({
                                 },
                               ];
 
-              // 2. Reasoning: Empty for ChatGPT, Copilot, DeepSeek, Perplexity, and Grok
-              const thinkingLevels = isChatGPT || isCopilot || isDeepSeek || isPerplexity || isGrok || isZhipu
+              // 2. Reasoning: Empty for ChatGPT, Copilot, DeepSeek, Perplexity, Grok, Zhipu, and Meta
+              const thinkingLevels = isChatGPT || isCopilot || isDeepSeek || isPerplexity || isGrok || isZhipu || p.id === "meta"
                 ? []
                 : isClaude
                   ? (caps?.thinking_levels && caps.thinking_levels.length > 0 && !caps.thinking_levels.some((t) => t.id === "auto")
@@ -412,9 +412,9 @@ export function ProviderModal({
                               ])
                             : [];
 
-              // 3. Modes: Copilot (All 5 options). Gemini, Qwen, Claude, DeepSeek, ChatGPT, Perplexity, Kimi, Grok, Zhipu, and Minimax have no modes.
+              // 3. Modes: Copilot (All 5 options). Gemini, Qwen, Claude, DeepSeek, ChatGPT, Perplexity, Kimi, Grok, Zhipu, Minimax, and Meta have no modes.
               const modes =
-                p.id === "gemini" || p.id === "qwen" || isClaude || isDeepSeek || isChatGPT || isPerplexity || isKimi || isGrok || isMistral || isZhipu || isMinimax
+                p.id === "gemini" || p.id === "qwen" || isClaude || isDeepSeek || isChatGPT || isPerplexity || isKimi || isGrok || isMistral || isZhipu || isMinimax || p.id === "meta"
                   ? []
                   : isCopilot && (!caps?.modes || caps.modes.length === 0)
                     ? [
@@ -2012,6 +2012,71 @@ export function ProviderModal({
                             }}
                           >
                             {isDeepResearch ? "BẬT" : "TẮT"}
+                          </span>
+                        </div>
+                      </div>
+                    ) : p.id === "meta" ? (
+                      /* Meta AI: No AI model dropdown, Thinking toggle (Thinking vs Instant) */
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 10,
+                          flexGrow: 1,
+                        }}
+                      >
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <label
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: "var(--text-secondary)",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                            >
+                              <BrainIcon size={12} color="var(--brand-blue)" />
+                              <span>Chế độ tư duy (Thinking Mode)</span>
+                            </label>
+                            <span
+                              style={{
+                                fontSize: 9.5,
+                                padding: "1px 5px",
+                                borderRadius: 3,
+                                backgroundColor: isDeepThinking ? "#eff6ff" : "#f1f5f9",
+                                color: isDeepThinking ? "var(--brand-blue)" : "#64748b",
+                                fontWeight: 700,
+                              }}
+                            >
+                              {isDeepThinking ? "Thinking (BẬT)" : "Instant (TẮT)"}
+                            </span>
+                          </div>
+                          <select
+                            value={isDeepThinking ? "thinking" : "instant"}
+                            onChange={(e) => {
+                              onUpdateSelection?.(p.id, { deep_thinking: e.target.value === "thinking" });
+                            }}
+                            style={{
+                              width: "100%",
+                              padding: "6px 8px",
+                              borderRadius: 6,
+                              border: `1.5px solid ${isDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--border-default, #cbd5e1)"}`,
+                              backgroundColor: isDeepThinking ? "#eff6ff" : "#ffffff",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: isDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--text-primary, #0f172a)",
+                              cursor: "pointer",
+                              outline: "none",
+                            }}
+                            title="Chọn chế độ: Thinking (suy luận sâu) hoặc Instant (phản hồi tức thì)"
+                          >
+                            <option value="thinking">Thinking (Suy luận chuyên sâu — BẬT)</option>
+                            <option value="instant">Instant (Phản hồi tức thì — TẮT)</option>
+                          </select>
+                          <span style={{ fontSize: 10.5, color: "var(--text-muted)", lineHeight: 1.25 }}>
+                            Meta AI không có dropdown chọn model. Chọn &quot;Thinking&quot; để bật suy luận đa bước hoặc &quot;Instant&quot; để phản hồi tức thì.
                           </span>
                         </div>
                       </div>

@@ -2078,7 +2078,7 @@ export function ChatArea({
           {/* Provider Options Bar for selected provider(s) (Models, Deep Research toggle, Reasoning, DOM Sync) */}
           {/* In an Agent conversation, no model selection is shown at the textbox area */}
           {!isAgentSession && selectedCount === 1 && (
-            <div style={{ padding: "0 0 4px 0", borderBottom: "1px solid var(--border-subtle, #f1f5f9)" }} className='hidden'>
+            <div style={{ padding: "0 0 4px 0", borderBottom: "1px solid var(--border-subtle, #f1f5f9)" }}>
               <ProviderOptionsBar
                 providerName={(selectedProviders[0] || selectedProvider).name}
                 providerId={(selectedProviders[0] || selectedProvider).id}
