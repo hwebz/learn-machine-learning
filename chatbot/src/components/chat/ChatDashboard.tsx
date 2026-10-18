@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { PROVIDERS_LIST, DEFAULT_SELECTED_PROVIDERS } from "../../lib/constants";
-import { ChatSession, Message, StepLog, ProviderInfo } from "../../types/chat";
+import { ChatSession, Message, StepLog, ProviderInfo, SourceLink } from "../../types/chat";
 import { LeftSidebar } from "../sidebar/LeftSidebar";
 import { ChatArea } from "./ChatArea";
 import { RightSidebar } from "../inspector/RightSidebar";
@@ -47,6 +47,92 @@ function markSessionAsDeleted(id: string, jobId?: string) {
   } catch (err) {
     console.warn("Could not save deleted session id to localStorage:", err);
   }
+}
+
+export function isActiveJobStatus(status?: string): boolean {
+  return Boolean(
+    status && ["queued", "running", "orchestrating", "researching", "leading"].includes(status)
+  );
+}
+
+export function resolveAssistantContent(status: string, reportMarkdown?: string | null, error?: string | null): string {
+  if (reportMarkdown && reportMarkdown.trim()) {
+    return reportMarkdown;
+  }
+  if (status === "cancelled") {
+    return "you stopped the research, please try again.";
+  }
+  if (status === "failed") {
+    return `> ❌ **Nhiệm vụ nghiên cứu gặp sự cố**\n>\n> ${error || "Không thể hoàn thành việc thu thập dữ liệu từ các nhà cung cấp."}`;
+  }
+  if (status === "needs_user_action") {
+    return `> ⚠️ **Yêu cầu can thiệp từ người dùng**\n>\n> ${error || "Một hoặc nhiều nhà cung cấp yêu cầu đăng nhập hoặc xác minh captcha để tiếp tục."}`;
+  }
+  if (status === "completed" || status === "partial") {
+    return "Đã hoàn thành nghiên cứu nhưng chưa có báo cáo tổng hợp chi tiết.";
+  }
+  return "";
+}
+
+export function buildAssistantMessage(
+  jobId: string,
+  jobData: {
+    report_markdown?: string | null;
+    status: string;
+    providers?: string[];
+    created_at?: string | null;
+    finished_at?: string | null;
+    sources?: SourceLink[];
+    claims?: any[];
+    provider_runs?: Record<string, any> | any[];
+    provider_options?: Record<string, any>;
+    steps?: StepLog[];
+    job_type?: "research" | "agent";
+    orchestrator_provider?: string;
+    lead_provider?: string;
+    tone?: string;
+    orchestrator_dispatch?: any[];
+    delegated_providers?: string[];
+    error?: string | null;
+  }
+): Message | null {
+  const content = resolveAssistantContent(jobData.status, jobData.report_markdown, jobData.error);
+  if (!content) return null;
+
+  const isAgent = jobData.job_type === "agent" || Boolean(jobData.orchestrator_provider);
+  const providers = jobData.providers && jobData.providers.length > 0 ? jobData.providers : DEFAULT_SELECTED_PROVIDERS;
+  const authorName = isAgent
+    ? `Deep Research Orchestrator (${(jobData.orchestrator_provider || "copilot").toUpperCase()} ➜ ${(jobData.lead_provider || "chatgpt").toUpperCase()})`
+    : `AI Research Engine${providers.length ? ' (' : ''}${providers.join(", ")}${providers.length ? ')' : ''}`;
+
+  const timestamp = jobData.finished_at
+    ? new Date(jobData.finished_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : jobData.created_at
+      ? new Date(jobData.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      : "";
+
+  return {
+    id: `msg-${jobId}-asst`,
+    role: "assistant",
+    authorName,
+    timestamp,
+    content,
+    providers,
+    tokens: jobData.report_markdown ? 1600 : 0,
+    latencySeconds: 14.5,
+    sources: jobData.sources || [],
+    claims: jobData.claims || [],
+    provider_runs: jobData.provider_runs || {},
+    provider_options: jobData.provider_options || {},
+    factCheckStatus: jobData.status === "completed" ? "verified" : "unverified",
+    steps: jobData.steps || [],
+    job_type: isAgent ? "agent" : "research",
+    orchestrator_provider: jobData.orchestrator_provider,
+    lead_provider: jobData.lead_provider,
+    tone: jobData.tone,
+    orchestrator_dispatch: jobData.orchestrator_dispatch,
+    delegated_providers: jobData.delegated_providers,
+  };
 }
 
 const FALLBACK_SESSION: ChatSession = {
@@ -136,6 +222,223 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     setInspectedProvider(provider ? provider.toLowerCase() : undefined);
   };
 
+  const connectToRunningJob = useCallback(
+    (jobId: string, initialSteps: StepLog[] = [], jobMeta?: any) => {
+      if (activeUnsubscribeRef.current) {
+        try {
+          activeUnsubscribeRef.current();
+        } catch (err) {
+          console.warn("Error unsubscribing previous SSE:", err);
+        }
+        activeUnsubscribeRef.current = null;
+      }
+
+      isCancelledRef.current = false;
+      activeJobIdRef.current = jobId;
+      setIsGenerating(true);
+
+      if (initialSteps && initialSteps.length > 0) {
+        setActiveSteps(initialSteps);
+      }
+
+      setIsRightSidebarOpen(true);
+
+      const jobProviders =
+        (jobMeta?.selectedProviders && jobMeta.selectedProviders.length > 0)
+          ? jobMeta.selectedProviders
+          : (jobMeta?.providers && jobMeta.providers.length > 0)
+            ? jobMeta.providers
+            : DEFAULT_SELECTED_PROVIDERS;
+
+      const initialProv = jobProviders[0] || "copilot";
+      setInspectedProvider(initialProv.toLowerCase());
+
+      const isAgent = jobMeta?.job_type === "agent" || Boolean(jobMeta?.orchestrator_provider);
+      const orchProv = jobMeta?.orchestrator_provider || (isAgent ? "gemini" : undefined);
+      const leadProv = jobMeta?.lead_provider || (isAgent ? "chatgpt" : undefined);
+
+      const unsub = subscribeJobEvents(jobId, {
+        onStatus: (newStatus) => {
+          if (isCancelledRef.current) return;
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === jobId || s.jobId === jobId
+                ? { ...s, status: newStatus as any }
+                : s
+            )
+          );
+        },
+        onStep: (stepLog) => {
+          if (isCancelledRef.current) return;
+          setActiveSteps((prev) => {
+            const existingIdx = prev.findIndex(
+              (s) =>
+                s.id === stepLog.id ||
+                (s.message === stepLog.message &&
+                  s.step === stepLog.step &&
+                  s.provider === stepLog.provider)
+            );
+            if (existingIdx >= 0) {
+              const updated = [...prev];
+              updated[existingIdx] = stepLog;
+              return updated;
+            }
+            return [...prev, stepLog];
+          });
+
+          const rawJobStatus = (stepLog.data as any)?.job_status;
+          const dispatch = stepLog.data?.dispatch;
+
+          setSessions((prev) =>
+            prev.map((s) => {
+              if (s.id !== jobId && s.jobId !== jobId) return s;
+              let nextStatus = s.status;
+              if (rawJobStatus && rawJobStatus !== "running") {
+                nextStatus = rawJobStatus as any;
+              } else if (dispatch && nextStatus === "orchestrating") {
+                nextStatus = "researching" as any;
+              }
+              return {
+                ...s,
+                status: nextStatus,
+                orchestrator_dispatch: dispatch || s.orchestrator_dispatch,
+              };
+            })
+          );
+        },
+        onResult: (result) => {
+          if (isCancelledRef.current) return;
+          setActiveSteps((latestSteps) => {
+            const consolidatedSources = [...(result.sources || [])];
+            const seenUrls = new Set(consolidatedSources.map((s) => s.url));
+            for (const st of latestSteps) {
+              const stepCits = st.citations || (st.data as any)?.citations || [];
+              for (const c of stepCits) {
+                if (c && c.url && !seenUrls.has(c.url)) {
+                  seenUrls.add(c.url);
+                  consolidatedSources.push({
+                    title: c.title || c.url,
+                    url: c.url,
+                    domain: c.domain,
+                  });
+                }
+              }
+            }
+
+            const asstMsg = buildAssistantMessage(jobId, {
+              report_markdown:
+                result.report_markdown ||
+                "Đã hoàn thành nghiên cứu và tổng hợp câu trả lời từ các mô hình.",
+              status: "completed",
+              providers: jobProviders,
+              sources: consolidatedSources,
+              claims: result.claims || [],
+              provider_runs: result.provider_runs || {},
+              provider_options:
+                (result as any).provider_options || jobMeta?.providerConfigurations || {},
+              steps: latestSteps,
+              job_type: isAgent ? "agent" : "research",
+              orchestrator_provider: orchProv,
+              lead_provider: leadProv,
+              tone: jobMeta?.tone,
+              orchestrator_dispatch:
+                (result as any).orchestrator_dispatch || jobMeta?.orchestrator_dispatch,
+              delegated_providers: jobMeta?.delegated_providers,
+            });
+
+            if (asstMsg) {
+              setInspectedMessage(asstMsg);
+              setSessions((prev) =>
+                prev.map((s) => {
+                  if (s.id !== jobId && s.jobId !== jobId) return s;
+                  const existingIdx = s.messages.findIndex(
+                    (m) => m.id === asstMsg.id || (m.role === "assistant" && s.jobId === jobId)
+                  );
+                  const updatedMessages =
+                    existingIdx >= 0
+                      ? s.messages.map((m, idx) => (idx === existingIdx ? asstMsg : m))
+                      : [...s.messages.filter((m) => m.role === "user"), asstMsg];
+                  return {
+                    ...s,
+                    status: "completed",
+                    messages: updatedMessages,
+                    orchestrator_dispatch:
+                      (result as any).orchestrator_dispatch || s.orchestrator_dispatch,
+                  };
+                })
+              );
+            }
+            return latestSteps;
+          });
+          setIsGenerating(false);
+          activeJobIdRef.current = null;
+          activeUnsubscribeRef.current = null;
+        },
+        onError: async (err) => {
+          if (isCancelledRef.current) return;
+          console.warn("SSE reconnect issue:", err);
+          try {
+            const finalResult = await getResearchResult(jobId);
+            if (finalResult && !isActiveJobStatus(finalResult.status)) {
+              const asstMsg = buildAssistantMessage(jobId, finalResult);
+              if (asstMsg) {
+                setInspectedMessage(asstMsg);
+                setSessions((prev) =>
+                  prev.map((s) =>
+                    s.id === jobId || s.jobId === jobId
+                      ? {
+                          ...s,
+                          status: finalResult.status as any,
+                          messages: [...s.messages.filter((m) => m.role === "user"), asstMsg],
+                        }
+                      : s
+                  )
+                );
+              }
+            }
+          } catch {}
+          setIsGenerating(false);
+          activeJobIdRef.current = null;
+          activeUnsubscribeRef.current = null;
+        },
+        onDone: async () => {
+          if (isCancelledRef.current) return;
+          try {
+            const finalResult = await getResearchResult(jobId);
+            if (finalResult) {
+              const asstMsg = buildAssistantMessage(jobId, finalResult);
+              if (asstMsg) {
+                setInspectedMessage(asstMsg);
+                setSessions((prev) =>
+                  prev.map((s) =>
+                    s.id === jobId || s.jobId === jobId
+                      ? {
+                          ...s,
+                          status: (finalResult.status as any) || "completed",
+                          messages: [...s.messages.filter((m) => m.role === "user"), asstMsg],
+                          orchestrator_dispatch:
+                            (finalResult as any).orchestrator_dispatch || s.orchestrator_dispatch,
+                        }
+                      : s
+                  )
+                );
+              }
+            }
+          } catch (e) {
+            console.warn("Could not fetch final research result in reconnect onDone:", e);
+          } finally {
+            setIsGenerating(false);
+            activeJobIdRef.current = null;
+            activeUnsubscribeRef.current = null;
+          }
+        },
+      });
+
+      activeUnsubscribeRef.current = unsub;
+    },
+    []
+  );
+
   // Synchronize history from backend on mount and via button
   const loadHistoryFromBackend = useCallback(async (preferredId?: string) => {
     setIsLoadingHistory(true);
@@ -166,33 +469,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             content: job.query,
           };
 
-          const assistantMsgs: Message[] = [];
-          if (job.report_markdown) {
-            assistantMsgs.push({
-              id: `msg-${job.job_id}-asst`,
-              role: "assistant",
-              authorName: `AI Research Engine${jobProviders.length ? ' (' : ''}${jobProviders.join(", ")}${jobProviders.length ? ')' : ''}`,
-              timestamp: job.finished_at
-                ? new Date(job.finished_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                : "",
-              content: job.report_markdown,
-              providers: jobProviders,
-              tokens: 1600,
-              latencySeconds: 14.5,
-              sources: job.sources || [],
-              claims: job.claims || [],
-              provider_runs: job.provider_runs || {},
-              provider_options: (job as any).provider_options || {},
-              factCheckStatus: "verified",
-              steps: (job as any).steps || [],
-              job_type: (job as any).job_type || "research",
-              orchestrator_provider: (job as any).orchestrator_provider,
-              lead_provider: (job as any).lead_provider,
-              tone: (job as any).tone,
-              orchestrator_dispatch: (job as any).orchestrator_dispatch,
-              delegated_providers: (job as any).delegated_providers,
-            });
-          }
+          const assistantMsg = buildAssistantMessage(job.job_id, job);
+          const assistantMsgs: Message[] = assistantMsg ? [assistantMsg] : [];
 
           const initialTitle = (job as any).title || (job.query.length > 36 ? job.query.slice(0, 36) + "..." : job.query);
           const isPinned = Boolean((job as any).pinned);
@@ -243,32 +521,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               content: directJob.query || "Phiên nghiên cứu",
             };
 
-            const asstMsgs: Message[] = [];
-            if (directJob.report_markdown) {
-              asstMsgs.push({
-                id: `msg-${directJob.job_id}-asst`,
-                role: "assistant",
-                authorName: `AI Research Engine${directProviders.length ? ' (' : ''}${directProviders.join(", ")}${directProviders.length ? ')' : ''}`,
-                timestamp: directJob.finished_at
-                  ? new Date(directJob.finished_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                  : "",
-                content: directJob.report_markdown,
-                providers: directProviders,
-                tokens: 1600,
-                latencySeconds: 14.5,
-                sources: directJob.sources || [],
-                claims: directJob.claims || [],
-                provider_runs: directJob.provider_runs || {},
-                provider_options: directJob.provider_options || {},
-                factCheckStatus: "verified",
-                steps: directJob.steps || [],
-                job_type: (directJob as any).job_type || "research",
-                orchestrator_provider: (directJob as any).orchestrator_provider,
-                lead_provider: (directJob as any).lead_provider,
-                tone: (directJob as any).tone,
-                orchestrator_dispatch: (directJob as any).orchestrator_dispatch,
-              });
-            }
+            const directAsst = buildAssistantMessage(directJob.job_id, directJob);
+            const asstMsgs: Message[] = directAsst ? [directAsst] : [];
 
             const directSession: ChatSession = {
               id: directJob.job_id,
@@ -366,12 +620,40 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         }
         return activeRunningSessions;
       });
+
+      const selectedTarget = targetId
+        ? newSessions.find((s) => s.id === targetId || s.jobId === targetId)
+        : undefined;
+
+      if (selectedTarget) {
+        const selectedJobId = selectedTarget.jobId || selectedTarget.id;
+        if (isActiveJobStatus(selectedTarget.status)) {
+          connectToRunningJob(
+            selectedJobId,
+            (selectedTarget as any).steps || [],
+            selectedTarget
+          );
+        } else {
+          const asst = selectedTarget.messages.find((m) => m.role === "assistant");
+          if (asst) {
+            setInspectedMessage(asst);
+            if (asst.steps && asst.steps.length > 0) {
+              setActiveSteps(asst.steps);
+            }
+          } else if ((selectedTarget as any).steps && (selectedTarget as any).steps.length > 0) {
+            setActiveSteps((selectedTarget as any).steps);
+          }
+          if (selectedTarget.selectedProviders && selectedTarget.selectedProviders.length > 0) {
+            setInspectedProvider(selectedTarget.selectedProviders[0].toLowerCase());
+          }
+        }
+      }
     } catch (err) {
       console.warn("Could not fetch research history from backend:", err);
     } finally {
       setIsLoadingHistory(false);
     }
-  }, [routeChatId]);
+  }, [routeChatId, connectToRunningJob]);
 
   useEffect(() => {
     setMounted(true);
@@ -612,9 +894,23 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         const fullJob = await getResearchResult(targetJobId);
         if (!fullJob) return;
 
-        // If the job is still actively running and has no final report yet, preserve live streaming state!
-        if (fullJob.status !== "completed" && !fullJob.report_markdown) {
+        // If the job is still actively running, reconnect to SSE stream!
+        if (isActiveJobStatus(fullJob.status)) {
+          connectToRunningJob(targetJobId, fullJob.steps || existingAsst?.steps || [], {
+            ...session,
+            ...fullJob,
+          });
           return;
+        }
+
+        // If switching away from an active generating job to a terminal job, clean up active SSE
+        if (activeJobIdRef.current && activeJobIdRef.current !== targetJobId) {
+          if (activeUnsubscribeRef.current) {
+            activeUnsubscribeRef.current();
+            activeUnsubscribeRef.current = null;
+          }
+          activeJobIdRef.current = null;
+          setIsGenerating(false);
         }
 
         let jobSources = fullJob.sources || [];
@@ -644,21 +940,16 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         const toneVal = (fullJob as any).tone || session?.tone;
         const orchDispatch = (fullJob as any).orchestrator_dispatch || session?.orchestrator_dispatch;
 
-        const asstMsg: Message = {
-          id: `msg-${targetJobId}-detail`,
-          role: "assistant",
-          authorName: isAgentJob
-            ? `Deep Research Orchestrator (${(orchProv || "copilot").toUpperCase()} ➜ ${(leadProv || "chatgpt").toUpperCase()})`
-            : `AI Research Engine${fullJobProviders.length ? ' (' : ''}${fullJobProviders.join(", ")}${fullJobProviders.length ? ')' : ''}`,
-          timestamp: fullJob.finished_at
-            ? new Date(fullJob.finished_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-            : (existingAsst?.timestamp || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })),
-          content: fullJob.report_markdown || existingAsst?.content || "",
+        const asstMsg = buildAssistantMessage(targetJobId, {
+          report_markdown: fullJob.report_markdown || existingAsst?.content || null,
+          status: fullJob.status,
           providers: fullJobProviders,
+          created_at: (fullJob as any).created_at,
+          finished_at: (fullJob as any).finished_at,
           sources: jobSources,
           claims: fullJob.claims || [],
           provider_runs: fullJob.provider_runs || {},
-          factCheckStatus: "verified",
+          provider_options: (fullJob as any).provider_options || {},
           steps: jobSteps,
           job_type: isAgentJob ? "agent" : "research",
           orchestrator_provider: orchProv,
@@ -666,20 +957,27 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           tone: toneVal,
           orchestrator_dispatch: orchDispatch,
           delegated_providers: (fullJob as any).delegated_providers,
-        };
+          error: (fullJob as any).error,
+        });
 
-        setInspectedMessage(asstMsg);
+        if (asstMsg) {
+          setInspectedMessage(asstMsg);
+        }
         setIsRightSidebarOpen(true);
 
         setSessions((prev) =>
           prev.map((s) => {
             if (s.id !== id && s.jobId !== id) return s;
             const otherMsgs = s.messages.filter((m) => m.role === "user");
+            const finalMessages = asstMsg
+              ? (otherMsgs.length > 0 ? [...otherMsgs, asstMsg] : [asstMsg])
+              : s.messages;
             return {
               ...s,
+              status: fullJob.status as any,
               selectedProviders: fullJobProviders,
               selectedProvider: fullJobProviders[0] || s.selectedProvider,
-              messages: otherMsgs.length > 0 ? [...otherMsgs, asstMsg] : [asstMsg],
+              messages: finalMessages,
               job_type: isAgentJob ? "agent" : s.job_type,
               orchestrator_provider: orchProv || s.orchestrator_provider,
               lead_provider: leadProv || s.lead_provider,

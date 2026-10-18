@@ -655,6 +655,35 @@ export function ChatArea({
                   />
                 )}
 
+                {/* Thinking Steps Inspector Button for standard research messages */}
+                {msg.steps && msg.steps.length > 0 && !(msg.job_type === "agent" || session.job_type === "agent") && (
+                  <div style={{ margin: "4px 0 10px 0" }}>
+                    <button
+                      type="button"
+                      onClick={() => onSelectThinking?.(msg.providers?.[0] || selectedProvider.id, msg)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "5px 12px",
+                        borderRadius: 6,
+                        backgroundColor: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                        color: "var(--brand-blue, #2563eb)",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                      title="Xem các bước suy luận và nhật ký nghiên cứu trong thanh bên phải"
+                    >
+                      <BrainIcon size={14} color="var(--brand-blue, #2563eb)" />
+                      <span>Xem tiến trình suy luận ({msg.steps.length} bước)</span>
+                      <ChevronRightIcon size={12} color="var(--brand-blue, #2563eb)" />
+                    </button>
+                  </div>
+                )}
+
                 {/* Main Content Body with Full Markdown & Syntax Highlighter */}
                 <div className="message-content-body">
                   <MarkdownContent content={msg.content} />

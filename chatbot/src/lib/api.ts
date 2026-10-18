@@ -274,7 +274,7 @@ export function subscribeJobEvents(
       if (data.message || data.step || data.event_type === "orchestrator_result") {
         const payloadData = data.data || {};
         const stepLog: StepLog = {
-          id: `step-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          id: data.id || (data.event_id ? `event-${data.event_id}` : `step-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`),
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
           provider: data.provider,
           step: data.step || data.event_type,

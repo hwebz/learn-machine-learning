@@ -466,6 +466,8 @@ async def research_events(job_id: str) -> StreamingResponse:
                     last_event_id = event.id or last_event_id
                     event_type = getattr(event, "event_type", None) or "progress"
                     data: dict[str, Any] = {
+                        "id": f"event-{event.id}" if event.id else None,
+                        "event_id": event.id,
                         "job_id": job_id,
                         "status": event.status,
                         "event_type": event_type,

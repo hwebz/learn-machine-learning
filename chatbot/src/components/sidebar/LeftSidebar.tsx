@@ -134,7 +134,12 @@ export function LeftSidebar({
     const isActive = session.id === activeSessionId;
     const isEditing = editingSessionId === session.id;
     const providerCount = session.selectedProviders?.length || 1;
-    const isRunning = session.status === "running" || session.status === "queued";
+    const isRunning =
+      session.status === "running" ||
+      session.status === "queued" ||
+      session.status === "orchestrating" ||
+      session.status === "researching" ||
+      session.status === "leading";
 
     if (isEditing) {
       return (
@@ -189,9 +194,32 @@ export function LeftSidebar({
                 boxShadow: "0 0 6px var(--brand-blue)",
                 flexShrink: 0,
               }}
+              title="Đang nghiên cứu..."
             />
           ) : session.pinned ? (
             <PinIcon size={12} color="var(--brand-blue)" filled={true} />
+          ) : session.status === "cancelled" ? (
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                backgroundColor: "#94a3b8",
+                flexShrink: 0,
+              }}
+              title="Đã dừng nghiên cứu"
+            />
+          ) : session.status === "failed" ? (
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                backgroundColor: "#ef4444",
+                flexShrink: 0,
+              }}
+              title="Nghiên cứu thất bại"
+            />
           ) : null}
           {session.job_type === "agent" && (
             <span
