@@ -86,6 +86,20 @@ export const mistralFallbackThinking: OptionItem[] = [
   { id: "think", label: "Think (Suy luận)", description: "Handle complex tasks — Suy luận sâu cho tác vụ phức tạp", selected: false, badge: "Think" },
 ];
 
+export const routerFallbackModels: OptionItem[] = [
+  { id: "Smartest", label: "Smartest (Auto Best Reasoning)", description: "Tự động chọn mô hình suy luận tốt nhất (DeepSeek-R1 / Qwen / Claude)", selected: true, badge: "Smartest", disabled: false },
+  { id: "Smarter", label: "Smarter (Balanced Synthesis)", description: "Mô hình cân bằng tốc độ và chất lượng suy luận cao", selected: false, badge: "Smarter", disabled: false },
+  { id: "Daily", label: "Daily (Fast & Efficient)", description: "Tốc độ phản hồi cực nhanh cho câu hỏi thường ngày", selected: false, badge: "Daily", disabled: false },
+  { id: "cx/gpt-6.1-sol", label: "cx/gpt-6.1-sol", description: "Mô hình frontier tổng hợp đa chiều", selected: false, badge: "Frontier", disabled: false },
+  { id: "nvidia/nemotron-3-ultra-550b-a55b", label: "Nemotron 3 Ultra 550B", description: "Mô hình 550B lý luận logic và toán học chuyên sâu", selected: false, badge: "550B", disabled: false },
+];
+
+export const routerFallbackThinking: OptionItem[] = [
+  { id: "auto", label: "Auto (Tự động suy luận)", description: "Tự động kích hoạt reasoning tokens theo độ phức tạp của câu hỏi", selected: true, badge: "Auto" },
+  { id: "high", label: "Deep Thinking (Tối đa)", description: "Bắt buộc suy luận đa bước toàn diện", selected: false, badge: "Deep" },
+  { id: "off", label: "Off (Tắt reasoning)", description: "Tắt reasoning, phản hồi trực tiếp", selected: false, badge: "Direct" },
+];
+
 export const copilotFallbackModes: OptionItem[] = [
   { id: "auto", label: "Auto", description: "Tự động cân bằng giữa tốc độ và độ chính xác (Mặc định)", selected: true, badge: "Auto" },
   { id: "quick", label: "Quick Response", description: "Ưu tiên tốc độ phản hồi nhanh cho các câu hỏi ngắn gọn", selected: false, badge: "Fast" },
@@ -153,6 +167,7 @@ export function resolveProviderModels(
   if (providerId === "qwen") return qwenFallbackModels;
   if (providerId === "zhipu") return zhipuFallbackModels;
   if (providerId === "minimax") return minimaxFallbackModels;
+  if (providerId === "9router" || providerId === "router") return routerFallbackModels;
 
   return [
     {
@@ -196,6 +211,7 @@ export function resolveProviderThinkingLevels(
   if (providerId === "gemini") return geminiFallbackThinking;
   if (providerId === "qwen") return qwenFallbackThinking;
   if (providerId === "mistral") return mistralFallbackThinking;
+  if (providerId === "9router" || providerId === "router") return routerFallbackThinking;
 
   return [];
 }
@@ -254,6 +270,12 @@ export function resolveCurrentSelections(
       : caps?.selected_model_id && models.some((m) => m.id === caps.selected_model_id && !m.disabled)
         ? caps.selected_model_id
         : "m3";
+  } else if (providerId === "9router" || providerId === "router") {
+    currentModelId = sel?.model_id && models.some((m) => m.id === sel.model_id && !m.disabled)
+      ? sel.model_id
+      : caps?.selected_model_id && models.some((m) => m.id === caps.selected_model_id && !m.disabled)
+        ? caps.selected_model_id
+        : "Smartest";
   } else {
     currentModelId = sel?.model_id && models.some((m) => m.id === sel.model_id && !m.disabled)
       ? sel.model_id

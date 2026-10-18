@@ -174,7 +174,7 @@ export function ProviderOptionsBar({
                     ? (capabilities?.available_models && capabilities.available_models.length > 0 && !capabilities.available_models.some((m) => m.id === "default")
                       ? capabilities.available_models
                       : minimaxFallbackModels)
-                  : [];
+                    : [];
 
   const thinkingLevels: OptionItem[] = isDeepSeek || isCopilot || isChatGPT || isPerplexity || isGrok || isZhipu || isMinimax || isMeta
     ? []
@@ -653,7 +653,7 @@ export function ProviderOptionsBar({
               <div
                 style={{
                   position: "absolute",
-                  top: "100%",
+                  bottom: "100%",
                   left: 0,
                   marginTop: 4,
                   width: 230,
@@ -761,7 +761,7 @@ export function ProviderOptionsBar({
               <div
                 style={{
                   position: "absolute",
-                  top: "100%",
+                  bottom: "100%",
                   left: 0,
                   marginTop: 4,
                   width: 260,
@@ -874,7 +874,7 @@ export function ProviderOptionsBar({
               <div
                 style={{
                   position: "absolute",
-                  top: "100%",
+                  bottom: "100%",
                   left: 0,
                   marginTop: 4,
                   width: 220,
@@ -1264,7 +1264,7 @@ export function ProviderOptionsBar({
               <div
                 style={{
                   position: "absolute",
-                  top: "100%",
+                  bottom: "100%",
                   left: 0,
                   marginTop: 4,
                   width: isCopilot ? 280 : 240,

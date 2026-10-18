@@ -221,6 +221,22 @@ export const PROVIDERS_LIST: ProviderInfo[] = [
     avatarBg: "linear-gradient(135deg, #047857 0%, #10b981 100%)",
     iconType: "pi",
   },
+  {
+    id: "9router",
+    name: "9Router",
+    modelName: "Smartest (Multi-LLM Router)",
+    shortDesc: "Local OpenAI-compatible router với định tuyến linh hoạt DeepSeek/Qwen/Claude.",
+    fullDesc: "Bộ định tuyến AI cục bộ (Local Router) hỗ trợ kết nối mọi mô hình ngôn ngữ lớn OpenAI-compatible với khả năng suy luận reasoning chuyên sâu.",
+    contextWindow: "128,000+ tokens",
+    trainingData: "Continuous Local / API",
+    category: "Thinking",
+    supportsDeepMode: true,
+    deepModeLabel: "Deep Thinking (Reasoning)",
+    standardModeLabel: "Auto",
+    color: "#10b981",
+    avatarBg: "linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%)",
+    iconType: "9router",
+  },
 ];
 
 export const DEFAULT_SELECTED_PROVIDERS: string[] = [];

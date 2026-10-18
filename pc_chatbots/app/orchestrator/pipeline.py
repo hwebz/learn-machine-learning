@@ -23,6 +23,7 @@ from app.adapters.kimi_ui import KimiUIAdapter
 from app.adapters.meta_ui import MetaUIAdapter
 from app.adapters.minimax_ui import MinimaxUIAdapter
 from app.adapters.mistral_ui import MistralUIAdapter
+from app.adapters.router_api import RouterAPIAdapter
 from app.adapters.pi_ui import PiUIAdapter
 from app.adapters.qwen_ui import QwenUIAdapter
 from app.adapters.zhipu_ui import ZhipuUIAdapter
@@ -62,6 +63,12 @@ _UI_ADAPTERS: dict[str, type] = {
 
 
 def create_adapter(provider: str) -> ProviderAdapter:
+    p = provider.lower()
+    if p in ("9router", "router"):
+        if settings.research_adapter_mode == "fake":
+            return FakeAdapter("9router")
+        return RouterAPIAdapter()
+
     mode = settings.research_adapter_mode
     if mode == "fake":
         return FakeAdapter(provider)

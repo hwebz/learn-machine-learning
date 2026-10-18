@@ -202,6 +202,17 @@ async def health(request: Request) -> dict[str, object]:
         entry.setdefault("detail", "Official API adapter not implemented yet")
         adapters_health[name] = entry
 
+    adapters_health["9router"] = {
+        "ui": {
+            "logged_in": router_reachable,
+            "selectors_ok": True,
+            "detail": f"9Router reachable at {settings.router_base_url}" if router_reachable else "9Router unreachable",
+        },
+        "api_key_configured": bool(settings.router_api_key),
+        "api_detail": "Local 9Router API adapter",
+        "detail": "Local 9Router API adapter",
+    }
+
     return {
         "status": "ok",
         "router_reachable": router_reachable,

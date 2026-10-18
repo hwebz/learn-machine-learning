@@ -3,6 +3,7 @@ import { extractProviderResponse } from "./providerResponse";
 
 export function normalizeProvider(name: string): string {
   const s = name.trim().toLowerCase();
+  if (s.includes("9router") || s === "router") return "9router";
   if (s.includes("qwen")) return "qwen";
   if (s.includes("copilot")) return "copilot";
   if (s.includes("gemini")) return "gemini";
@@ -22,7 +23,7 @@ export function extractProvider(st: StepLog): string {
   if (st.provider) return normalizeProvider(st.provider);
   if (st.data?.provider) return normalizeProvider(String(st.data.provider));
   const match = st.message.match(
-    /\b(qwen|copilot|gemini|deepseek|chatgpt|openai|grok|perplexity|claude|mistral|kimi|moonshot|zhipu|glm|minimax|hailuo)\b/i
+    /\b(9router|router|qwen|copilot|gemini|deepseek|chatgpt|openai|grok|perplexity|claude|mistral|kimi|moonshot|zhipu|glm|minimax|hailuo)\b/i
   );
   if (match) return normalizeProvider(match[1]);
   return "";

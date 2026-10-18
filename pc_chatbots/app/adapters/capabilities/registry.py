@@ -21,6 +21,7 @@ from app.adapters.capabilities.mistral import MistralCapabilitiesStrategy
 from app.adapters.capabilities.zhipu import ZhipuCapabilitiesStrategy
 from app.adapters.capabilities.minimax import MinimaxCapabilitiesStrategy
 from app.adapters.capabilities.meta import MetaCapabilitiesStrategy
+from app.adapters.capabilities.router import RouterCapabilitiesStrategy
 from app.adapters.capabilities.models import (
     OptionItem,
     ProviderLiveCapabilities,
@@ -138,6 +139,9 @@ class CapabilitiesRegistry:
         self.register(minimax_strat)
         meta_strat = MetaCapabilitiesStrategy()
         self.register(meta_strat)
+        router_strat = RouterCapabilitiesStrategy("9router")
+        self.register(router_strat)
+        self.register(RouterCapabilitiesStrategy("router"))
 
     def register(self, strategy: BaseProviderCapabilitiesStrategy) -> None:
         self._strategies[strategy.provider_name.lower()] = strategy

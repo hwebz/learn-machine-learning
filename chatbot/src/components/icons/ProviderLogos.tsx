@@ -193,10 +193,32 @@ export function ProviderLogo({
   if (norm === "pi") {
     return <PiLogo size={size} className={className} color={color} style={style} />;
   }
+  if (norm === "9router" || norm === "router" || norm.includes("9router")) {
+    return <NineRouterLogo size={size} className={className} color={color} style={style} />;
+  }
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className} style={style}>
       <circle cx="12" cy="12" r="11" fill="var(--brand-blue, #2563eb)" />
       <path d="M12 7v10M7 12h10" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** 9Router Official Logo */
+export function NineRouterLogo({ size = 24, className = "", color, style }: ProviderLogoProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className} style={style}>
+      <title>9Router</title>
+      <rect width="24" height="24" rx="6" fill={color || "#10b981"} />
+      <path
+        d="M7 8.5C7 6.567 8.567 5 10.5 5h3c1.933 0 3.5 1.567 3.5 3.5v2c0 1.933-1.567 3.5-3.5 3.5H10v4.5"
+        stroke="#ffffff"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="10" cy="8.5" r="1.5" fill="#ffffff" />
+      <path d="M14 15.5l3 3.5m0-3.5l-3 3.5" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }

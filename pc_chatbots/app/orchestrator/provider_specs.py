@@ -25,6 +25,8 @@ PROVIDER_CATALOG: dict[str, dict[str, Any]] = {
     "minimax": {"name": "MiniMax", "desc": "Document processing, creative angles, conversational reasoning."},
     "meta": {"name": "Meta AI", "desc": "Open foundation research, general knowledge synthesis."},
     "pi": {"name": "Inflection Pi", "desc": "Exploratory inquiry, accessible explanations."},
+    "9router": {"name": "9Router", "desc": "Local multi-LLM OpenAI-compatible router, flexible reasoning and model orchestration."},
+    "router": {"name": "9Router", "desc": "Local multi-LLM OpenAI-compatible router, flexible reasoning and model orchestration."},
 }
 
 
@@ -214,6 +216,20 @@ def _resolve_pi_spec(ctx: ProviderPromptContext) -> tuple[str, str, str, dict[st
     active_summary = "Conversational dialogue mode"
     role = "Pedagogic breakdown, accessible explanations, intuitive analogies."
     default_cfg = {"thinking": True}
+    return config_schema, active_summary, role, default_cfg
+
+
+@register_provider_spec("9router")
+@register_provider_spec("router")
+def _resolve_router_spec(ctx: ProviderPromptContext) -> tuple[str, str, str, dict[str, Any]]:
+    active_model = ctx.chosen_model or "Smartest"
+    active_thinking = ctx.chosen_thinking or ("high" if ctx.is_dt else "auto")
+    avail_models = ctx.available_models or ["Smartest", "Smarter", "Daily", "cx/gpt-6.1-sol", "nvidia/nemotron-3-ultra-550b-a55b"]
+    avail_str = " | ".join(f'"{m}"' for m in avail_models[:6])
+    config_schema = f'{{"model": {avail_str}, "thinking": "auto" | "high" | "off"}}'
+    active_summary = f'Model="{active_model}", Thinking="{active_thinking}"'
+    role = "Local high-performance multi-LLM router, flexible reasoning models orchestration, DeepSeek/Qwen synthesis."
+    default_cfg = {"model": active_model, "thinking": active_thinking}
     return config_schema, active_summary, role, default_cfg
 
 
