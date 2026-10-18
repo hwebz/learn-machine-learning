@@ -9,6 +9,7 @@ ProviderName = Literal[
     "perplexity", "gemini", "chatgpt", "claude", "copilot",
     "qwen", "kimi", "deepseek", "zhipu", "grok",
     "minimax", "meta", "pi", "mistral",
+    "9router", "router",
 ]
 JobStatus = Literal[
     "queued", "orchestrating", "planning", "researching", "extracting", "verifying", "synthesizing", "leading",

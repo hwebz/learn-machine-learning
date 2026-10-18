@@ -12,6 +12,7 @@ class FakeAdapter:
         "perplexity", "gemini", "chatgpt", "claude", "copilot",
         "qwen", "kimi", "deepseek", "zhipu", "grok",
         "minimax", "meta", "pi", "mistral",
+        "9router", "router",
     }
 
     def __init__(self, name: str) -> None:

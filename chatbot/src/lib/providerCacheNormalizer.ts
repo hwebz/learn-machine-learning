@@ -362,6 +362,29 @@ export function normalizeProviderCache(
     if (cachedSelections["meta"].deep_research === undefined) cachedSelections["meta"].deep_research = false;
   }
 
+  const normalizeRouterKey = (key: string) => {
+    if (cachedCaps[key]) {
+      if (!cachedCaps[key].selected_model_id || cachedCaps[key].selected_model_id === "default" || cachedCaps[key].selected_model_id === "none") {
+        cachedCaps[key].selected_model_id = "Smartest";
+      }
+      if (cachedCaps[key].deep_thinking === undefined) cachedCaps[key].deep_thinking = true;
+      if (cachedCaps[key].web_search === undefined) cachedCaps[key].web_search = true;
+    }
+    if (cachedSelections[key]) {
+      if (!cachedSelections[key].model_id || cachedSelections[key].model_id === "default" || cachedSelections[key].model_id === "none") {
+        cachedSelections[key].model_id = "Smartest";
+      }
+      if (!cachedSelections[key].thinking_level_id) {
+        cachedSelections[key].thinking_level_id = "auto";
+      }
+      if (!cachedSelections[key].mode_id) {
+        cachedSelections[key].mode_id = "standard";
+      }
+    }
+  };
+  normalizeRouterKey("9router");
+  normalizeRouterKey("router");
+
   return {
     normalizedCaps: cachedCaps,
     normalizedSelections: cachedSelections,

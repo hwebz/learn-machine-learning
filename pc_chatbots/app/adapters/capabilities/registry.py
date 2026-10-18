@@ -203,17 +203,42 @@ class CapabilitiesRegistry:
         """Retrieve capabilities for a provider. If force_sync is True, perform live DOM scan."""
         p = provider.lower()
         strategy = self.get_strategy(p)
+        is_api = getattr(strategy, "is_api_only", False) or p in ("9router", "router")
 
         if not force_sync and p in self._cache:
             return self._merge_defaults_if_empty(p, self._cache[p])
 
         if not force_sync:
+            # If API-only provider and not yet in cache, try direct API probe first
+            if is_api:
+                try:
+                    caps = await strategy.inspect_dom(None)
+                    self._cache[p] = caps
+                    self._save_cache_to_disk()
+                    return caps
+                except Exception:
+                    pass
             # Return strategy baseline if not yet synced
             caps = strategy.get_default_capabilities()
             self._cache[p] = caps
             return caps
 
-        # Perform live DOM inspection via Playwright
+        # For API-only providers (e.g. 9Router): Pure API query, no browser / DOM sync needed!
+        if is_api:
+            try:
+                caps = await strategy.inspect_dom(None)
+                self._cache[p] = caps
+                self._save_cache_to_disk()
+                return caps
+            except Exception as exc:
+                logger.warning("api_capabilities_sync_failed", provider=p, error=str(exc))
+                caps = strategy.get_default_capabilities()
+                caps.last_error = f"Không thể đồng bộ từ API 9Router: {type(exc).__name__}: {exc}"
+                caps.is_live_dom = False
+                self._cache[p] = caps
+                return caps
+
+        # Perform live DOM inspection via Playwright for browser UI providers
         async with self._lock:
             session = BrowserSessionManager.get_session(p)
             cfg = provider_selectors(self._selectors, p)

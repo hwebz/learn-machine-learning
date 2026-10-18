@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
+import json
 from typing import Any
 
 import httpx
@@ -81,14 +82,29 @@ class RouterAPIAdapter:
         """Query 9Router with full support for all OpenAI-compatible response formats."""
         started_at = datetime.now(timezone.utc)
 
-        # 1. Resolve model
-        model = (
+        # 1. Resolve model & options
+        opts: dict[str, Any] = {}
+        if isinstance(mode, str) and mode.strip().startswith("{"):
+            try:
+                parsed = json.loads(mode)
+                if isinstance(parsed, dict):
+                    opts = parsed
+            except Exception:
+                pass
+
+        raw_model = (
             kwargs.get("model")
             or kwargs.get("model_id")
-            or (settings.router_model_lead if mode in ("deep", "thinking") else None)
-            or (mode if mode and mode not in ("default", "standard") else None)
-            or self.default_model
+            or opts.get("model")
+            or opts.get("model_id")
+            or (settings.router_model_lead if (mode in ("deep", "thinking") or opts.get("mode_id") == "deep_research") else None)
+            or (mode if mode and not mode.strip().startswith("{") and mode not in ("default", "standard") else None)
         )
+
+        if not raw_model or str(raw_model).strip().lower() in ("default", "none", "auto", "standard"):
+            model = self.default_model
+        else:
+            model = str(raw_model).strip()
 
         if on_step is not None:
             await on_step(
@@ -108,6 +124,14 @@ class RouterAPIAdapter:
             req_body["temperature"] = kwargs["temperature"]
         if "max_tokens" in kwargs:
             req_body["max_tokens"] = kwargs["max_tokens"]
+
+        thinking_level = kwargs.get("thinking_level") or kwargs.get("thinking_level_id") or opts.get("thinking_level_id")
+        if thinking_level == "high":
+            req_body["reasoning_effort"] = "high"
+        elif thinking_level == "medium":
+            req_body["reasoning_effort"] = "medium"
+        elif thinking_level == "off":
+            req_body["reasoning_effort"] = "none"
 
         url = f"{self.base_url}{self.chat_endpoint}"
         headers = {

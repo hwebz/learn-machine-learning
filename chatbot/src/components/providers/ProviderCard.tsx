@@ -61,6 +61,7 @@ export const ProviderCard = React.memo(function ProviderCard({
 
   const dataTypes = caps?.supported_data_types;
   const voice = caps?.voice_chat;
+  const isApiOnly = p.id === "9router" || p.id === "router";
 
   return (
     <div
@@ -279,15 +280,33 @@ export const ProviderCard = React.memo(function ProviderCard({
             </span>
           </div>
 
-          <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-            {caps?.synced_at
-              ? `Cập nhật: ${new Date(caps.synced_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-              : "Mặc định"}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {isApiOnly && (
+              <span
+                style={{
+                  fontSize: 10,
+                  padding: "1px 6px",
+                  borderRadius: 4,
+                  backgroundColor: "#ecfdf5",
+                  color: "#059669",
+                  fontWeight: 700,
+                  border: "1px solid #a7f3d0",
+                }}
+                title="Thuần API - Không sử dụng tự động hoá trình duyệt Playwright"
+              >
+                ⚡ Pure API
+              </span>
+            )}
+            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+              {caps?.synced_at
+                ? `Cập nhật: ${new Date(caps.synced_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                : "Mặc định"}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Card Actions: Sync DOM + Open Browser */}
+      {/* Card Actions: Sync DOM/API + Open Browser/Dashboard */}
       <div
         style={{
           display: "flex",
@@ -308,51 +327,85 @@ export const ProviderCard = React.memo(function ProviderCard({
           style={{
             padding: "4px 10px",
             borderRadius: 5,
-            border: "1px solid #bfdbfe",
-            backgroundColor: isSyncing ? "#eff6ff" : "#ffffff",
+            border: isApiOnly ? "1px solid #a7f3d0" : "1px solid #bfdbfe",
+            backgroundColor: isSyncing ? (isApiOnly ? "#ecfdf5" : "#eff6ff") : "#ffffff",
             fontSize: 11,
             fontWeight: 600,
-            color: "var(--brand-blue)",
+            color: isApiOnly ? "#059669" : "var(--brand-blue)",
             cursor: isSyncing || isSyncingAll ? "not-allowed" : "pointer",
             display: "inline-flex",
             alignItems: "center",
             gap: 5,
             transition: "all 0.15s ease",
           }}
-          title={`Quét lại DOM của ${p.name} để cập nhật mô hình, suy luận và chế độ`}
+          title={
+            isApiOnly
+              ? `Truy vấn API 9Router (http://localhost:20128/v1/models) để cập nhật danh sách mô hình và thinking mode`
+              : `Quét lại DOM của ${p.name} để cập nhật mô hình, suy luận và chế độ`
+          }
         >
           <RefreshIcon
             size={12}
-            color="var(--brand-blue)"
+            color={isApiOnly ? "#059669" : "var(--brand-blue)"}
             style={isSyncing ? { animation: "spin 1s linear infinite" } : undefined}
           />
-          <span>{isSyncing ? "Đang quét DOM..." : "🔄 Đồng bộ DOM"}</span>
+          <span>
+            {isSyncing
+              ? (isApiOnly ? "Đang gọi API..." : "Đang quét DOM...")
+              : (isApiOnly ? "⚡ Đồng bộ API" : "🔄 Đồng bộ DOM")}
+          </span>
         </button>
 
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            openProviderBrowser(p.id);
-          }}
-          style={{
-            padding: "4px 10px",
-            borderRadius: 5,
-            border: "1px solid #e2e8f0",
-            backgroundColor: "#ffffff",
-            fontSize: 11,
-            fontWeight: 600,
-            color: "var(--text-secondary)",
-            cursor: "pointer",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
-          }}
-          title={`Mở trình duyệt thực tế của ${p.name} để đăng nhập hoặc kiểm tra hồ sơ`}
-        >
-          <span>🌐</span>
-          <span>Mở trình duyệt</span>
-        </button>
+        {isApiOnly ? (
+          <a
+            href="http://localhost:20128/dashboard"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              padding: "4px 10px",
+              borderRadius: 5,
+              border: "1px solid #e2e8f0",
+              backgroundColor: "#ffffff",
+              fontSize: 11,
+              fontWeight: 600,
+              color: "var(--text-secondary)",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              textDecoration: "none",
+            }}
+            title="Mở bảng điều khiển 9Router Dashboard tại http://localhost:20128/dashboard"
+          >
+            <span>⚡</span>
+            <span>Dashboard API</span>
+          </a>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              openProviderBrowser(p.id);
+            }}
+            style={{
+              padding: "4px 10px",
+              borderRadius: 5,
+              border: "1px solid #e2e8f0",
+              backgroundColor: "#ffffff",
+              fontSize: 11,
+              fontWeight: 600,
+              color: "var(--text-secondary)",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+            }}
+            title={`Mở trình duyệt thực tế của ${p.name} để đăng nhập hoặc kiểm tra hồ sơ`}
+          >
+            <span>🌐</span>
+            <span>Mở trình duyệt</span>
+          </button>
+        )}
       </div>
     </div>
   );

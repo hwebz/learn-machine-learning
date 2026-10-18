@@ -279,8 +279,9 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
           const isZhipu = p === "zhipu";
           const isMinimax = p === "minimax";
           const isMeta = p === "meta";
+          const is9Router = p === "9router" || p === "router";
 
-          // Safe model for Claude & Kimi
+          // Safe model for Claude & Kimi & 9Router
           const isKimiDeepResearch = isKimi && (existing.deep_research !== undefined ? existing.deep_research : (caps.deep_research ?? false));
           const isQwenDeepResearch = isQwen && (existing.deep_research !== undefined ? existing.deep_research : (caps.deep_research ?? false));
           const rawModelId = existing.model_id || caps.selected_model_id || caps.available_models.find((m) => !m.disabled)?.id || "";
@@ -294,6 +295,8 @@ export function useProviderCapabilities(currentProviderId: string = "chatgpt") {
             ? "glm-5.3-flash"
             : isMinimax && (!rawModelId || rawModelId === "default")
             ? "m3"
+            : is9Router && (!rawModelId || rawModelId === "default" || rawModelId === "none")
+            ? (caps.selected_model_id || "Smartest")
             : rawModelId;
 
           // Safe thinking for Claude, Kimi & Qwen
