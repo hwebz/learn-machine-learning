@@ -113,6 +113,7 @@ export function buildAssistantMessage(
 
   return {
     id: `msg-${jobId}-asst`,
+    jobId,
     role: "assistant",
     authorName,
     timestamp,
@@ -133,6 +134,31 @@ export function buildAssistantMessage(
     orchestrator_dispatch: jobData.orchestrator_dispatch,
     delegated_providers: jobData.delegated_providers,
   };
+}
+
+export function upsertAssistantMessage(messages: Message[], newAsstMsg: Message): Message[] {
+  const newJobId =
+    newAsstMsg.jobId ||
+    (newAsstMsg.id.startsWith("msg-")
+      ? newAsstMsg.id.replace(/^msg-/, "").replace(/-asst$/, "")
+      : newAsstMsg.id.replace(/^asst-/, ""));
+
+  const existingIdx = messages.findIndex((m) => {
+    if (m.id === newAsstMsg.id) return true;
+    if (m.role !== "assistant") return false;
+    const mJobId =
+      m.jobId ||
+      (m.id.startsWith("msg-")
+        ? m.id.replace(/^msg-/, "").replace(/-asst$/, "")
+        : m.id.replace(/^asst-/, ""));
+    if (newJobId && mJobId && newJobId === mJobId) return true;
+    return false;
+  });
+
+  if (existingIdx >= 0) {
+    return messages.map((m, idx) => (idx === existingIdx ? newAsstMsg : m));
+  }
+  return [...messages, newAsstMsg];
 }
 
 const FALLBACK_SESSION: ChatSession = {
@@ -215,9 +241,6 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     setIsRightSidebarOpen(true);
     if (message) {
       setInspectedMessage(message);
-      if (message.steps && message.steps.length > 0) {
-        setActiveSteps(message.steps);
-      }
     }
     setInspectedProvider(provider ? provider.toLowerCase() : undefined);
   };
@@ -351,17 +374,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               setSessions((prev) =>
                 prev.map((s) => {
                   if (s.id !== jobId && s.jobId !== jobId) return s;
-                  const existingIdx = s.messages.findIndex(
-                    (m) => m.id === asstMsg.id || (m.role === "assistant" && s.jobId === jobId)
-                  );
-                  const updatedMessages =
-                    existingIdx >= 0
-                      ? s.messages.map((m, idx) => (idx === existingIdx ? asstMsg : m))
-                      : [...s.messages.filter((m) => m.role === "user"), asstMsg];
                   return {
                     ...s,
                     status: "completed",
-                    messages: updatedMessages,
+                    messages: upsertAssistantMessage(s.messages, asstMsg),
                     orchestrator_dispatch:
                       (result as any).orchestrator_dispatch || s.orchestrator_dispatch,
                   };
@@ -389,7 +405,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                       ? {
                           ...s,
                           status: finalResult.status as any,
-                          messages: [...s.messages.filter((m) => m.role === "user"), asstMsg],
+                          messages: upsertAssistantMessage(s.messages, asstMsg),
                         }
                       : s
                   )
@@ -415,7 +431,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                       ? {
                           ...s,
                           status: (finalResult.status as any) || "completed",
-                          messages: [...s.messages.filter((m) => m.role === "user"), asstMsg],
+                          messages: upsertAssistantMessage(s.messages, asstMsg),
                           orchestrator_dispatch:
                             (finalResult as any).orchestrator_dispatch || s.orchestrator_dispatch,
                         }
@@ -572,11 +588,22 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         const safeNewSessions = newSessions.filter(
           (s) => !activeRunningIds.has(s.id) && !activeRunningIds.has(s.jobId || "")
         );
-        const existingJobIds = new Set(safeNewSessions.map((s) => s.id));
+        const mergedSafeSessions = safeNewSessions.map((newS) => {
+          const oldS = prev.find((p) => p.id === newS.id || (p.jobId && p.jobId === newS.id));
+          if (oldS && oldS.messages && oldS.messages.length > newS.messages.length) {
+            return {
+              ...newS,
+              messages: oldS.messages,
+              title: oldS.title || newS.title,
+            };
+          }
+          return newS;
+        });
+        const existingJobIds = new Set(mergedSafeSessions.map((s) => s.id));
         const keptPrev = prev.filter(
           (s) => !existingJobIds.has(s.id) && !existingJobIds.has(s.jobId || "") && !activeRunningIds.has(s.id)
         );
-        const validCombined = [...activeRunningSessions, ...safeNewSessions, ...keptPrev].filter(
+        const validCombined = [...activeRunningSessions, ...mergedSafeSessions, ...keptPrev].filter(
           (s) => (s.messages && s.messages.length > 0) || s.jobId
         );
 
@@ -968,9 +995,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         setSessions((prev) =>
           prev.map((s) => {
             if (s.id !== id && s.jobId !== id) return s;
-            const otherMsgs = s.messages.filter((m) => m.role === "user");
             const finalMessages = asstMsg
-              ? (otherMsgs.length > 0 ? [...otherMsgs, asstMsg] : [asstMsg])
+              ? upsertAssistantMessage(s.messages, asstMsg)
               : s.messages;
             return {
               ...s,
@@ -1183,6 +1209,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           if (finalReport) {
             const assistantMsg: Message = {
               id: `msg-${jobAccepted.job_id}-asst`,
+              jobId: jobAccepted.job_id,
               role: "assistant",
               authorName: `Deep Research Orchestrator (${config.orchestrator_provider.toUpperCase()} ➜ ${config.lead_provider.toUpperCase()})`,
               timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -1211,7 +1238,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                   ? {
                     ...s,
                     status: "completed",
-                    messages: [...s.messages.filter((m) => m.role === "user"), assistantMsg],
+                    messages: upsertAssistantMessage(s.messages, assistantMsg),
                     orchestrator_dispatch: (result as any).orchestrator_dispatch || s.orchestrator_dispatch,
                     delegated_providers: config.delegated_providers || s.delegated_providers,
                     providerConfigurations: s.providerConfigurations || {
@@ -1238,6 +1265,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             if (finalResult && finalResult.report_markdown) {
               const assistantMsg: Message = {
                 id: `msg-${jobAccepted.job_id}-asst`,
+                jobId: jobAccepted.job_id,
                 role: "assistant",
                 authorName: `Deep Research Orchestrator (${config.orchestrator_provider.toUpperCase()} ➜ ${config.lead_provider.toUpperCase()})`,
                 timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -1266,7 +1294,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                     ? {
                       ...s,
                       status: "completed",
-                      messages: [...s.messages.filter((m) => m.role === "user"), assistantMsg],
+                      messages: upsertAssistantMessage(s.messages, assistantMsg),
                       orchestrator_dispatch: finalResult.orchestrator_dispatch || s.orchestrator_dispatch,
                       delegated_providers: config.delegated_providers || s.delegated_providers,
                       providerConfigurations: s.providerConfigurations || {
@@ -1482,13 +1510,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       prev.map((s) => {
         if (s.id !== targetSessionId && s.jobId !== targetSessionId) return s;
 
-        const asstMsgId = currentJobId ? `asst-${currentJobId}` : `asst-stopped-${Date.now()}`;
-        const existingIdx = s.messages.findIndex(
-          (m) => m.id === asstMsgId || (m.role === "assistant" && currentJobId && s.jobId === currentJobId)
-        );
-
+        const asstMsgId = currentJobId ? `msg-${currentJobId}-asst` : `asst-stopped-${Date.now()}`;
         const assistantMsg: Message = {
           id: asstMsgId,
+          jobId: currentJobId || undefined,
           role: "assistant",
           authorName: `AI Research Engine${currentProviderIds.length ? ' (' : ''}${currentProviderIds.join(", ")}${currentProviderIds.length ? ')' : ''}`,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -1499,15 +1524,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           factCheckStatus: "unverified",
         };
 
-        const updatedMessages =
-          existingIdx >= 0
-            ? s.messages.map((m, idx) => (idx === existingIdx ? assistantMsg : m))
-            : [...s.messages, assistantMsg];
-
         return {
           ...s,
           status: "cancelled",
-          messages: updatedMessages,
+          messages: upsertAssistantMessage(s.messages, assistantMsg),
         };
       })
     );
@@ -1648,9 +1668,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               }
             }
 
-            const asstMsgId = `asst-${jobAccepted.job_id}`;
+            const asstMsgId = `msg-${jobAccepted.job_id}-asst`;
             const assistantMsg: Message = {
               id: asstMsgId,
+              jobId: jobAccepted.job_id,
               role: "assistant",
               authorName: `AI Research Engine${currentProviderIds.length ? ' (' : ''}${currentProviderIds.join(", ")}${currentProviderIds.length ? ')' : ''}`,
               timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -1670,14 +1691,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             setSessions((prev) =>
               prev.map((s) => {
                 if (s.id !== jobAccepted.job_id && s.jobId !== jobAccepted.job_id) return s;
-                const existingIdx = s.messages.findIndex(
-                  (m) => m.id === asstMsgId || (m.role === "assistant" && s.jobId === jobAccepted.job_id)
-                );
-                const updatedMessages =
-                  existingIdx >= 0
-                    ? s.messages.map((m, idx) => (idx === existingIdx ? assistantMsg : m))
-                    : [...s.messages, assistantMsg];
-                return { ...s, status: "completed", messages: updatedMessages };
+                return {
+                  ...s,
+                  status: "completed",
+                  messages: upsertAssistantMessage(s.messages, assistantMsg),
+                };
               })
             );
             return latestSteps;
@@ -1753,9 +1771,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                 }
               }
 
-              const asstMsgId = `asst-${targetJobId}`;
+              const asstMsgId = `msg-${targetJobId}-asst`;
               const assistantMsg: Message = {
                 id: asstMsgId,
+                jobId: targetJobId,
                 role: "assistant",
                 authorName: `AI Research Engine${(result.providers || activeSession.selectedProviders || [provider]).length ? ' (' : ''}${(result.providers || activeSession.selectedProviders || [provider]).join(", ")}${(result.providers || activeSession.selectedProviders || [provider]).length ? ')' : ''}`,
                 timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -1774,14 +1793,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               setSessions((prev) =>
                 prev.map((s) => {
                   if (s.id !== targetJobId && s.jobId !== targetJobId) return s;
-                  const existingIdx = s.messages.findIndex(
-                    (m) => m.id === asstMsgId || (m.role === "assistant" && s.jobId === targetJobId)
-                  );
-                  const updatedMessages =
-                    existingIdx >= 0
-                      ? s.messages.map((m, idx) => (idx === existingIdx ? assistantMsg : m))
-                      : [...s.messages, assistantMsg];
-                  return { ...s, status: "completed", messages: updatedMessages };
+                  return {
+                    ...s,
+                    status: "completed",
+                    messages: upsertAssistantMessage(s.messages, assistantMsg),
+                  };
                 })
               );
               setInspectedMessage(assistantMsg);
@@ -1973,7 +1989,13 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           selectedProviders={selectedProviders}
           currentMessage={inspectedMessage || (latestMessage?.role === "assistant" ? latestMessage : undefined)}
           currentQuery={
-            activeSession.messages.find((m) => m.role === "user")?.content ||
+            (inspectedMessage
+              ? activeSession.messages
+                  .slice(0, activeSession.messages.indexOf(inspectedMessage))
+                  .reverse()
+                  .find((m) => m.role === "user")?.content
+              : null) ||
+            activeSession.messages.filter((m) => m.role === "user").pop()?.content ||
             (activeSession.messages.length > 0 ? activeSession.title : "")
           }
           isGenerating={isGenerating}

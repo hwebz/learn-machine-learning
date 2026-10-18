@@ -631,8 +631,8 @@ export function ChatArea({
                           provider={act.provider}
                           reason={act.reason}
                           kind={act.kind}
-                          jobId={session.jobId || session.id}
-                          onContinue={(prov) => onRetryProvider?.(prov, session.jobId || session.id)}
+                          jobId={msg.jobId || session.jobId || session.id}
+                          onContinue={(prov) => onRetryProvider?.(prov, msg.jobId || session.jobId || session.id)}
                         />
                       ))}
                     </div>
@@ -646,10 +646,23 @@ export function ChatArea({
                     leadProvider={msg.lead_provider || session.lead_provider}
                     tone={msg.tone || session.tone}
                     dispatchPlan={msg.orchestrator_dispatch || session.orchestrator_dispatch}
-                    status={session.status}
+                    status={
+                      msg.content === "you stopped the research, please try again."
+                        ? "cancelled"
+                        : (msg.factCheckStatus === "unverified" && session.status === "cancelled")
+                          ? "cancelled"
+                          : "completed"
+                    }
                     providerRuns={msg.provider_runs}
-                    steps={msg.steps || activeSteps}
-                    topic={session.title || msg.content}
+                    steps={msg.steps || []}
+                    topic={
+                      session.messages
+                        .slice(0, session.messages.indexOf(msg))
+                        .reverse()
+                        .find((m) => m.role === "user")?.content ||
+                      session.title ||
+                      msg.content
+                    }
                     message={msg}
                     onSelectThinking={onSelectThinking}
                   />
@@ -735,7 +748,16 @@ export function ChatArea({
                     <button
                       className="icon-btn"
                       title="Chạy lại nghiên cứu"
-                      onClick={() => onSendMessage(session.messages[0]?.content || "Research more")}
+                      onClick={() => {
+                        const correspondingUserQuery =
+                          session.messages
+                            .slice(0, session.messages.indexOf(msg))
+                            .reverse()
+                            .find((m) => m.role === "user")?.content ||
+                          session.messages[0]?.content ||
+                          "Research more";
+                        onSendMessage(correspondingUserQuery);
+                      }}
                     >
                       <RefreshIcon size={15} />
                     </button>

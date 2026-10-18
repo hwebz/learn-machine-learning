@@ -393,10 +393,14 @@ export function RightSidebar({
     }
   }, [isResizing, sidebarWidth]);
   // Determine which step log collection to inspect:
-  // If active generation is ongoing, use activeSteps. Otherwise use currentMessage steps.
-  const stepsToInspect = (isGenerating && activeSteps.length > 0)
-    ? activeSteps
-    : (currentMessage?.steps || activeSteps || []);
+  // If an inspected message was selected with its own steps, inspect those steps.
+  // Otherwise, if generation is actively ongoing, use activeSteps.
+  const stepsToInspect =
+    currentMessage?.steps && currentMessage.steps.length > 0
+      ? currentMessage.steps
+      : isGenerating && activeSteps.length > 0
+      ? activeSteps
+      : currentMessage?.steps || activeSteps || [];
 
   // Pre-aggregate thinking details for all providers present
   const providersMap = new Map<string, ProviderThinkingDetail>();

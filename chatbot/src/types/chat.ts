@@ -65,6 +65,7 @@ export interface Message {
   tone?: string;
   orchestrator_dispatch?: AgentDispatchPlanItem[];
   delegated_providers?: string[];
+  jobId?: string;
 }
 
 export interface AgentDispatchPlanItem {
