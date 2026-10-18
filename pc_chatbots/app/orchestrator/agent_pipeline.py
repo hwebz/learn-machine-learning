@@ -23,6 +23,7 @@ from app.orchestrator.pipeline import (
 )
 from app.adapters.capabilities.registry import CapabilitiesRegistry
 from app.api.schemas import OrchestratorOutput
+from app.orchestrator.step_emitter import StepEmitter, notify_job_event
 
 logger = structlog.get_logger(__name__)
 
@@ -63,301 +64,19 @@ TONE_INSTRUCTIONS: dict[str, str] = {
 }
 
 
-PROVIDER_CATALOG: dict[str, dict[str, str]] = {
-    "chatgpt": {
-        "name": "ChatGPT",
-        "config": '{"thinking": boolean}',
-        "desc": "General synthesis, code, structured explanations, multi-step reasoning.",
-    },
-    "perplexity": {
-        "name": "Perplexity",
-        "config": '{"thinking": boolean}',
-        "desc": "Real-time search, finding live citations, latest statistics, academic papers.",
-    },
-    "gemini": {
-        "name": "Gemini",
-        "config": '{"model": "flash" | "pro" | "argon", "mode": "low" | "medium" | "high"}',
-        "desc": "Deep conceptual reasoning, multimodal data, broad context analysis.",
-    },
-    "copilot": {
-        "name": "Microsoft Copilot",
-        "config": '{"thinking": boolean}',
-        "desc": "Enterprise research, web grounding, business applications.",
-    },
-    "qwen": {
-        "name": "Qwen",
-        "config": '{"mode": "qwen-3.7-plus" | "qwen-3.8-max", "thinking": boolean}',
-        "desc": "Technical analysis, mathematics, deep Chinese/English bilingual queries.",
-    },
-    "kimi": {
-        "name": "Moonshot Kimi",
-        "config": '{"mode": "k3", "thinking": boolean}',
-        "desc": "Long-form context synthesis, document deep dives.",
-    },
-    "zhipu": {
-        "name": "Zhipu AI GLM",
-        "config": '{"model": "glm-5.3" | "glm-5.3-flash", "mode": "low" | "high" | "max"}',
-        "desc": "Structured knowledge, bilingual analysis.",
-    },
-    "deepseek": {
-        "name": "DeepSeek",
-        "config": '{"thinking": boolean}',
-        "desc": "Deep algorithmic thinking, rigorous logic, mathematical formulations.",
-    },
-    "claude": {
-        "name": "Anthropic Claude",
-        "config": '{"thinking": boolean}',
-        "desc": "Rigorous logical analysis, nuanced writing, academic critique.",
-    },
-    "grok": {
-        "name": "xAI Grok",
-        "config": '{"thinking": boolean}',
-        "desc": "Real-time discovery, contrarian thinking, edge-case analysis.",
-    },
-    "mistral": {
-        "name": "Mistral Le Chat",
-        "config": '{"thinking": boolean}',
-        "desc": "Concise reasoning, European multilingual benchmarks, fast inference.",
-    },
-    "minimax": {
-        "name": "MiniMax",
-        "config": '{"thinking": boolean}',
-        "desc": "Document processing, creative angles, conversational reasoning.",
-    },
-    "meta": {
-        "name": "Meta AI",
-        "config": '{"thinking": boolean}',
-        "desc": "Open foundation research, general knowledge synthesis.",
-    },
-    "pi": {
-        "name": "Inflection Pi",
-        "config": '{"thinking": boolean}',
-        "desc": "Exploratory inquiry, accessible explanations.",
-    },
-}
+from .provider_specs import PROVIDER_CATALOG, resolve_provider_live_prompt_info
 
-
-def resolve_provider_live_prompt_info(
-    pid: str,
-    user_config: dict[str, Any] | None = None,
-    caps_data: Any | None = None,
-) -> dict[str, Any]:
-    """Resolves live DOM capabilities and user choices into rich metadata for prompt construction."""
-    p = pid.lower()
-    pcfg = user_config or {}
-
-    caps_dict: dict[str, Any] = {}
-    if caps_data is not None:
-        if isinstance(caps_data, dict):
-            caps_dict = caps_data
-        elif hasattr(caps_data, "model_dump"):
-            caps_dict = caps_data.model_dump()
-        else:
-            try:
-                caps_dict = dict(caps_data)
-            except Exception:
-                caps_dict = {}
-
-    if not caps_dict:
-        try:
-            reg = CapabilitiesRegistry.instance()
-            cached_caps = reg._cache.get(p)
-            if cached_caps is not None:
-                caps_dict = cached_caps.model_dump()
-            else:
-                caps_dict = reg.get_strategy(p).get_default_capabilities().model_dump()
-        except Exception as exc:
-            logger.warning("resolve_live_caps_fallback", provider=p, error=str(exc))
-            caps_dict = {}
-
-    is_live_dom = bool(caps_dict.get("is_live_dom", False))
-    available_models = [
-        m.get("id") for m in caps_dict.get("available_models", [])
-        if isinstance(m, dict) and m.get("id") and not m.get("disabled")
-    ]
-    selected_model_id = caps_dict.get("selected_model_id")
-    thinking_levels = [
-        t.get("id") for t in caps_dict.get("thinking_levels", [])
-        if isinstance(t, dict) and t.get("id")
-    ]
-    selected_thinking_level_id = caps_dict.get("selected_thinking_level_id")
-    modes = [
-        m.get("id") for m in caps_dict.get("modes", [])
-        if isinstance(m, dict) and m.get("id")
-    ]
-    selected_mode_id = caps_dict.get("selected_mode_id")
-
-    deep_thinking_cap = caps_dict.get("deep_thinking")
-    deep_research_cap = caps_dict.get("deep_research")
-    web_search_cap = caps_dict.get("web_search")
-
-    chosen_model = (
-        pcfg.get("model_id")
-        or pcfg.get("model")
-        or selected_model_id
-        or (available_models[0] if available_models else None)
-    )
-    chosen_thinking = (
-        pcfg.get("thinking_level_id")
-        or (pcfg.get("thinking") if isinstance(pcfg.get("thinking"), str) else None)
-        or selected_thinking_level_id
-        or (thinking_levels[0] if thinking_levels else None)
-    )
-    chosen_mode = (
-        pcfg.get("mode_id")
-        or pcfg.get("mode")
-        or selected_mode_id
-        or (modes[0] if modes else None)
-    )
-
-    is_dr = (
-        bool(pcfg["deep_research"])
-        if pcfg.get("deep_research") is not None
-        else (bool(deep_research_cap) if deep_research_cap is not None else False)
-    )
-    is_dt = (
-        bool(pcfg["deep_thinking"])
-        if pcfg.get("deep_thinking") is not None
-        else (bool(deep_thinking_cap) if deep_thinking_cap is not None else False)
-    )
-    is_ws = (
-        bool(pcfg["web_search"])
-        if pcfg.get("web_search") is not None
-        else (bool(web_search_cap) if web_search_cap is not None else True)
-    )
-
-    base_info = PROVIDER_CATALOG.get(p, {})
-    name = base_info.get("name") or p.capitalize()
-
-    # Per-provider fine-grained resolution
-    if p == "gemini":
-        active_model = chosen_model or "gemini-3.1-pro"
-        active_thinking = chosen_thinking or "high"
-        avail_str = " | ".join(f'"{m}"' for m in (available_models or ["gemini-3.1-pro", "gemini-3.8-flash", "gemini-4-argon"]))
-        config_schema = f'{{"model": {avail_str}, "thinking": "low" | "medium" | "high", "deep_research": boolean}}'
-        active_summary = f'Model="{active_model}", Thinking Level="{active_thinking}", Deep Research={"Active" if is_dr else "Off"}'
-        role = "Deep conceptual reasoning, cross-domain multimodal synthesis, theoretical foundations and math."
-        default_cfg = {"model": active_model, "thinking": active_thinking, "deep_research": is_dr}
-
-    elif p == "minimax":
-        active_model = chosen_model or "m3.1-flash"
-        avail_str = " | ".join(f'"{m}"' for m in (available_models or ["m3.1-flash", "m3", "m2.7"]))
-        config_schema = f'{{"model": {avail_str}, "deep_research": boolean}}'
-        active_summary = f'Model="{active_model}", Deep Research={"Active" if is_dr else "Off"}'
-        role = "Document deep processing, high-speed long-form extraction, comprehensive data retrieval and practical execution."
-        default_cfg = {"model": active_model, "deep_research": is_dr}
-
-    elif p == "meta":
-        is_meta_thinking = True if (
-            chosen_thinking == "thinking"
-            or is_dt
-            or pcfg.get("thinking") is True
-            or pcfg.get("thinking") == "thinking"
-        ) else False
-        active_meta_thinking = "thinking" if is_meta_thinking else "instant"
-        config_schema = '{"thinking": "thinking" | "instant"}'
-        active_summary = f'Thinking Mode="{active_meta_thinking}" (DOM toggle: Thinking vs Instant; no model dropdown)'
-        role = "Open foundation models synthesis, open science perspectives, HTML/code representations and structured knowledge extraction."
-        default_cfg = {"thinking": active_meta_thinking}
-
-    elif p == "chatgpt":
-        active_thinking_bool = bool(pcfg.get("deep_thinking", pcfg.get("thinking", True)))
-        config_schema = '{"thinking": boolean, "deep_research": boolean, "web_search": boolean}'
-        active_summary = f'Thinking={"Active" if active_thinking_bool else "Off"}, Deep Research={"Active" if is_dr else "Off"}, Web Search={"Active" if is_ws else "Off"}'
-        role = "Software architecture, algorithmic engineering, multi-step structured reasoning, reproducible code."
-        default_cfg = {"thinking": active_thinking_bool, "deep_research": is_dr, "web_search": is_ws}
-
-    elif p == "qwen":
-        active_model = chosen_model or "qwen-3.8-max"
-        active_thinking = chosen_thinking or "auto"
-        avail_str = " | ".join(f'"{m}"' for m in (available_models or ["qwen-3.8-max", "qwen-3.7-plus"]))
-        config_schema = f'{{"model": {avail_str}, "thinking": "auto" | "thinking" | "fast", "deep_research": boolean, "web_search": boolean}}'
-        active_summary = f'Model="{active_model}", Thinking="{active_thinking}", Deep Research={"Active" if is_dr else "Off"}, Web Search={"Active" if is_ws else "Off"}'
-        role = "Frontier math and code benchmarks, multilingual Chinese/global scientific papers and technical specifications."
-        default_cfg = {"model": active_model, "thinking": active_thinking, "deep_research": is_dr, "web_search": is_ws}
-
-    elif p == "copilot":
-        avail_str = " | ".join(f'"{m}"' for m in (modes or ["auto", "quick", "think_deeper", "gpt_5_6_quick", "gpt_5_6_think"]))
-        active_mode = chosen_mode or "gpt_5_6_think"
-        config_schema = f'{{"mode": {avail_str}}}'
-        active_summary = f'Mode="{active_mode}" (Microsoft 365 Copilot reasoning with live web grounding)'
-        role = "Enterprise business impact, commercial viability, corporate governance, industry market trends and Microsoft ecosystem analysis."
-        default_cfg = {"mode": active_mode}
-
-    elif p == "deepseek":
-        active_dt = bool(pcfg.get("deep_thinking", deep_thinking_cap if deep_thinking_cap is not None else True))
-        config_schema = '{"deep_thinking": boolean, "web_search": boolean}'
-        active_summary = f'DeepThink R1={"Active" if active_dt else "Off"}, Web Search={"Active" if is_ws else "Off"}'
-        role = "Deep algorithmic proofs, formal mathematical logic, chain-of-thought verification and code optimization."
-        default_cfg = {"deep_thinking": active_dt, "web_search": is_ws}
-
-    elif p == "claude":
-        active_model = chosen_model or "claude-sonnet-5.5"
-        active_thinking = chosen_thinking or "high"
-        avail_str = " | ".join(f'"{m}"' for m in (available_models or ["claude-sonnet-5.5", "claude-haiku-5.5"]))
-        config_schema = f'{{"model": {avail_str}, "thinking": "low" | "medium" | "high" | "max"}}'
-        active_summary = f'Model="{active_model}", Thinking Budget="{active_thinking}"'
-        role = "Nuanced academic critique, formal methodology, scholarly writing and ethical considerations."
-        default_cfg = {"model": active_model, "thinking": active_thinking}
-
-    elif p == "perplexity":
-        config_schema = '{"web_search": true}'
-        active_summary = "Web Search=Active (Live online citations & sources)"
-        role = "Real-time 2026 data, factual verification, authoritative citations and academic references."
-        default_cfg = {"web_search": True}
-
-    elif p == "kimi":
-        active_model = chosen_model or "k3"
-        active_thinking = chosen_thinking or "high"
-        config_schema = '{"model": "k3" | "instant", "thinking": "high" | "medium" | "low", "deep_research": boolean}'
-        active_summary = f'Model="{active_model}", Thinking="{active_thinking}", Deep Research={"Active" if is_dr else "Off"}'
-        role = "Long-form document deep dives, comprehensive technical reports and policy cross-referencing."
-        default_cfg = {"model": active_model, "thinking": active_thinking, "deep_research": is_dr}
-
-    elif p == "mistral":
-        active_thinking = chosen_thinking or "think"
-        config_schema = '{"thinking": "think" | "fast", "deep_research": boolean}'
-        active_summary = f'Thinking="{active_thinking}", Deep Research={"Active" if is_dr else "Off"}'
-        role = "European multilingual benchmarks, fast analytical inference and concise technical reasoning."
-        default_cfg = {"thinking": active_thinking, "deep_research": is_dr}
-
-    elif p == "zhipu":
-        active_model = chosen_model or "glm-5.3"
-        active_mode = chosen_mode or "high"
-        avail_str = " | ".join(f'"{m}"' for m in (available_models or ["glm-5.3", "glm-5.3-flash"]))
-        config_schema = f'{{"model": {avail_str}, "mode": "low" | "high" | "max"}}'
-        active_summary = f'Model="{active_model}", Mode="{active_mode}"'
-        role = "Structured bilingual knowledge, ontology mapping, Asian technology developments."
-        default_cfg = {"model": active_model, "mode": active_mode}
-
-    elif p == "grok":
-        active_thinking_bool = bool(pcfg.get("deep_thinking", pcfg.get("thinking", True)))
-        config_schema = '{"thinking": boolean}'
-        active_summary = f'Thinking={"Active" if active_thinking_bool else "Off"}'
-        role = "Real-time pulse, contrarian angles, edge-case vulnerability assessment."
-        default_cfg = {"thinking": active_thinking_bool}
-
-    elif p == "pi":
-        config_schema = '{"thinking": boolean}'
-        active_summary = "Conversational dialogue mode"
-        role = "Pedagogic breakdown, accessible explanations, intuitive analogies."
-        default_cfg = {"thinking": True}
-
-    else:
-        config_schema = '{"thinking": boolean}'
-        active_summary = "Standard default configuration"
-        role = base_info.get("desc", "Specialized research synthesis.")
-        default_cfg = {"thinking": True}
-
-    return {
-        "id": p,
-        "name": name,
-        "is_live_dom": is_live_dom,
-        "active_summary": active_summary,
-        "config_schema": config_schema,
-        "role": role,
-        "default_config": default_cfg,
-    }
+__all__ = [
+    "AgentPipelineError",
+    "AgentPipelineResult",
+    "AgentStageStatus",
+    "PROVIDER_CATALOG",
+    "build_orchestrator_prompt",
+    "build_synthesis_prompt",
+    "parse_orchestrator_plan",
+    "resolve_provider_live_prompt_info",
+    "run_agent_pipeline",
+]
 
 
 def build_orchestrator_prompt(
@@ -509,6 +228,7 @@ async def _set_agent_status(
                 data_json=json.dumps(data, ensure_ascii=False) if data is not None else None,
             ))
             await session.commit()
+        notify_job_event(job_id)
 
 
 async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
@@ -576,25 +296,14 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             "mode": json.dumps(orch_config) if orch_config else "default",
         }
         if "on_step" in inspect.signature(orch_adapter.ask).parameters:
-            async def _orch_step(step_name: str, step_msg: str, step_data: dict[str, Any] | None = None) -> None:
-                if cancel_event.is_set():
-                    raise asyncio.CancelledError("Cancelled by user")
-                step_payload = dict(step_data or {})
-                step_payload["role"] = "orchestrator"
-                step_payload["provider_role_key"] = "orchestrator"
-                step_payload["elapsed_s"] = round(time.monotonic() - orch_start, 1)
-                async with SessionLocal() as s:
-                    s.add(JobEvent(
-                        job_id=job_id,
-                        status="orchestrating",
-                        event_type="thinking" if step_name == "thinking_progress" else "step",
-                        provider=orchestrator_prov,
-                        step=step_name,
-                        message=step_msg,
-                        data_json=json.dumps(step_payload, ensure_ascii=False),
-                    ))
-                    await s.commit()
-            ask_kwargs["on_step"] = _orch_step
+            ask_kwargs["on_step"] = StepEmitter(
+                job_id=job_id,
+                provider=orchestrator_prov,
+                status="orchestrating",
+                role="orchestrator",
+                cancel_event=cancel_event,
+                start_time=orch_start,
+            )
 
         try:
             orch_res = await orch_adapter.ask(orch_prompt, **ask_kwargs)
@@ -719,37 +428,28 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             prov = st.provider
             subtask_start = time.monotonic()
             role_key = f"subtask:{prov}_{idx}"
-            async def _subtask_step(step_name: str, step_msg: str, step_data: dict[str, Any] | None = None) -> None:
-                if cancel_event.is_set():
-                    raise asyncio.CancelledError("Cancelled by user")
-                step_payload = dict(step_data or {})
-                step_payload["role"] = "subtask"
-                step_payload["subtask_id"] = st.id
-                step_payload["branch"] = st.branch
-                step_payload["branch_index"] = idx
-                step_payload["provider_role_key"] = role_key
-                step_payload["elapsed_s"] = round(time.monotonic() - subtask_start, 1)
-                async with SessionLocal() as s:
-                    s.add(JobEvent(
-                        job_id=job_id,
-                        status="researching",
-                        event_type="thinking" if step_name == "thinking_progress" else "step",
-                        provider=prov,
-                        step=step_name,
-                        message=step_msg,
-                        subtasks_total=total_subtasks,
-                        subtasks_done=len(runs),
-                        data_json=json.dumps(step_payload, ensure_ascii=False),
-                    ))
-                    await s.commit()
-
             adapter = create_adapter(prov)
             ask_args: dict[str, Any] = {
                 "timeout_s": 600,
                 "mode": json.dumps(item_cfg) if item_cfg else "default",
             }
             if "on_step" in inspect.signature(adapter.ask).parameters:
-                ask_args["on_step"] = _subtask_step
+                ask_args["on_step"] = StepEmitter(
+                    job_id=job_id,
+                    provider=prov,
+                    status="researching",
+                    role="subtask",
+                    cancel_event=cancel_event,
+                    subtasks_total=total_subtasks,
+                    get_subtasks_done=lambda: len(runs),
+                    start_time=subtask_start,
+                    extra_payload={
+                        "subtask_id": st.id,
+                        "branch": st.branch,
+                        "branch_index": idx,
+                        "provider_role_key": role_key,
+                    },
+                )
 
             try:
                 result = await adapter.ask(st.prompt, **ask_args)
@@ -880,27 +580,16 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             "mode": json.dumps(lead_config) if lead_config else "default",
         }
         if "on_step" in inspect.signature(lead_adapter.ask).parameters:
-            async def _lead_step(step_name: str, step_msg: str, step_data: dict[str, Any] | None = None) -> None:
-                if cancel_event.is_set():
-                    raise asyncio.CancelledError("Cancelled by user")
-                step_payload = dict(step_data or {})
-                step_payload["role"] = "lead"
-                step_payload["provider_role_key"] = "lead"
-                step_payload["elapsed_s"] = round(time.monotonic() - lead_start, 1)
-                async with SessionLocal() as s:
-                    s.add(JobEvent(
-                        job_id=job_id,
-                        status="leading",
-                        event_type="thinking" if step_name == "thinking_progress" else "step",
-                        provider=lead_prov,
-                        step=step_name,
-                        message=step_msg,
-                        subtasks_total=total_subtasks,
-                        subtasks_done=total_subtasks,
-                        data_json=json.dumps(step_payload, ensure_ascii=False),
-                    ))
-                    await s.commit()
-            lead_kwargs["on_step"] = _lead_step
+            lead_kwargs["on_step"] = StepEmitter(
+                job_id=job_id,
+                provider=lead_prov,
+                status="leading",
+                role="lead",
+                cancel_event=cancel_event,
+                subtasks_total=total_subtasks,
+                get_subtasks_done=lambda: total_subtasks,
+                start_time=lead_start,
+            )
 
         try:
             lead_res = await lead_adapter.ask(lead_prompt, **lead_kwargs)

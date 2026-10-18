@@ -26,6 +26,7 @@ from app.api.schemas import (
 from app.adapters.capabilities import CapabilitiesRegistry, VoiceTranscriberService
 from app.adapters.perplexity_api import PerplexityAgentAdapter
 from app.orchestrator.pipeline import _UI_ADAPTERS
+from app.orchestrator.step_emitter import subscribe_job, unsubscribe_job
 from app.browser.session import BrowserSessionManager
 from app.core.db import SessionLocal
 from app.core.config import detect_available_browsers, settings, update_runtime_settings
@@ -51,39 +52,51 @@ async def generated_media(filename: str) -> FileResponse:
     )
 
 
+def _safe_json_loads(raw: str | None, fallback: Any = None) -> Any:
+    """Safely parse a JSON string with a fallback value on None or decode error."""
+    if not raw:
+        return fallback if fallback is not None else []
+    try:
+        return json.loads(raw)
+    except Exception:
+        return fallback if fallback is not None else []
+
+
+def _event_to_step_dict(ev: JobEvent) -> dict[str, Any]:
+    """Serialize a JobEvent model instance into the standardized step dict format."""
+    ev_data = None
+    if ev.data_json:
+        try:
+            ev_data = json.loads(ev.data_json)
+        except Exception:
+            ev_data = ev.data_json
+    return {
+        "id": f"event-{ev.id}",
+        "timestamp": ev.created_at.strftime("%H:%M:%S") if ev.created_at else "",
+        "provider": ev.provider,
+        "step": ev.step or ev.event_type or "progress",
+        "message": ev.message or f"Event {ev.event_type}",
+        "status": "completed" if ev.status == "completed" else "running",
+        "data": ev_data,
+        "thinkingText": ev_data.get("thinking_text") if isinstance(ev_data, dict) else None,
+        "thinkingSteps": ev_data.get("thinking_steps") if isinstance(ev_data, dict) else None,
+        "citations": ev_data.get("citations") if isinstance(ev_data, dict) else None,
+        "isThinking": bool(ev.event_type == "thinking" or (isinstance(ev_data, dict) and ev_data.get("is_thinking"))),
+    }
+
+
 def _job_response(
     job: Job,
     steps: list[dict[str, Any]] | None = None,
     sources: list[dict[str, Any]] | None = None,
 ) -> ResearchResponse:
-    try:
-        runs = json.loads(job.provider_runs_json) if job.provider_runs_json else {}
-    except Exception:
-        runs = {}
+    runs = _safe_json_loads(job.provider_runs_json, {})
     if sources is None:
-        try:
-            sources = json.loads(job.sources_json) if job.sources_json else []
-        except Exception:
-            sources = []
-    try:
-        claims = json.loads(job.claims_json) if job.claims_json else []
-    except Exception:
-        claims = []
-    try:
-        disagreements = json.loads(job.disagreements_json) if job.disagreements_json else []
-    except Exception:
-        disagreements = []
-    try:
-        config = json.loads(job.config_json) if job.config_json else {}
-    except Exception:
-        config = {}
-
-    orchestrator_dispatch = None
-    if getattr(job, "orchestrator_dispatch_json", None):
-        try:
-            orchestrator_dispatch = json.loads(job.orchestrator_dispatch_json)
-        except Exception:
-            orchestrator_dispatch = None
+        sources = _safe_json_loads(job.sources_json, [])
+    claims = _safe_json_loads(job.claims_json, [])
+    disagreements = _safe_json_loads(job.disagreements_json, [])
+    config = _safe_json_loads(job.config_json, {})
+    orchestrator_dispatch = _safe_json_loads(getattr(job, "orchestrator_dispatch_json", None), None)
 
     return ResearchResponse(
         job_id=job.id,
@@ -106,8 +119,8 @@ def _job_response(
         tone=getattr(job, "tone", None),
         orchestrator_dispatch=orchestrator_dispatch,
         delegated_providers=config.get("delegated_providers") or [],
-        orchestrator_config=json.loads(job.orchestrator_config_json) if getattr(job, "orchestrator_config_json", None) else config.get("orchestrator_config"),
-        lead_config=json.loads(job.lead_config_json) if getattr(job, "lead_config_json", None) else config.get("lead_config"),
+        orchestrator_config=_safe_json_loads(getattr(job, "orchestrator_config_json", None), None) or config.get("orchestrator_config"),
+        lead_config=_safe_json_loads(getattr(job, "lead_config_json", None), None) or config.get("lead_config"),
         error=job.error,
         created_at=job.created_at,
         finished_at=job.finished_at,
@@ -119,35 +132,11 @@ async def _load_job_steps(job_id: str) -> list[dict[str, Any]]:
         events = (await session.exec(
             select(JobEvent).where(JobEvent.job_id == job_id).order_by(JobEvent.id)
         )).all()
-        steps: list[dict[str, Any]] = []
-        for ev in events:
-            ev_data = None
-            if ev.data_json:
-                try:
-                    ev_data = json.loads(ev.data_json)
-                except Exception:
-                    ev_data = ev.data_json
-            steps.append({
-                "id": f"event-{ev.id}",
-                "timestamp": ev.created_at.strftime("%H:%M:%S") if ev.created_at else "",
-                "provider": ev.provider,
-                "step": ev.step or ev.event_type or "progress",
-                "message": ev.message or f"Event {ev.event_type}",
-                "status": "completed" if ev.status == "completed" else "running",
-                "data": ev_data,
-                "thinkingText": ev_data.get("thinking_text") if isinstance(ev_data, dict) else None,
-                "thinkingSteps": ev_data.get("thinking_steps") if isinstance(ev_data, dict) else None,
-                "citations": ev_data.get("citations") if isinstance(ev_data, dict) else None,
-                "isThinking": bool(ev.event_type == "thinking" or (isinstance(ev_data, dict) and ev_data.get("is_thinking"))),
-            })
-        return steps
+        return [_event_to_step_dict(ev) for ev in events]
 
 
 async def _load_job_sources(job: Job) -> list[dict[str, Any]]:
-    try:
-        sources = json.loads(job.sources_json) if job.sources_json else []
-    except Exception:
-        sources = []
+    sources = _safe_json_loads(job.sources_json, [])
     if not sources:
         async with SessionLocal() as session:
             db_sources = list((await session.exec(
@@ -302,14 +291,8 @@ async def list_research(limit: int = 50) -> list[dict[str, Any]]:
 
         result = []
         for j in jobs:
-            try:
-                config = json.loads(j.config_json) if j.config_json else {}
-            except Exception:
-                config = {}
-            try:
-                sources = json.loads(j.sources_json) if j.sources_json else []
-            except Exception:
-                sources = []
+            config = _safe_json_loads(j.config_json, {})
+            sources = _safe_json_loads(j.sources_json, [])
 
             # Fallback to Source table if sources_json was empty
             if not sources:
@@ -320,43 +303,10 @@ async def list_research(limit: int = 50) -> list[dict[str, Any]]:
                         for s in src_records
                     ]
 
-            try:
-                claims = json.loads(j.claims_json) if j.claims_json else []
-            except Exception:
-                claims = []
-            try:
-                runs = json.loads(j.provider_runs_json) if j.provider_runs_json else {}
-            except Exception:
-                runs = {}
-
-            job_steps: list[dict[str, Any]] = []
-            for ev in events_by_job.get(j.id, []):
-                ev_data = None
-                if ev.data_json:
-                    try:
-                        ev_data = json.loads(ev.data_json)
-                    except Exception:
-                        ev_data = ev.data_json
-                job_steps.append({
-                    "id": f"event-{ev.id}",
-                    "timestamp": ev.created_at.strftime("%H:%M:%S") if ev.created_at else "",
-                    "provider": ev.provider,
-                    "step": ev.step or ev.event_type or "progress",
-                    "message": ev.message or f"Event {ev.event_type}",
-                    "status": "completed" if ev.status == "completed" else "running",
-                    "data": ev_data,
-                    "thinkingText": ev_data.get("thinking_text") if isinstance(ev_data, dict) else None,
-                    "thinkingSteps": ev_data.get("thinking_steps") if isinstance(ev_data, dict) else None,
-                    "citations": ev_data.get("citations") if isinstance(ev_data, dict) else None,
-                    "isThinking": bool(ev.event_type == "thinking" or (isinstance(ev_data, dict) and ev_data.get("is_thinking"))),
-                })
-
-            orchestrator_dispatch = None
-            if getattr(j, "orchestrator_dispatch_json", None):
-                try:
-                    orchestrator_dispatch = json.loads(j.orchestrator_dispatch_json)
-                except Exception:
-                    orchestrator_dispatch = None
+            claims = _safe_json_loads(j.claims_json, [])
+            runs = _safe_json_loads(j.provider_runs_json, {})
+            job_steps = [_event_to_step_dict(ev) for ev in events_by_job.get(j.id, [])]
+            orchestrator_dispatch = _safe_json_loads(getattr(j, "orchestrator_dispatch_json", None), None)
 
             result.append({
                 "job_id": j.id,
@@ -381,8 +331,8 @@ async def list_research(limit: int = 50) -> list[dict[str, Any]]:
                 "tone": getattr(j, "tone", None),
                 "orchestrator_dispatch": orchestrator_dispatch,
                 "delegated_providers": config.get("delegated_providers") or [],
-                "orchestrator_config": json.loads(j.orchestrator_config_json) if getattr(j, "orchestrator_config_json", None) else config.get("orchestrator_config"),
-                "lead_config": json.loads(j.lead_config_json) if getattr(j, "lead_config_json", None) else config.get("lead_config"),
+                "orchestrator_config": _safe_json_loads(getattr(j, "orchestrator_config_json", None), None) or config.get("orchestrator_config"),
+                "lead_config": _safe_json_loads(getattr(j, "lead_config_json", None), None) or config.get("lead_config"),
                 "created_at": j.created_at.isoformat() if j.created_at else None,
                 "finished_at": j.finished_at.isoformat() if j.finished_at else None,
             })
@@ -491,41 +441,50 @@ async def research_events(job_id: str) -> StreamingResponse:
 
     async def stream() -> AsyncIterator[str]:
         last_event_id = 0
-        while True:
-            async with SessionLocal() as session:
-                events = (await session.exec(
-                    select(JobEvent).where(JobEvent.job_id == job_id, JobEvent.id > last_event_id).order_by(JobEvent.id)
-                )).all()
-                job = await session.get(Job, job_id)
-            if job is None:
-                return
-            for event in events:
-                last_event_id = event.id or last_event_id
-                event_type = getattr(event, "event_type", None) or "progress"
-                data: dict[str, Any] = {
-                    "job_id": job_id,
-                    "status": event.status,
-                    "event_type": event_type,
-                    "progress": {"subtasks_total": event.subtasks_total, "subtasks_done": event.subtasks_done},
-                }
-                if getattr(event, "provider", None):
-                    data["provider"] = event.provider
-                if getattr(event, "step", None):
-                    data["step"] = event.step
-                if getattr(event, "message", None):
-                    data["message"] = event.message
-                if getattr(event, "data_json", None):
+        ev_notify = subscribe_job(job_id)
+        try:
+            while True:
+                async with SessionLocal() as session:
+                    events = (await session.exec(
+                        select(JobEvent).where(JobEvent.job_id == job_id, JobEvent.id > last_event_id).order_by(JobEvent.id)
+                    )).all()
+                    job = await session.get(Job, job_id)
+                if job is None:
+                    return
+                for event in events:
+                    last_event_id = event.id or last_event_id
+                    event_type = getattr(event, "event_type", None) or "progress"
+                    data: dict[str, Any] = {
+                        "job_id": job_id,
+                        "status": event.status,
+                        "event_type": event_type,
+                        "progress": {"subtasks_total": event.subtasks_total, "subtasks_done": event.subtasks_done},
+                    }
+                    if getattr(event, "provider", None):
+                        data["provider"] = event.provider
+                    if getattr(event, "step", None):
+                        data["step"] = event.step
+                    if getattr(event, "message", None):
+                        data["message"] = event.message
+                    if getattr(event, "data_json", None):
+                        data["data"] = _safe_json_loads(event.data_json, event.data_json)
+
+                    yield f"id: {last_event_id}\nevent: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+                if job.status in {"completed", "partial", "failed", "needs_user_action", "cancelled"} and not events:
+                    yield "event: done\ndata: {}\n\n"
+                    return
+
+                if not events:
                     try:
-                        data["data"] = json.loads(event.data_json)
-                    except Exception:
-                        data["data"] = event.data_json
-
-                yield f"id: {last_event_id}\nevent: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-
-            if job.status in {"completed", "partial", "failed", "needs_user_action", "cancelled"} and not events:
-                yield "event: done\ndata: {}\n\n"
-                return
-            await asyncio.sleep(0.25)
+                        await asyncio.wait_for(ev_notify.wait(), timeout=2.0)
+                        ev_notify.clear()
+                    except asyncio.TimeoutError:
+                        pass
+                else:
+                    await asyncio.sleep(0.02)
+        finally:
+            unsubscribe_job(job_id, ev_notify)
 
     return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 

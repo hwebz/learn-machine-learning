@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import winreg
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,8 +24,24 @@ def _read_dotenv(path: Path = Path(".env")) -> None:
 
 SETTINGS_FILE = Path("./data/settings.json")
 
+_browsers_cache: tuple[float, list[dict[str, Any]]] = (0.0, [])
 
-def detect_available_browsers() -> list[dict[str, Any]]:
+
+def detect_available_browsers(force_refresh: bool = False, ttl: float = 60.0) -> list[dict[str, Any]]:
+    """Inspect the local machine (Windows) to find installed web browsers.
+    Results are cached for `ttl` seconds to avoid repeated disk and registry I/O.
+    """
+    global _browsers_cache
+    now = time.monotonic()
+    if not force_refresh and (now - _browsers_cache[0] < ttl) and _browsers_cache[1]:
+        return [dict(b) for b in _browsers_cache[1]]
+
+    result = _detect_available_browsers_impl()
+    _browsers_cache = (now, result)
+    return [dict(b) for b in result]
+
+
+def _detect_available_browsers_impl() -> list[dict[str, Any]]:
     """Inspect the local machine (Windows) to find installed web browsers.
 
     Default browser rule:

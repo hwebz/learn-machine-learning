@@ -1,12 +1,27 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { PROVIDERS_LIST, TONE_PRESETS } from "../../lib/constants";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { PROVIDERS_LIST } from "../../lib/constants";
 import { ProviderInfo } from "../../types/chat";
 import { ProviderLiveCapabilities, ProviderSelectionConfig } from "../../types/capabilities";
-import { BrainIcon, CloseIcon, ModelBadgeLogo, RefreshIcon, SearchIcon, SparklesIcon } from "../icons/Icons";
+import { CloseIcon } from "../icons/Icons";
 
-interface AgentConfigScreenProps {
+import {
+  resolveSubProviderLiveConfig,
+  constructOrchestrationPrompt,
+} from "../../lib/agentPromptBuilder";
+
+import { AgentTopicSection, SUGGESTED_AGENT_TOPICS } from "./AgentTopicSection";
+import { ProviderGridPicker } from "./ProviderGridPicker";
+import { ProviderFinetuneSection } from "./ProviderFinetuneSection";
+import { SubProvidersDelegationSection } from "./SubProvidersDelegationSection";
+import { OrchestratorPromptPreview } from "./OrchestratorPromptPreview";
+import { AgentToneSection } from "./AgentToneSection";
+
+// Re-export for backward compatibility
+export { resolveSubProviderLiveConfig, constructOrchestrationPrompt, SUGGESTED_AGENT_TOPICS };
+
+export interface AgentConfigScreenProps {
   onStartAgentResearch: (config: {
     query: string;
     orchestrator_provider: string;
@@ -35,212 +50,7 @@ interface AgentConfigScreenProps {
   initialTone?: string;
 }
 
-export function resolveSubProviderLiveConfig(
-  providerId: string,
-  selectionsMap: Record<string, ProviderSelectionConfig> = {},
-  capabilitiesMap: Record<string, ProviderLiveCapabilities> = {}
-) {
-  const p = providerId.toLowerCase();
-  const sel = selectionsMap[p] || {};
-  const caps = capabilitiesMap[p];
-  const isLiveDom = Boolean(caps?.is_live_dom);
-
-  const availableModels = (caps?.available_models || []).filter((m) => !m.disabled).map((m) => m.id);
-  const selectedModelId = caps?.selected_model_id;
-  const thinkingLevels = (caps?.thinking_levels || []).map((t) => t.id);
-  const selectedThinkingLevelId = caps?.selected_thinking_level_id;
-  const modes = (caps?.modes || []).map((m) => m.id);
-  const selectedModeId = caps?.selected_mode_id;
-
-  const chosenModel = sel.model_id || selectedModelId || (availableModels.length > 0 ? availableModels[0] : undefined);
-  const chosenThinking = sel.thinking_level_id || selectedThinkingLevelId || (thinkingLevels.length > 0 ? thinkingLevels[0] : undefined);
-  const chosenMode = sel.mode_id || selectedModeId || (modes.length > 0 ? modes[0] : undefined);
-
-  const isDr = sel.deep_research !== undefined ? sel.deep_research : Boolean(caps?.deep_research);
-  const isDt = sel.deep_thinking !== undefined ? sel.deep_thinking : Boolean(caps?.deep_thinking);
-  const isWs = sel.web_search !== undefined ? sel.web_search : (caps?.web_search !== undefined ? caps.web_search : true);
-
-  let activeModel = chosenModel;
-  let activeThinking = chosenThinking;
-  let activeSummary = "";
-  let configSchema = "";
-  let role = "";
-  let configObj: Record<string, any> = {};
-
-  if (p === "gemini") {
-    activeModel = chosenModel || "gemini-3.1-pro";
-    activeThinking = chosenThinking || "high";
-    const availStr = (availableModels.length > 0 ? availableModels : ["gemini-3.1-pro", "gemini-3.8-flash", "gemini-4-argon"]).map((m) => `"${m}"`).join(" | ");
-    configSchema = `{"model": ${availStr}, "thinking": "low" | "medium" | "high", "deep_research": boolean}`;
-    activeSummary = `Model="${activeModel}", Thinking="${activeThinking}"${isDr ? ", Deep Research=Active" : ""}`;
-    role = "Deep conceptual reasoning, cross-domain multimodal synthesis, theoretical foundations and math.";
-    configObj = { model: activeModel, model_id: activeModel, thinking: activeThinking, thinking_level_id: activeThinking, deep_research: isDr };
-  } else if (p === "minimax") {
-    activeModel = chosenModel || "m3.1-flash";
-    const availStr = (availableModels.length > 0 ? availableModels : ["m3.1-flash", "m3", "m2.7"]).map((m) => `"${m}"`).join(" | ");
-    configSchema = `{"model": ${availStr}, "deep_research": boolean}`;
-    activeSummary = `Model="${activeModel}"${isDr ? ", Deep Research=Active" : ""}`;
-    role = "Document deep processing, high-speed long-form extraction, comprehensive data retrieval and practical execution.";
-    configObj = { model: activeModel, model_id: activeModel, deep_research: isDr };
-  } else if (p === "meta") {
-    const isMetaThinking = chosenThinking === "thinking" || isDt;
-    const metaMode = isMetaThinking ? "thinking" : "instant";
-    configSchema = `{"thinking": "thinking" | "instant"}`;
-    activeSummary = `Thinking Mode="${metaMode}" (DOM 2-option toggle: Thinking vs Instant; no model dropdown)`;
-    role = "Open foundation models synthesis, open science perspectives, HTML/code representations and structured knowledge extraction.";
-    configObj = { thinking: metaMode, thinking_level_id: metaMode, deep_thinking: isMetaThinking };
-  } else if (p === "chatgpt") {
-    configSchema = `{"thinking": boolean, "deep_research": boolean, "web_search": boolean}`;
-    activeSummary = `Thinking=${isDt ? "Active" : "Off"}, Deep Research=${isDr ? "Active" : "Off"}, Web Search=${isWs ? "Active" : "Off"}`;
-    role = "Software architecture, algorithmic engineering, multi-step structured reasoning, reproducible code.";
-    configObj = { thinking: isDt, deep_thinking: isDt, deep_research: isDr, web_search: isWs };
-  } else if (p === "qwen") {
-    activeModel = chosenModel || "qwen-3.8-max";
-    activeThinking = chosenThinking || "auto";
-    const availStr = (availableModels.length > 0 ? availableModels : ["qwen-3.8-max", "qwen-3.7-plus"]).map((m) => `"${m}"`).join(" | ");
-    configSchema = `{"model": ${availStr}, "thinking": "auto" | "thinking" | "fast", "deep_research": boolean, "web_search": boolean}`;
-    activeSummary = `Model="${activeModel}", Thinking="${activeThinking}"${isDr ? ", Deep Research=Active" : ""}`;
-    role = "Frontier math and code benchmarks, multilingual Chinese/global scientific papers and technical specifications.";
-    configObj = { model: activeModel, model_id: activeModel, thinking: activeThinking, thinking_level_id: activeThinking, deep_research: isDr, web_search: isWs };
-  } else if (p === "copilot") {
-    const activeMode = chosenMode || "gpt_5_6_think";
-    const availStr = (modes.length > 0 ? modes : ["auto", "quick", "think_deeper", "gpt_5_6_quick", "gpt_5_6_think"]).map((m) => `"${m}"`).join(" | ");
-    configSchema = `{"mode": ${availStr}}`;
-    activeSummary = `Mode="${activeMode}" (Microsoft 365 Copilot with live web grounding)`;
-    role = "Enterprise business impact, commercial viability, corporate governance, industry market trends and Microsoft ecosystem analysis.";
-    configObj = { mode: activeMode, mode_id: activeMode };
-  } else if (p === "deepseek") {
-    configSchema = `{"deep_thinking": boolean, "web_search": boolean}`;
-    activeSummary = `DeepThink R1=${isDt ? "Active" : "Off"}, Web Search=${isWs ? "Active" : "Off"}`;
-    role = "Deep algorithmic proofs, formal mathematical logic, chain-of-thought verification and code optimization.";
-    configObj = { deep_thinking: isDt, web_search: isWs };
-  } else if (p === "claude") {
-    activeModel = chosenModel || "claude-sonnet-5.5";
-    activeThinking = chosenThinking || "high";
-    const availStr = (availableModels.length > 0 ? availableModels : ["claude-sonnet-5.5", "claude-haiku-5.5"]).map((m) => `"${m}"`).join(" | ");
-    configSchema = `{"model": ${availStr}, "thinking": "low" | "medium" | "high" | "max"}}`;
-    activeSummary = `Model="${activeModel}", Thinking="${activeThinking}"`;
-    role = "Nuanced academic critique, formal methodology, scholarly writing and ethical considerations.";
-    configObj = { model: activeModel, model_id: activeModel, thinking: activeThinking, thinking_level_id: activeThinking };
-  } else if (p === "perplexity") {
-    configSchema = `{"web_search": true}`;
-    activeSummary = "Web Search=Active (Live online citations & sources)";
-    role = "Real-time 2026 data, factual verification, authoritative citations and academic references.";
-    configObj = { web_search: true };
-  } else if (p === "kimi") {
-    activeModel = chosenModel || "k3";
-    activeThinking = chosenThinking || "high";
-    configSchema = `{"model": "k3" | "instant", "thinking": "high" | "medium" | "low", "deep_research": boolean}`;
-    activeSummary = `Model="${activeModel}", Thinking="${activeThinking}"${isDr ? ", Deep Research=Active" : ""}`;
-    role = "Long-form document deep dives, comprehensive technical reports and policy cross-referencing.";
-    configObj = { model: activeModel, model_id: activeModel, thinking: activeThinking, thinking_level_id: activeThinking, deep_research: isDr };
-  } else if (p === "mistral") {
-    activeThinking = chosenThinking || "think";
-    configSchema = `{"thinking": "think" | "fast", "deep_research": boolean}`;
-    activeSummary = `Thinking="${activeThinking}"${isDr ? ", Deep Research=Active" : ""}`;
-    role = "European multilingual benchmarks, fast analytical inference and concise technical reasoning.";
-    configObj = { thinking: activeThinking, thinking_level_id: activeThinking, deep_research: isDr };
-  } else if (p === "zhipu") {
-    activeModel = chosenModel || "glm-5.3";
-    const activeMode = chosenMode || "high";
-    const availStr = (availableModels.length > 0 ? availableModels : ["glm-5.3", "glm-5.3-flash"]).map((m) => `"${m}"`).join(" | ");
-    configSchema = `{"model": ${availStr}, "mode": "low" | "high" | "max"}}`;
-    activeSummary = `Model="${activeModel}", Mode="${activeMode}"`;
-    role = "Structured bilingual knowledge, ontology mapping, Asian technology developments.";
-    configObj = { model: activeModel, model_id: activeModel, mode: activeMode, mode_id: activeMode };
-  } else if (p === "grok") {
-    configSchema = `{"thinking": boolean}`;
-    activeSummary = `Thinking=${isDt ? "Active" : "Off"}`;
-    role = "Real-time pulse, contrarian angles, edge-case vulnerability assessment.";
-    configObj = { thinking: isDt, deep_thinking: isDt };
-  } else if (p === "pi") {
-    configSchema = `{"thinking": boolean}`;
-    activeSummary = "Conversational dialogue mode";
-    role = "Pedagogic breakdown, accessible explanations, intuitive analogies.";
-    configObj = { thinking: true };
-  } else {
-    configSchema = `{"thinking": boolean}`;
-    activeSummary = "Cấu hình mặc định";
-    role = "Nghiên cứu chuyên môn và tổng hợp thông tin.";
-    configObj = { thinking: true };
-  }
-
-  return {
-    id: p,
-    isLiveDom,
-    activeModel,
-    activeThinking,
-    isDeepResearch: isDr,
-    isDeepThinking: isDt,
-    isWebSearch: isWs,
-    activeSummary,
-    configSchema,
-    role,
-    configObj,
-  };
-}
-
-export function constructOrchestrationPrompt(
-  topic: string,
-  selectedDelegatedProviders: string[],
-  capabilitiesMap: Record<string, ProviderLiveCapabilities>,
-  selectionsMap: Record<string, ProviderSelectionConfig>,
-  providersList: ProviderInfo[]
-): string {
-  const providersText = selectedDelegatedProviders
-    .map((pid, idx) => {
-      const pObj = providersList.find((p) => p.id === pid);
-      const name = pObj?.name || pid.toUpperCase();
-      const cfg = resolveSubProviderLiveConfig(pid, selectionsMap, capabilitiesMap);
-      const badge = cfg.isLiveDom ? "[REAL DOM SYNCED]" : "[LATEST LIVE CONFIG]";
-      return `${idx + 1}. ${name} (id: "${pid}") ${badge}\n   - Active DOM Setting: ${cfg.activeSummary}\n   - Expected "config" JSON Schema: ${cfg.configSchema}\n   - Specialized Sub-topic Role: ${cfg.role}`;
-    })
-    .join("\n");
-
-  const allowedIdsStr = selectedDelegatedProviders.map((pid) => `"${pid}"`).join(", ");
-
-  return `You are a Master Research Orchestrator.
-Your goal is to analyze the research topic provided by the user and intelligently decompose it into 2 to 5 specialized sub-tasks.
-Each sub-task must be assigned to the most appropriate AI provider from the ALLOWED providers list below.
-
-## Available Allowed Providers and Configurations (Live DOM Synced):
-${providersText || "Chưa có provider nào được chọn."}
-
-## STRICT REQUIREMENT: Allowed Delegation Providers
-You are STRICTLY RESTRICTED to assigning sub-tasks ONLY to providers in this allowed list: [${allowedIdsStr}].
-DO NOT assign any sub-task to any provider outside this list. Every single item in "agents_dispatch" MUST have "id" strictly matching one of [${allowedIdsStr}].
-
-## Rules:
-- Decompose the topic into 2 to 5 distinct, non-overlapping specialized sub-topics.
-- Assign each sub-topic to the provider best suited for that angle among the allowed providers, matching their active capabilities and strengths described above.
-- In each "agents_dispatch" item, provide a valid "config" object that matches the provider's active DOM setting and expected schema.
-- Each "question" must be a self-contained, detailed prompt for that provider to investigate.
-- The output MUST be strictly valid JSON matching the schema below. Do not wrap in markdown or add explanations.
-
-## Output JSON Schema:
-{
-  "research_topic": "${topic || "<Chủ đề nghiên cứu>"}",
-  "agents_dispatch": [
-    {
-      "id": "<provider_id>",
-      "name": "<provider_name>",
-      "config": { ... },
-      "sub_topic": "<Brief specialized sub-topic title>",
-      "question": "<Detailed research prompt tailored for this provider's capabilities>"
-    }
-  ]
-}
-
-Research Topic to decompose:
-${topic || "<Chủ đề nghiên cứu>"}`;
-}
-
-const SUGGESTED_AGENT_TOPICS = [
-  "Ứng dụng của Deep Learning trong đời sống và y học hiện đại",
-  "So sánh cơ chế Thinking & Reasoning giữa Gemini 3.1 Pro, ChatGPT o3 và DeepSeek R1",
-  "Khảo sát kiến trúc Agentic AI và khả năng tự động phân rã nhiệm vụ (Task Decomposition)",
-  "Xu hướng bán dẫn và chip tăng tốc AI (GPU vs NPU vs TPU) giai đoạn 2026-2030",
-];
+const DEFAULT_DELEGATED = ["copilot", "gemini", "chatgpt", "deepseek", "qwen", "perplexity", "claude"];
 
 export function AgentConfigScreen({
   onStartAgentResearch,
@@ -260,10 +70,12 @@ export function AgentConfigScreen({
   initialDelegatedProviders,
   initialTone,
 }: AgentConfigScreenProps) {
-  // Use all providers implemented in normal chat mode
   const availableProviders = providers && providers.length > 0 ? providers : PROVIDERS_LIST;
 
+  // 1. Topic Query
   const [query, setQuery] = useState(initialQuery || "");
+
+  // 2. Orchestrator State
   const [selectedOrchestrator, setSelectedOrchestrator] = useState<string>(
     initialOrchestratorProvider || "gemini"
   );
@@ -278,14 +90,16 @@ export function AgentConfigScreen({
   const [isSyncingOrch, setIsSyncingOrch] = useState(false);
   const [orchSyncMessage, setOrchSyncMessage] = useState<string | null>(null);
 
-  // Sub-providers delegation state (default to top reasoning models or previous selected)
-  const DEFAULT_DELEGATED = ["copilot", "gemini", "chatgpt", "deepseek", "qwen", "perplexity", "claude"];
+  // 3. Delegated Sub-Providers State
   const [selectedDelegatedProviders, setSelectedDelegatedProviders] = useState<string[]>(
     initialDelegatedProviders && initialDelegatedProviders.length > 0
       ? initialDelegatedProviders
       : DEFAULT_DELEGATED
   );
+  const [isSyncingAllSub, setIsSyncingAllSub] = useState(false);
+  const [subSyncMessage, setSubSyncMessage] = useState<string | null>(null);
 
+  // 4. Lead Provider State
   const [selectedLead, setSelectedLead] = useState<string>(
     initialLeadProvider || "chatgpt"
   );
@@ -300,51 +114,24 @@ export function AgentConfigScreen({
   const [isSyncingLead, setIsSyncingLead] = useState(false);
   const [leadSyncMessage, setLeadSyncMessage] = useState<string | null>(null);
 
+  // 5. Tone & Submit State
   const [selectedTone, setSelectedTone] = useState<string>(
     initialTone || "professional"
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isPromptPreviewOpen, setIsPromptPreviewOpen] = useState(true);
-  const [isCopiedPrompt, setIsCopiedPrompt] = useState(false);
-  const [isSyncingAllSub, setIsSyncingAllSub] = useState(false);
-  const [subSyncMessage, setSubSyncMessage] = useState<string | null>(null);
 
-  const constructedOrchestratorPrompt = useMemo(() => {
-    return constructOrchestrationPrompt(
-      query.trim(),
-      selectedDelegatedProviders,
-      capabilitiesMap,
-      selectionsMap,
-      availableProviders
-    );
-  }, [query, selectedDelegatedProviders, capabilitiesMap, selectionsMap, availableProviders]);
-
-  // Sync state when initial props change (e.g. switching conversation or opening modal)
+  // Synchronize initial props
   useEffect(() => {
-    if (initialOrchestratorProvider) {
-      setSelectedOrchestrator(initialOrchestratorProvider);
-    }
-    if (initialLeadProvider) {
-      setSelectedLead(initialLeadProvider);
-    }
+    if (initialOrchestratorProvider) setSelectedOrchestrator(initialOrchestratorProvider);
+    if (initialLeadProvider) setSelectedLead(initialLeadProvider);
     if (initialDelegatedProviders && initialDelegatedProviders.length > 0) {
       setSelectedDelegatedProviders(initialDelegatedProviders);
     }
-    if (initialTone) {
-      setSelectedTone(initialTone);
-    }
-    if (initialQuery !== undefined) {
-      setQuery(initialQuery);
-    }
-  }, [
-    initialOrchestratorProvider,
-    initialLeadProvider,
-    initialDelegatedProviders,
-    initialTone,
-    initialQuery,
-  ]);
+    if (initialTone) setSelectedTone(initialTone);
+    if (initialQuery !== undefined) setQuery(initialQuery);
+  }, [initialOrchestratorProvider, initialLeadProvider, initialDelegatedProviders, initialTone, initialQuery]);
 
-  // Auto-fetch capabilities if not cached when provider selected
+  // Load capabilities if missing
   useEffect(() => {
     if (onLoadCapabilities && selectedOrchestrator && !capabilitiesMap[selectedOrchestrator]) {
       onLoadCapabilities(selectedOrchestrator);
@@ -357,912 +144,199 @@ export function AgentConfigScreen({
     }
   }, [selectedLead, capabilitiesMap, onLoadCapabilities]);
 
-  const orchProviderObj = availableProviders.find((p) => p.id === selectedOrchestrator);
-  const leadProviderObj = availableProviders.find((p) => p.id === selectedLead);
-
-  const orchCaps = capabilitiesMap[selectedOrchestrator];
-  const orchConfigMerged = selectedOrchestrator === initialOrchestratorProvider ? initialOrchestratorConfig : undefined;
+  // Merged selections for active providers
   const orchSel = useMemo(() => {
     const base = selectionsMap[selectedOrchestrator] || {};
-    if (!orchConfigMerged) return base;
+    const configMerged = selectedOrchestrator === initialOrchestratorProvider ? initialOrchestratorConfig : undefined;
+    if (!configMerged) return base;
     return {
       ...base,
-      ...orchConfigMerged,
-      model_id: orchConfigMerged.model_id || orchConfigMerged.model || base.model_id,
-      thinking_level_id: orchConfigMerged.thinking_level_id || (typeof orchConfigMerged.thinking === "string" ? orchConfigMerged.thinking : undefined) || base.thinking_level_id,
-      mode_id: orchConfigMerged.mode_id || orchConfigMerged.mode || base.mode_id,
-      deep_research: orchConfigMerged.deep_research !== undefined ? orchConfigMerged.deep_research : base.deep_research,
-      deep_thinking: orchConfigMerged.deep_thinking !== undefined ? orchConfigMerged.deep_thinking : base.deep_thinking,
-      web_search: orchConfigMerged.web_search !== undefined ? orchConfigMerged.web_search : base.web_search,
-      research_mode: orchConfigMerged.research_mode || base.research_mode,
+      ...configMerged,
+      model_id: configMerged.model_id || configMerged.model || base.model_id,
+      thinking_level_id: configMerged.thinking_level_id || (typeof configMerged.thinking === "string" ? configMerged.thinking : undefined) || base.thinking_level_id,
+      mode_id: configMerged.mode_id || configMerged.mode || base.mode_id,
+      deep_research: configMerged.deep_research !== undefined ? configMerged.deep_research : base.deep_research,
+      deep_thinking: configMerged.deep_thinking !== undefined ? configMerged.deep_thinking : base.deep_thinking,
+      web_search: configMerged.web_search !== undefined ? configMerged.web_search : base.web_search,
+      research_mode: configMerged.research_mode || base.research_mode,
     };
-  }, [selectionsMap, selectedOrchestrator, orchConfigMerged]);
+  }, [selectionsMap, selectedOrchestrator, initialOrchestratorProvider, initialOrchestratorConfig]);
 
-  const leadCaps = capabilitiesMap[selectedLead];
-  const leadConfigMerged = selectedLead === initialLeadProvider ? initialLeadConfig : undefined;
   const leadSel = useMemo(() => {
     const base = selectionsMap[selectedLead] || {};
-    if (!leadConfigMerged) return base;
+    const configMerged = selectedLead === initialLeadProvider ? initialLeadConfig : undefined;
+    if (!configMerged) return base;
     return {
       ...base,
-      ...leadConfigMerged,
-      model_id: leadConfigMerged.model_id || leadConfigMerged.model || base.model_id,
-      thinking_level_id: leadConfigMerged.thinking_level_id || (typeof leadConfigMerged.thinking === "string" ? leadConfigMerged.thinking : undefined) || base.thinking_level_id,
-      mode_id: leadConfigMerged.mode_id || leadConfigMerged.mode || base.mode_id,
-      deep_research: leadConfigMerged.deep_research !== undefined ? leadConfigMerged.deep_research : base.deep_research,
-      deep_thinking: leadConfigMerged.deep_thinking !== undefined ? leadConfigMerged.deep_thinking : base.deep_thinking,
-      web_search: leadConfigMerged.web_search !== undefined ? leadConfigMerged.web_search : base.web_search,
-      research_mode: leadConfigMerged.research_mode || base.research_mode,
+      ...configMerged,
+      model_id: configMerged.model_id || configMerged.model || base.model_id,
+      thinking_level_id: configMerged.thinking_level_id || (typeof configMerged.thinking === "string" ? configMerged.thinking : undefined) || base.thinking_level_id,
+      mode_id: configMerged.mode_id || configMerged.mode || base.mode_id,
+      deep_research: configMerged.deep_research !== undefined ? configMerged.deep_research : base.deep_research,
+      deep_thinking: configMerged.deep_thinking !== undefined ? configMerged.deep_thinking : base.deep_thinking,
+      web_search: configMerged.web_search !== undefined ? configMerged.web_search : base.web_search,
+      research_mode: configMerged.research_mode || base.research_mode,
     };
-  }, [selectionsMap, selectedLead, leadConfigMerged]);
+  }, [selectionsMap, selectedLead, initialLeadProvider, initialLeadConfig]);
 
-  // Helper to format synced time
-  const formatSyncTime = (timestamp?: string) => {
-    if (!timestamp) return null;
-    try {
-      return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    } catch {
-      return null;
-    }
-  };
-
-  // Sync Orchestrator local state when capabilities or selections update
+  // Sync Orchestrator local state when provider or selection changes
   useEffect(() => {
-    if (selectedOrchestrator === "deepseek") {
-      setOrchModel("");
-      setOrchThinkingLevel("");
-      setOrchMode("");
-      if (orchSel?.deep_thinking !== undefined) {
-        setOrchDeepThinking(orchSel.deep_thinking);
-      } else if (orchCaps?.deep_thinking !== undefined) {
-        setOrchDeepThinking(orchCaps.deep_thinking);
-      }
-      if (orchSel?.web_search !== undefined) {
-        setOrchWebSearch(orchSel.web_search);
-      } else if (orchCaps?.web_search !== undefined) {
-        setOrchWebSearch(orchCaps.web_search);
-      }
-      return;
-    }
+    const caps = capabilitiesMap[selectedOrchestrator];
+    const isDr = orchSel?.deep_research !== undefined ? orchSel.deep_research : (caps?.deep_research ?? false);
+    const isDt = orchSel?.deep_thinking !== undefined ? orchSel.deep_thinking : (caps?.deep_thinking ?? false);
+    const isWs = orchSel?.web_search !== undefined ? orchSel.web_search : (caps?.web_search ?? true);
 
-    if (selectedOrchestrator === "chatgpt") {
-      setOrchModel("");
-      setOrchThinkingLevel("");
-      setOrchMode("");
-      if (orchSel?.web_search !== undefined) {
-        setOrchWebSearch(orchSel.web_search);
-      } else if (orchCaps?.web_search !== undefined) {
-        setOrchWebSearch(orchCaps.web_search);
-      }
-      if (orchSel?.deep_research !== undefined) {
-        setOrchDeepResearch(orchSel.deep_research);
-      } else if (orchCaps?.deep_research !== undefined) {
-        setOrchDeepResearch(orchCaps.deep_research);
-      }
-      if (orchSel?.deep_thinking !== undefined) {
-        setOrchDeepThinking(orchSel.deep_thinking);
-      } else if (orchCaps?.deep_thinking !== undefined) {
-        setOrchDeepThinking(orchCaps.deep_thinking);
-      }
-      return;
-    }
+    setOrchDeepResearch(isDr);
+    setOrchDeepThinking(isDt);
+    setOrchWebSearch(isWs);
+    setOrchResearchMode(orchSel?.research_mode || caps?.research_mode || "normal");
 
-    if (selectedOrchestrator === "perplexity") {
-      setOrchModel("auto");
-      setOrchThinkingLevel("");
-      setOrchMode("");
-      setOrchDeepThinking(false);
-      setOrchWebSearch(true);
-      return;
-    }
-
-    if (selectedOrchestrator === "kimi") {
-      setOrchMode("");
-      const isDr = orchSel?.deep_research !== undefined ? orchSel.deep_research : (orchCaps?.deep_research ?? false);
-      setOrchDeepResearch(isDr);
-      const chosenModel = orchSel?.model_id || orchCaps?.selected_model_id || (orchCaps?.available_models && orchCaps.available_models.length > 0 ? orchCaps.available_models[0].id : "instant");
-      if (isDr && (chosenModel === "instant" || !chosenModel || chosenModel === "default")) {
-        setOrchModel("k3");
-      } else {
-        setOrchModel(chosenModel || "instant");
-      }
-      if (orchSel?.thinking_level_id) {
-        setOrchThinkingLevel(orchSel.thinking_level_id);
-      } else if (orchCaps?.selected_thinking_level_id) {
-        setOrchThinkingLevel(orchCaps.selected_thinking_level_id);
-      } else if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0) {
-        setOrchThinkingLevel(orchCaps.thinking_levels[0].id);
-      } else {
-        setOrchThinkingLevel("high");
-      }
-      return;
-    }
-
-    if (selectedOrchestrator === "qwen") {
-      setOrchMode("");
-      const isDr = orchSel?.deep_research !== undefined ? orchSel.deep_research : (orchCaps?.deep_research ?? false);
-      setOrchDeepResearch(isDr);
-      const chosenModel = orchSel?.model_id || orchCaps?.selected_model_id || (orchCaps?.available_models && orchCaps.available_models.length > 0 ? orchCaps.available_models[0].id : "qwen-3.8-max");
-      setOrchModel(chosenModel);
-      if (isDr) {
-        setOrchThinkingLevel("auto");
-      } else if (orchSel?.thinking_level_id) {
-        setOrchThinkingLevel(orchSel.thinking_level_id);
-      } else if (orchCaps?.selected_thinking_level_id) {
-        setOrchThinkingLevel(orchCaps.selected_thinking_level_id);
-      } else if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0) {
-        setOrchThinkingLevel(orchCaps.thinking_levels[0].id);
-      } else {
-        setOrchThinkingLevel("auto");
-      }
-      setOrchWebSearch(orchSel?.web_search !== undefined ? orchSel.web_search : (orchCaps?.web_search ?? true));
-      setOrchResearchMode(orchSel?.research_mode || orchCaps?.research_mode || "normal");
-      return;
-    }
-
-    if (selectedOrchestrator === "gemini") {
-      setOrchMode("");
-      const isDr = orchSel?.deep_research !== undefined ? orchSel.deep_research : (orchCaps?.deep_research ?? false);
-      setOrchDeepResearch(isDr);
-      const chosenModel = orchSel?.model_id || orchCaps?.selected_model_id || (orchCaps?.available_models && orchCaps.available_models.length > 0 ? orchCaps.available_models[0].id : "pro");
-      setOrchModel(chosenModel);
-      if (orchSel?.thinking_level_id) {
-        setOrchThinkingLevel(orchSel.thinking_level_id);
-      } else if (orchCaps?.selected_thinking_level_id) {
-        setOrchThinkingLevel(orchCaps.selected_thinking_level_id);
-      } else if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0) {
-        setOrchThinkingLevel(orchCaps.thinking_levels[0].id);
-      } else {
-        setOrchThinkingLevel("medium");
-      }
-      return;
-    }
-
-    if (selectedOrchestrator === "grok") {
-      setOrchModel("");
-      setOrchThinkingLevel("");
-      setOrchMode("");
-      setOrchDeepThinking(false);
-      setOrchDeepResearch(false);
-      return;
-    }
-
-    if (selectedOrchestrator === "mistral") {
-      setOrchModel("");
-      setOrchMode("");
-      const isDr = orchSel?.deep_research !== undefined ? orchSel.deep_research : (orchCaps?.deep_research ?? false);
-      setOrchDeepResearch(isDr);
-      const chosenThinking = orchSel?.thinking_level_id || orchCaps?.selected_thinking_level_id || "fast";
-      setOrchThinkingLevel(chosenThinking);
-      return;
-    }
-
-    if (selectedOrchestrator === "copilot") {
-      setOrchModel("");
-      setOrchThinkingLevel("");
-      if (orchSel?.mode_id) {
-        setOrchMode(orchSel.mode_id);
-      } else if (orchCaps?.selected_mode_id) {
-        setOrchMode(orchCaps.selected_mode_id);
-      } else if (orchCaps?.modes && orchCaps.modes.length > 0) {
-        setOrchMode(orchCaps.modes[0].id);
-      } else {
-        setOrchMode("auto");
-      }
-      return;
-    }
-
-    if (selectedOrchestrator === "minimax") {
-      setOrchMode("");
-      setOrchThinkingLevel("");
-      const isDr = orchSel?.deep_research !== undefined ? orchSel.deep_research : (orchCaps?.deep_research ?? false);
-      setOrchDeepResearch(isDr);
-      const chosenModel = orchSel?.model_id || orchCaps?.selected_model_id || (orchCaps?.available_models && orchCaps.available_models.length > 0 ? orchCaps.available_models[0].id : "m3");
-      setOrchModel(chosenModel);
-      return;
-    }
-
-    if (selectedOrchestrator === "zhipu") {
-      setOrchThinkingLevel("");
-      const chosenModel = orchSel?.model_id || orchCaps?.selected_model_id || (orchCaps?.available_models && orchCaps.available_models.length > 0 ? orchCaps.available_models[0].id : "glm-5.3");
-      setOrchModel(chosenModel);
-      setOrchMode(orchSel?.mode_id || orchCaps?.selected_mode_id || "high");
-      return;
-    }
-
-    if (selectedOrchestrator === "meta") {
-      setOrchModel("");
-      setOrchMode("");
-      setOrchDeepResearch(false);
-      const chosenThinking = orchSel?.thinking_level_id || (orchSel?.deep_thinking ? "thinking" : undefined) || orchCaps?.selected_thinking_level_id || (orchCaps?.deep_thinking ? "thinking" : "instant");
-      setOrchThinkingLevel(chosenThinking);
-      setOrchThinking(chosenThinking === "thinking");
-      setOrchDeepThinking(chosenThinking === "thinking");
-      return;
-    }
-
-    if (orchSel?.model_id && orchSel.model_id !== "claude-opus-5.5" && orchSel.model_id !== "claude-fable-5.1") {
+    if (orchSel?.model_id) {
       setOrchModel(orchSel.model_id);
-    } else if (orchCaps?.selected_model_id && orchCaps.selected_model_id !== "claude-opus-5.5" && orchCaps.selected_model_id !== "claude-fable-5.1") {
-      setOrchModel(orchCaps.selected_model_id);
-    } else if (selectedOrchestrator === "claude") {
-      setOrchModel("claude-sonnet-5.5");
-    } else if (orchCaps?.available_models && orchCaps.available_models.length > 0) {
-      setOrchModel(orchCaps.available_models[0].id);
-    } else if (selectedOrchestrator === "gemini") {
-      setOrchModel("pro");
-    } else if (selectedOrchestrator === "qwen") {
-      setOrchModel("qwen-3.8-max");
+    } else if (caps?.selected_model_id) {
+      setOrchModel(caps.selected_model_id);
+    } else if (caps?.available_models && caps.available_models.length > 0) {
+      setOrchModel(caps.available_models[0].id);
+    } else {
+      setOrchModel("default");
     }
 
     if (orchSel?.thinking_level_id) {
       setOrchThinkingLevel(orchSel.thinking_level_id);
-    } else if (orchCaps?.selected_thinking_level_id) {
-      setOrchThinkingLevel(orchCaps.selected_thinking_level_id);
-    } else if (selectedOrchestrator === "claude") {
-      setOrchThinkingLevel("medium");
-    } else if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0) {
-      setOrchThinkingLevel(orchCaps.thinking_levels[0].id);
+    } else if (caps?.selected_thinking_level_id) {
+      setOrchThinkingLevel(caps.selected_thinking_level_id);
+    } else if (caps?.thinking_levels && caps.thinking_levels.length > 0) {
+      setOrchThinkingLevel(caps.thinking_levels[0].id);
+    } else {
+      setOrchThinkingLevel(selectedOrchestrator === "meta" && isDt ? "thinking" : "auto");
     }
 
     if (orchSel?.mode_id) {
       setOrchMode(orchSel.mode_id);
-    } else if (orchCaps?.selected_mode_id) {
-      setOrchMode(orchCaps.selected_mode_id);
-    } else if (orchCaps?.modes && orchCaps.modes.length > 0) {
-      setOrchMode(orchCaps.modes[0].id);
+    } else if (caps?.selected_mode_id) {
+      setOrchMode(caps.selected_mode_id);
+    } else if (caps?.modes && caps.modes.length > 0) {
+      setOrchMode(caps.modes[0].id);
     } else {
       setOrchMode("");
     }
-  }, [selectedOrchestrator, orchCaps, orchSel]);
+  }, [selectedOrchestrator, capabilitiesMap, orchSel]);
 
-  // Sync Lead local state when capabilities or selections update
+  // Sync Lead local state when provider or selection changes
   useEffect(() => {
-    if (selectedLead === "deepseek") {
-      setLeadModel("");
-      setLeadThinkingLevel("");
-      setLeadMode("");
-      if (leadSel?.deep_thinking !== undefined) {
-        setLeadDeepThinking(leadSel.deep_thinking);
-      } else if (leadCaps?.deep_thinking !== undefined) {
-        setLeadDeepThinking(leadCaps.deep_thinking);
-      }
-      if (leadSel?.web_search !== undefined) {
-        setLeadWebSearch(leadSel.web_search);
-      } else if (leadCaps?.web_search !== undefined) {
-        setLeadWebSearch(leadCaps.web_search);
-      }
-      return;
-    }
+    const caps = capabilitiesMap[selectedLead];
+    const isDr = leadSel?.deep_research !== undefined ? leadSel.deep_research : (caps?.deep_research ?? false);
+    const isDt = leadSel?.deep_thinking !== undefined ? leadSel.deep_thinking : (caps?.deep_thinking ?? false);
+    const isWs = leadSel?.web_search !== undefined ? leadSel.web_search : (caps?.web_search ?? true);
 
-    if (selectedLead === "chatgpt") {
-      setLeadModel("");
-      setLeadThinkingLevel("");
-      setLeadMode("");
-      if (leadSel?.web_search !== undefined) {
-        setLeadWebSearch(leadSel.web_search);
-      } else if (leadCaps?.web_search !== undefined) {
-        setLeadWebSearch(leadCaps.web_search);
-      }
-      if (leadSel?.deep_research !== undefined) {
-        setLeadDeepResearch(leadSel.deep_research);
-      } else if (leadCaps?.deep_research !== undefined) {
-        setLeadDeepResearch(leadCaps.deep_research);
-      }
-      if (leadSel?.deep_thinking !== undefined) {
-        setLeadDeepThinking(leadSel.deep_thinking);
-      } else if (leadCaps?.deep_thinking !== undefined) {
-        setLeadDeepThinking(leadCaps.deep_thinking);
-      }
-      return;
-    }
+    setLeadDeepResearch(isDr);
+    setLeadDeepThinking(isDt);
+    setLeadWebSearch(isWs);
+    setLeadResearchMode(leadSel?.research_mode || caps?.research_mode || "normal");
 
-    if (selectedLead === "perplexity") {
-      setLeadModel("auto");
-      setLeadThinkingLevel("");
-      setLeadMode("");
-      setLeadDeepThinking(false);
-      setLeadWebSearch(true);
-      return;
-    }
-
-    if (selectedLead === "kimi") {
-      setLeadMode("");
-      const isDr = leadSel?.deep_research !== undefined ? leadSel.deep_research : (leadCaps?.deep_research ?? false);
-      setLeadDeepResearch(isDr);
-      const chosenModel = leadSel?.model_id || leadCaps?.selected_model_id || (leadCaps?.available_models && leadCaps.available_models.length > 0 ? leadCaps.available_models[0].id : "instant");
-      if (isDr && (chosenModel === "instant" || !chosenModel || chosenModel === "default")) {
-        setLeadModel("k3");
-      } else {
-        setLeadModel(chosenModel || "instant");
-      }
-      if (leadSel?.thinking_level_id) {
-        setLeadThinkingLevel(leadSel.thinking_level_id);
-      } else if (leadCaps?.selected_thinking_level_id) {
-        setLeadThinkingLevel(leadCaps.selected_thinking_level_id);
-      } else if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0) {
-        setLeadThinkingLevel(leadCaps.thinking_levels[0].id);
-      } else {
-        setLeadThinkingLevel("high");
-      }
-      return;
-    }
-
-    if (selectedLead === "qwen") {
-      setLeadMode("");
-      const isDr = leadSel?.deep_research !== undefined ? leadSel.deep_research : (leadCaps?.deep_research ?? false);
-      setLeadDeepResearch(isDr);
-      const chosenModel = leadSel?.model_id || leadCaps?.selected_model_id || (leadCaps?.available_models && leadCaps.available_models.length > 0 ? leadCaps.available_models[0].id : "qwen-3.8-max");
-      setLeadModel(chosenModel);
-      if (isDr) {
-        setLeadThinkingLevel("auto");
-      } else if (leadSel?.thinking_level_id) {
-        setLeadThinkingLevel(leadSel.thinking_level_id);
-      } else if (leadCaps?.selected_thinking_level_id) {
-        setLeadThinkingLevel(leadCaps.selected_thinking_level_id);
-      } else if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0) {
-        setLeadThinkingLevel(leadCaps.thinking_levels[0].id);
-      } else {
-        setLeadThinkingLevel("auto");
-      }
-      setLeadWebSearch(leadSel?.web_search !== undefined ? leadSel.web_search : (leadCaps?.web_search ?? true));
-      setLeadResearchMode(leadSel?.research_mode || leadCaps?.research_mode || "normal");
-      return;
-    }
-
-    if (selectedLead === "gemini") {
-      setLeadMode("");
-      const isDr = leadSel?.deep_research !== undefined ? leadSel.deep_research : (leadCaps?.deep_research ?? false);
-      setLeadDeepResearch(isDr);
-      const chosenModel = leadSel?.model_id || leadCaps?.selected_model_id || (leadCaps?.available_models && leadCaps.available_models.length > 0 ? leadCaps.available_models[0].id : "pro");
-      setLeadModel(chosenModel);
-      if (leadSel?.thinking_level_id) {
-        setLeadThinkingLevel(leadSel.thinking_level_id);
-      } else if (leadCaps?.selected_thinking_level_id) {
-        setLeadThinkingLevel(leadCaps.selected_thinking_level_id);
-      } else if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0) {
-        setLeadThinkingLevel(leadCaps.thinking_levels[0].id);
-      } else {
-        setLeadThinkingLevel("medium");
-      }
-      return;
-    }
-
-    if (selectedLead === "grok") {
-      setLeadModel("");
-      setLeadThinkingLevel("");
-      setLeadMode("");
-      setLeadDeepThinking(false);
-      setLeadDeepResearch(false);
-      return;
-    }
-
-    if (selectedLead === "mistral") {
-      setLeadModel("");
-      setLeadMode("");
-      const isDr = leadSel?.deep_research !== undefined ? leadSel.deep_research : (leadCaps?.deep_research ?? false);
-      setLeadDeepResearch(isDr);
-      const chosenThinking = leadSel?.thinking_level_id || leadCaps?.selected_thinking_level_id || "fast";
-      setLeadThinkingLevel(chosenThinking);
-      return;
-    }
-
-    if (selectedLead === "copilot") {
-      setLeadModel("");
-      setLeadThinkingLevel("");
-      if (leadSel?.mode_id) {
-        setLeadMode(leadSel.mode_id);
-      } else if (leadCaps?.selected_mode_id) {
-        setLeadMode(leadCaps.selected_mode_id);
-      } else if (leadCaps?.modes && leadCaps.modes.length > 0) {
-        setLeadMode(leadCaps.modes[0].id);
-      } else {
-        setLeadMode("auto");
-      }
-      return;
-    }
-
-    if (selectedLead === "minimax") {
-      setLeadMode("");
-      setLeadThinkingLevel("");
-      const isDr = leadSel?.deep_research !== undefined ? leadSel.deep_research : (leadCaps?.deep_research ?? false);
-      setLeadDeepResearch(isDr);
-      const chosenModel = leadSel?.model_id || leadCaps?.selected_model_id || (leadCaps?.available_models?.[0]?.id ?? "m3");
-      setLeadModel(chosenModel);
-      return;
-    }
-
-    if (selectedLead === "zhipu") {
-      setLeadThinkingLevel("");
-      const chosenModel = leadSel?.model_id || leadCaps?.selected_model_id || (leadCaps?.available_models?.[0]?.id ?? "glm-5.3");
-      setLeadModel(chosenModel);
-      setLeadMode(leadSel?.mode_id || leadCaps?.selected_mode_id || "high");
-      return;
-    }
-
-    if (selectedLead === "meta") {
-      setLeadModel("");
-      setLeadMode("");
-      setLeadDeepResearch(false);
-      const chosenThinking = leadSel?.thinking_level_id || (leadSel?.deep_thinking ? "thinking" : undefined) || leadCaps?.selected_thinking_level_id || (leadCaps?.deep_thinking ? "thinking" : "instant");
-      setLeadThinkingLevel(chosenThinking);
-      setLeadThinking(chosenThinking === "thinking");
-      setLeadDeepThinking(chosenThinking === "thinking");
-      return;
-    }
-
-    if (leadSel?.model_id && leadSel.model_id !== "claude-opus-5.5" && leadSel.model_id !== "claude-fable-5.1") {
+    if (leadSel?.model_id) {
       setLeadModel(leadSel.model_id);
-    } else if (leadCaps?.selected_model_id && leadCaps.selected_model_id !== "claude-opus-5.5" && leadCaps.selected_model_id !== "claude-fable-5.1") {
-      setLeadModel(leadCaps.selected_model_id);
-    } else if (selectedLead === "claude") {
-      setLeadModel("claude-sonnet-5.5");
-    } else if (leadCaps?.available_models && leadCaps.available_models.length > 0) {
-      setLeadModel(leadCaps.available_models[0].id);
-    } else if (selectedLead === "gemini") {
-      setLeadModel("gemini-3.1-pro");
-    } else if (selectedLead === "qwen") {
-      setLeadModel("qwen-3.8-max");
+    } else if (caps?.selected_model_id) {
+      setLeadModel(caps.selected_model_id);
+    } else if (caps?.available_models && caps.available_models.length > 0) {
+      setLeadModel(caps.available_models[0].id);
+    } else {
+      setLeadModel("default");
     }
 
     if (leadSel?.thinking_level_id) {
       setLeadThinkingLevel(leadSel.thinking_level_id);
-    } else if (leadCaps?.selected_thinking_level_id) {
-      setLeadThinkingLevel(leadCaps.selected_thinking_level_id);
-    } else if (selectedLead === "claude") {
-      setLeadThinkingLevel("medium");
-    } else if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0) {
-      setLeadThinkingLevel(leadCaps.thinking_levels[0].id);
+    } else if (caps?.selected_thinking_level_id) {
+      setLeadThinkingLevel(caps.selected_thinking_level_id);
+    } else if (caps?.thinking_levels && caps.thinking_levels.length > 0) {
+      setLeadThinkingLevel(caps.thinking_levels[0].id);
+    } else {
+      setLeadThinkingLevel(selectedLead === "meta" && isDt ? "thinking" : "auto");
     }
 
     if (leadSel?.mode_id) {
       setLeadMode(leadSel.mode_id);
-    } else if (leadCaps?.selected_mode_id) {
-      setLeadMode(leadCaps.selected_mode_id);
-    } else if (leadCaps?.modes && leadCaps.modes.length > 0) {
-      setLeadMode(leadCaps.modes[0].id);
+    } else if (caps?.selected_mode_id) {
+      setLeadMode(caps.selected_mode_id);
+    } else if (caps?.modes && caps.modes.length > 0) {
+      setLeadMode(caps.modes[0].id);
     } else {
       setLeadMode("");
     }
-  }, [selectedLead, leadCaps, leadSel]);
+  }, [selectedLead, capabilitiesMap, leadSel]);
 
-  type AgentOption = { id: string; label: string; badge?: string; disabled?: boolean };
-
-  // Computed models for Orchestrator
-  const orchModels = useMemo<AgentOption[]>(() => {
-    if (selectedOrchestrator === "deepseek" || selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt" || selectedOrchestrator === "grok" || selectedOrchestrator === "mistral" || selectedOrchestrator === "meta") {
-      return [];
-    }
-    if (selectedOrchestrator === "perplexity") {
-      const perplexityFallbackModels: AgentOption[] = [
-        { id: "auto", label: "Auto (Tự động - Mặc định)", badge: "Auto", disabled: false },
-        { id: "gpt-6-1-sol", label: "GPT-6.1 Sol", badge: "Pro", disabled: true },
-        { id: "gpt-6-astra", label: "GPT-6 Astra", badge: "Max", disabled: true },
-        { id: "gemini-4-argon", label: "Gemini 4 Argon", badge: "New", disabled: true },
-        { id: "gemini-3-8-flash", label: "Gemini 3.8 Flash", badge: "Pro", disabled: true },
-        { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5", badge: "Pro", disabled: true },
-        { id: "claude-opus-5-5", label: "Claude Opus 5.5", badge: "Max", disabled: true },
-        { id: "claude-fable-5-1", label: "Claude Fable 5.1", badge: "Max", disabled: true },
-        { id: "kimi-k3", label: "Kimi K3", badge: "Pro", disabled: true },
-        { id: "glm-5-3", label: "GLM 5.3", badge: "Pro", disabled: true },
-        { id: "grok-4-7", label: "Grok 4.7", badge: "Pro", disabled: true },
-        { id: "nemotron-3-ultra", label: "Nemotron 3 Ultra", badge: "Pro", disabled: true },
-      ];
-      if (orchCaps?.available_models && orchCaps.available_models.length > 0 && !orchCaps.available_models.some((m) => m.id === "default")) {
-        return orchCaps.available_models.map((m) => ({
-          ...m,
-          disabled: m.id !== "auto",
-          badge: m.id === "auto" ? "Auto" : (m.badge || "Pro"),
-        }));
-      }
-      return perplexityFallbackModels;
-    }
-    if (selectedOrchestrator === "claude") {
-      const base: AgentOption[] = orchCaps?.available_models && orchCaps.available_models.length > 0
-        ? orchCaps.available_models
-        : [
-          { id: "claude-sonnet-5.5", label: "Claude Sonnet 5.5 (Cân bằng & thông minh)", badge: "Sonnet", disabled: false },
-          { id: "claude-haiku-5.5", label: "Claude Haiku 5.5 (Phản hồi nhanh)", badge: "Haiku", disabled: false },
-          { id: "claude-opus-5.5", label: "Claude Opus 5.5 (Pro)", badge: "Upgrade", disabled: true },
-          { id: "claude-fable-5.1", label: "Claude Fable 5.1 (Max)", badge: "Upgrade", disabled: true },
-        ];
-      return base.map((m) => {
-        const isUpgrade = m.id === "claude-opus-5.5" || m.id === "claude-fable-5.1" || m.disabled || m.badge === "Upgrade";
-        return {
-          ...m,
-          disabled: isUpgrade,
-          badge: isUpgrade ? "Upgrade" : m.badge,
-        };
-      });
-    }
-    if (orchCaps?.available_models && orchCaps.available_models.length > 0) {
-      return orchCaps.available_models;
-    }
-    if (selectedOrchestrator === "gemini") {
-      return [
-        { id: "pro", label: "Gemini 3.1 Pro (Deep Reasoning)", badge: "Deep" },
-        { id: "flash", label: "Gemini Flash (Nhanh)", badge: "Fast" },
-        { id: "argon", label: "Gemini Argon", badge: "Pro" },
-      ];
-    }
-    if (selectedOrchestrator === "qwen") {
-      return [
-        { id: "qwen-3.8-max", label: "Qwen 3.8 Max (Reasoning)", badge: "Max" },
-        { id: "qwen-3.7-plus", label: "Qwen 3.7 Plus", badge: "Plus" },
-        { id: "qwen-3.8-omni-flash", label: "Qwen 3.8 Omni-Flash", badge: "Omni" },
-      ];
-    }
-    if (selectedOrchestrator === "zhipu") {
-      return [
-        { id: "glm-5.3", label: "GLM-5.3", badge: "GLM" },
-        { id: "glm-4-plus", label: "GLM-4 Plus", badge: "GLM" },
-      ];
-    }
-    if (selectedOrchestrator === "minimax") {
-      return [
-        { id: "m3", label: "M3 (Toàn diện)", badge: "M3" },
-        { id: "m3.1-flash", label: "M3.1-Flash-Preview", badge: "Flash" },
-        { id: "m2.7", label: "M2.7", badge: "2.7" },
-        { id: "m2.7-highspeed", label: "M2.7 HighSpeed", badge: "HighSpeed" },
-      ];
-    }
-    if (selectedOrchestrator === "kimi") {
-      const kimiFallbackModels: AgentOption[] = [
-        { id: "instant", label: "Instant (Phản hồi nhanh)", badge: "Fast" },
-        { id: "k3", label: "K3 (Chat & Agent)", badge: "All-Rounder" },
-        { id: "k2.8", label: "K2.8 (Preview · Well-rounded)", badge: "Preview" },
-      ];
-      const baseModels = orchCaps?.available_models && orchCaps.available_models.length > 0 && !orchCaps.available_models.some((m) => m.id === "default")
-        ? orchCaps.available_models
-        : kimiFallbackModels;
-      return baseModels.map((m) => {
-        const isInstantDisabled = orchDeepResearch && m.id === "instant";
-        return {
-          ...m,
-          disabled: isInstantDisabled || m.disabled,
-          badge: isInstantDisabled ? "Không hỗ trợ DR" : m.badge,
-        };
-      });
-    }
-    return [
-      { id: "default", label: orchProviderObj?.modelName || "Mặc định" },
-    ];
-  }, [orchCaps, selectedOrchestrator, orchProviderObj, orchDeepResearch]);
-
-  // Computed thinking levels for Orchestrator
-  const orchThinkingLevels = useMemo<AgentOption[]>(() => {
-    if (selectedOrchestrator === "deepseek" || selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt" || selectedOrchestrator === "perplexity" || selectedOrchestrator === "grok") {
-      return [];
-    }
-    if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0) {
-      return orchCaps.thinking_levels;
-    }
-    if (selectedOrchestrator === "meta") {
-      return [
-        { id: "thinking", label: "Thinking (Suy luận chuyên sâu)", badge: "Thinking" },
-        { id: "instant", label: "Instant (Phản hồi tức thì)", badge: "Instant" },
-      ];
-    }
-    if (selectedOrchestrator === "gemini") {
-      return [
-        { id: "high", label: "Cao (High Thinking)", badge: "High" },
-        { id: "medium", label: "Vừa (Medium)", badge: "Med" },
-        { id: "low", label: "Thấp (Low)", badge: "Low" },
-      ];
-    }
-    if (selectedOrchestrator === "qwen") {
-      return [
-        { id: "auto", label: "Auto (Tự động cân bằng)", badge: "Auto" },
-        { id: "thinking", label: "Thinking (Suy luận sâu)", badge: "Think" },
-        { id: "fast", label: "Fast (Phản hồi nhanh)", badge: "Fast" },
-      ];
-    }
-    if (selectedOrchestrator === "claude") {
-      return [
-        { id: "medium", label: "Trung bình (Medium - Khuyên dùng)", badge: "Med" },
-        { id: "low", label: "Thấp (Low - Nhanh)", badge: "Low" },
-        { id: "high", label: "Cao (High - Kỹ lưỡng)", badge: "High" },
-        { id: "extra", label: "Rất cao (Extra)", badge: "Extra" },
-        { id: "max", label: "Tối đa (Max)", badge: "Max" },
-      ];
-    }
-    if (selectedOrchestrator === "kimi") {
-      const kimiFallbackThinking: AgentOption[] = [
-        { id: "standard", label: "Standard (Tiêu chuẩn)", badge: "Standard" },
-        { id: "high", label: "High (Chuyên sâu)", badge: "High" },
-      ];
-      if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0) {
-        return orchCaps.thinking_levels;
-      }
-      return kimiFallbackThinking;
-    }
-    if (selectedOrchestrator === "mistral") {
-      const mistralFallbackThinking: AgentOption[] = [
-        { id: "fast", label: "Fast (Nhanh)", badge: "Fast" },
-        { id: "think", label: "Think (Suy luận)", badge: "Think" },
-      ];
-      if (orchCaps?.thinking_levels && orchCaps.thinking_levels.length > 0) {
-        return orchCaps.thinking_levels;
-      }
-      return mistralFallbackThinking;
-    }
-    return [];
-  }, [orchCaps, selectedOrchestrator]);
-
-  // Computed modes for Orchestrator
-  const orchModes = useMemo<AgentOption[]>(() => {
-    if (selectedOrchestrator === "gemini" || selectedOrchestrator === "qwen" || selectedOrchestrator === "claude" || selectedOrchestrator === "deepseek" || selectedOrchestrator === "chatgpt" || selectedOrchestrator === "perplexity" || selectedOrchestrator === "kimi" || selectedOrchestrator === "grok" || selectedOrchestrator === "mistral" || selectedOrchestrator === "meta") {
-      return [];
-    }
-    if (orchCaps?.modes && orchCaps.modes.length > 0) {
-      return orchCaps.modes;
-    }
-    if (selectedOrchestrator === "copilot") {
-      return [
-        { id: "auto", label: "Auto (Cân bằng tốc độ & độ chính xác)", badge: "Auto" },
-        { id: "quick", label: "Quick Response (Phản hồi nhanh)", badge: "Fast" },
-        { id: "think_deeper", label: "Think Deeper (Suy luận đa bước chuyên sâu)", badge: "Think" },
-        { id: "gpt_5_6_quick", label: "GPT > GPT-5.6 Sol Quick Response", badge: "GPT-5.6" },
-        { id: "gpt_5_6_think", label: "GPT > GPT-5.6 Sol Think Deeper", badge: "GPT-5.6" },
-      ];
-    }
-    return [];
-  }, [orchCaps, selectedOrchestrator]);
-
-  // Computed models for Lead Provider
-  const leadModels = useMemo<AgentOption[]>(() => {
-    if (selectedLead === "deepseek" || selectedLead === "copilot" || selectedLead === "chatgpt" || selectedLead === "grok" || selectedLead === "mistral" || selectedLead === "meta") {
-      return [];
-    }
-    if (selectedLead === "perplexity") {
-      const perplexityFallbackModels: AgentOption[] = [
-        { id: "auto", label: "Auto (Tự động - Mặc định)", badge: "Auto", disabled: false },
-        { id: "gpt-6-1-sol", label: "GPT-6.1 Sol", badge: "Pro", disabled: true },
-        { id: "gpt-6-astra", label: "GPT-6 Astra", badge: "Max", disabled: true },
-        { id: "gemini-4-argon", label: "Gemini 4 Argon", badge: "New", disabled: true },
-        { id: "gemini-3-8-flash", label: "Gemini 3.8 Flash", badge: "Pro", disabled: true },
-        { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5", badge: "Pro", disabled: true },
-        { id: "claude-opus-5-5", label: "Claude Opus 5.5", badge: "Max", disabled: true },
-        { id: "claude-fable-5-1", label: "Claude Fable 5.1", badge: "Max", disabled: true },
-        { id: "kimi-k3", label: "Kimi K3", badge: "Pro", disabled: true },
-        { id: "glm-5-3", label: "GLM 5.3", badge: "Pro", disabled: true },
-        { id: "grok-4-7", label: "Grok 4.7", badge: "Pro", disabled: true },
-        { id: "nemotron-3-ultra", label: "Nemotron 3 Ultra", badge: "Pro", disabled: true },
-      ];
-      if (leadCaps?.available_models && leadCaps.available_models.length > 0 && !leadCaps.available_models.some((m) => m.id === "default")) {
-        return leadCaps.available_models.map((m) => ({
-          ...m,
-          disabled: m.id !== "auto",
-          badge: m.id === "auto" ? "Auto" : (m.badge || "Pro"),
-        }));
-      }
-      return perplexityFallbackModels;
-    }
-    if (selectedLead === "claude") {
-      const base: AgentOption[] = leadCaps?.available_models && leadCaps.available_models.length > 0
-        ? leadCaps.available_models
-        : [
-          { id: "claude-sonnet-5.5", label: "Claude Sonnet 5.5 (Cân bằng & thông minh)", badge: "Sonnet", disabled: false },
-          { id: "claude-haiku-5.5", label: "Claude Haiku 5.5 (Phản hồi nhanh)", badge: "Haiku", disabled: false },
-          { id: "claude-opus-5.5", label: "Claude Opus 5.5 (Pro)", badge: "Upgrade", disabled: true },
-          { id: "claude-fable-5.1", label: "Claude Fable 5.1 (Max)", badge: "Upgrade", disabled: true },
-        ];
-      return base.map((m) => {
-        const isUpgrade = m.id === "claude-opus-5.5" || m.id === "claude-fable-5.1" || m.disabled || m.badge === "Upgrade";
-        return {
-          ...m,
-          disabled: isUpgrade,
-          badge: isUpgrade ? "Upgrade" : m.badge,
-        };
-      });
-    }
-    if (leadCaps?.available_models && leadCaps.available_models.length > 0) {
-      return leadCaps.available_models;
-    }
-    if (selectedLead === "gemini") {
-      return [
-        { id: "pro", label: "Gemini 3.1 Pro (Deep Reasoning)", badge: "Deep" },
-        { id: "flash", label: "Gemini Flash (Nhanh)", badge: "Fast" },
-        { id: "argon", label: "Gemini Argon", badge: "Pro" },
-      ];
-    }
-    if (selectedLead === "qwen") {
-      return [
-        { id: "qwen-3.8-max", label: "Qwen 3.8 Max (Reasoning)", badge: "Max" },
-        { id: "qwen-3.7-plus", label: "Qwen 3.7 Plus", badge: "Plus" },
-        { id: "qwen-3.8-omni-flash", label: "Qwen 3.8 Omni-Flash", badge: "Omni" },
-      ];
-    }
-    if (selectedLead === "zhipu") {
-      return [
-        { id: "glm-5.3", label: "GLM-5.3", badge: "GLM" },
-        { id: "glm-4-plus", label: "GLM-4 Plus", badge: "GLM" },
-      ];
-    }
-    if (selectedLead === "minimax") {
-      return [
-        { id: "m3", label: "M3 (Toàn diện)", badge: "M3" },
-        { id: "m3.1-flash", label: "M3.1-Flash-Preview", badge: "Flash" },
-        { id: "m2.7", label: "M2.7", badge: "2.7" },
-        { id: "m2.7-highspeed", label: "M2.7 HighSpeed", badge: "HighSpeed" },
-      ];
-    }
-    if (selectedLead === "kimi") {
-      const kimiFallbackModels: AgentOption[] = [
-        { id: "instant", label: "Instant (Phản hồi nhanh)", badge: "Fast" },
-        { id: "k3", label: "K3 (Chat & Agent)", badge: "All-Rounder" },
-        { id: "k2.8", label: "K2.8 (Preview · Well-rounded)", badge: "Preview" },
-      ];
-      const baseModels = leadCaps?.available_models && leadCaps.available_models.length > 0 && !leadCaps.available_models.some((m) => m.id === "default")
-        ? leadCaps.available_models
-        : kimiFallbackModels;
-      return baseModels.map((m) => {
-        const isInstantDisabled = leadDeepResearch && m.id === "instant";
-        return {
-          ...m,
-          disabled: isInstantDisabled || m.disabled,
-          badge: isInstantDisabled ? "Không hỗ trợ DR" : m.badge,
-        };
-      });
-    }
-    return [
-      { id: "default", label: leadProviderObj?.modelName || "Mặc định" },
-    ];
-  }, [leadCaps, selectedLead, leadProviderObj, leadDeepResearch]);
-
-  // Computed thinking levels for Lead Provider
-  const leadThinkingLevels = useMemo<AgentOption[]>(() => {
-    if (selectedLead === "deepseek" || selectedLead === "copilot" || selectedLead === "chatgpt" || selectedLead === "perplexity" || selectedLead === "grok") {
-      return [];
-    }
-    if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0) {
-      return leadCaps.thinking_levels;
-    }
-    if (selectedLead === "meta") {
-      return [
-        { id: "thinking", label: "Thinking (Suy luận chuyên sâu)", badge: "Thinking" },
-        { id: "instant", label: "Instant (Phản hồi tức thì)", badge: "Instant" },
-      ];
-    }
-    if (selectedLead === "gemini") {
-      return [
-        { id: "high", label: "Cao (High Thinking)", badge: "High" },
-        { id: "medium", label: "Vừa (Medium)", badge: "Med" },
-        { id: "low", label: "Thấp (Low)", badge: "Low" },
-      ];
-    }
-    if (selectedLead === "qwen") {
-      return [
-        { id: "auto", label: "Auto (Tự động cân bằng)", badge: "Auto" },
-        { id: "thinking", label: "Thinking (Suy luận sâu)", badge: "Think" },
-        { id: "fast", label: "Fast (Phản hồi nhanh)", badge: "Fast" },
-      ];
-    }
-    if (selectedLead === "claude") {
-      return [
-        { id: "medium", label: "Trung bình (Medium - Khuyên dùng)", badge: "Med" },
-        { id: "low", label: "Thấp (Low - Nhanh)", badge: "Low" },
-        { id: "high", label: "Cao (High - Kỹ lưỡng)", badge: "High" },
-        { id: "extra", label: "Rất cao (Extra)", badge: "Extra" },
-        { id: "max", label: "Tối đa (Max)", badge: "Max" },
-      ];
-    }
-    if (selectedLead === "kimi") {
-      const kimiFallbackThinking: AgentOption[] = [
-        { id: "standard", label: "Standard (Tiêu chuẩn)", badge: "Standard" },
-        { id: "high", label: "High (Chuyên sâu)", badge: "High" },
-      ];
-      if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0) {
-        return leadCaps.thinking_levels;
-      }
-      return kimiFallbackThinking;
-    }
-    if (selectedLead === "mistral") {
-      const mistralFallbackThinking: AgentOption[] = [
-        { id: "fast", label: "Fast (Nhanh)", badge: "Fast" },
-        { id: "think", label: "Think (Suy luận)", badge: "Think" },
-      ];
-      if (leadCaps?.thinking_levels && leadCaps.thinking_levels.length > 0) {
-        return leadCaps.thinking_levels;
-      }
-      return mistralFallbackThinking;
-    }
-    return [];
-  }, [leadCaps, selectedLead]);
-
-  // Computed modes for Lead Provider
-  const leadModes = useMemo<AgentOption[]>(() => {
-    if (selectedLead === "gemini" || selectedLead === "qwen" || selectedLead === "claude" || selectedLead === "deepseek" || selectedLead === "chatgpt" || selectedLead === "perplexity" || selectedLead === "kimi" || selectedLead === "grok" || selectedLead === "mistral" || selectedLead === "meta") {
-      return [];
-    }
-    if (leadCaps?.modes && leadCaps.modes.length > 0) {
-      return leadCaps.modes;
-    }
-    if (selectedLead === "copilot") {
-      return [
-        { id: "auto", label: "Auto (Cân bằng tốc độ & độ chính xác)", badge: "Auto" },
-        { id: "quick", label: "Quick Response (Phản hồi nhanh)", badge: "Fast" },
-        { id: "think_deeper", label: "Think Deeper (Suy luận đa bước chuyên sâu)", badge: "Think" },
-        { id: "gpt_5_6_quick", label: "GPT > GPT-5.6 Sol Quick Response", badge: "GPT-5.6" },
-        { id: "gpt_5_6_think", label: "GPT > GPT-5.6 Sol Think Deeper", badge: "GPT-5.6" },
-      ];
-    }
-    return [];
-  }, [leadCaps, selectedLead]);
-
-  // Sub-providers delegation toggle handlers
-  const toggleDelegatedProvider = (providerId: string) => {
-    setSelectedDelegatedProviders((prev) =>
-      prev.includes(providerId)
-        ? prev.filter((id) => id !== providerId)
-        : [...prev, providerId]
+  // Live Decomposition Prompt Construction
+  const constructedOrchestratorPrompt = useMemo(() => {
+    return constructOrchestrationPrompt(
+      query.trim(),
+      selectedDelegatedProviders,
+      capabilitiesMap,
+      selectionsMap,
+      availableProviders
     );
-  };
+  }, [query, selectedDelegatedProviders, capabilitiesMap, selectionsMap, availableProviders]);
 
-  const handleSelectAllDelegated = () => {
+  // Handlers for Delegated Providers
+  const toggleDelegatedProvider = useCallback((providerId: string) => {
+    setSelectedDelegatedProviders((prev) =>
+      prev.includes(providerId) ? prev.filter((id) => id !== providerId) : [...prev, providerId]
+    );
+  }, []);
+
+  const handleSelectAllDelegated = useCallback(() => {
     setSelectedDelegatedProviders(availableProviders.map((p) => p.id));
-  };
+  }, [availableProviders]);
 
-  const handleSelectTopThinkingDelegated = () => {
+  const handleSelectTopThinkingDelegated = useCallback(() => {
     setSelectedDelegatedProviders(
       availableProviders
         .filter((p) => p.supportsDeepMode || ["deepseek", "qwen", "gemini", "chatgpt", "copilot", "claude", "perplexity", "kimi"].includes(p.id))
         .map((p) => p.id)
     );
-  };
+  }, [availableProviders]);
 
-  const handleDeselectAllDelegated = () => {
+  const handleDeselectAllDelegated = useCallback(() => {
     setSelectedDelegatedProviders([]);
-  };
+  }, []);
 
-  // Handle DOM Resync for Orchestrator
-  const handleSyncOrchestrator = async () => {
+  // Handlers for DOM Resync
+  const handleSyncOrchestrator = useCallback(async () => {
     if (isSyncingOrch || !onSyncProvider) return;
     setIsSyncingOrch(true);
     setOrchSyncMessage(null);
     try {
       const res = await onSyncProvider(selectedOrchestrator);
-      const modelCount = res?.available_models?.length || 0;
       const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-      setOrchSyncMessage(`✓ Đã đồng bộ DOM thành công lúc ${timeStr}${modelCount > 0 ? ` (${modelCount} mô hình)` : ""}`);
+      setOrchSyncMessage(`✓ Đã đồng bộ DOM thành công lúc ${timeStr}`);
       if (res?.selected_model_id) setOrchModel(res.selected_model_id);
       if (res?.selected_thinking_level_id) setOrchThinkingLevel(res.selected_thinking_level_id);
       if (res?.selected_mode_id) setOrchMode(res.selected_mode_id);
-      if (res?.deep_thinking !== undefined) setOrchDeepThinking(res.deep_thinking);
-      if (res?.web_search !== undefined) setOrchWebSearch(res.web_search);
-      if (res?.deep_research !== undefined) setOrchDeepResearch(res.deep_research);
     } catch (err: any) {
       setOrchSyncMessage(`Lỗi đồng bộ DOM: ${err?.message || "Không thể kết nối"}`);
     } finally {
       setIsSyncingOrch(false);
     }
-  };
+  }, [isSyncingOrch, onSyncProvider, selectedOrchestrator]);
 
-  // Handle DOM Resync for Lead Provider
-  const handleSyncLead = async () => {
+  const handleSyncLead = useCallback(async () => {
     if (isSyncingLead || !onSyncProvider) return;
     setIsSyncingLead(true);
     setLeadSyncMessage(null);
     try {
       const res = await onSyncProvider(selectedLead);
-      const modelCount = res?.available_models?.length || 0;
       const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-      setLeadSyncMessage(`✓ Đã đồng bộ DOM thành công lúc ${timeStr}${modelCount > 0 ? ` (${modelCount} mô hình)` : ""}`);
+      setLeadSyncMessage(`✓ Đã đồng bộ DOM thành công lúc ${timeStr}`);
       if (res?.selected_model_id) setLeadModel(res.selected_model_id);
       if (res?.selected_thinking_level_id) setLeadThinkingLevel(res.selected_thinking_level_id);
       if (res?.selected_mode_id) setLeadMode(res.selected_mode_id);
-      if (res?.deep_thinking !== undefined) setLeadDeepThinking(res.deep_thinking);
-      if (res?.web_search !== undefined) setLeadWebSearch(res.web_search);
-      if (res?.deep_research !== undefined) setLeadDeepResearch(res.deep_research);
     } catch (err: any) {
       setLeadSyncMessage(`Lỗi đồng bộ DOM: ${err?.message || "Không thể kết nối"}`);
     } finally {
       setIsSyncingLead(false);
     }
-  };
+  }, [isSyncingLead, onSyncProvider, selectedLead]);
 
-  // Handle batch DOM Resync for all selected delegated sub-providers
-  const handleSyncAllSelectedSubProviders = async () => {
+  const handleSyncAllSelectedSubProviders = useCallback(async () => {
     if (isSyncingAllSub || !onSyncProvider || selectedDelegatedProviders.length === 0) return;
     setIsSyncingAllSub(true);
     setSubSyncMessage(null);
@@ -1283,186 +357,51 @@ export function AgentConfigScreen({
     } finally {
       setIsSyncingAllSub(false);
     }
-  };
+  }, [isSyncingAllSub, onSyncProvider, selectedDelegatedProviders]);
 
+  // Form Submit Handler
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim() || selectedDelegatedProviders.length === 0 || isSubmitting) return;
 
     setIsSubmitting(true);
 
-    // Build comprehensive orchestrator config matching both string matching and DOM models
-    const orchConfig: Record<string, any> = {
-      model_id: orchModel,
-      model: orchModel,
-      thinking_level_id: orchThinkingLevel,
-      thinking: orchThinking,
-      mode_id: orchMode,
-      mode: orchMode,
-    };
-    if (selectedOrchestrator === "gemini") {
-      orchConfig.model = orchModel || "pro";
-      orchConfig.mode = "";
-      orchConfig.mode_id = "";
-      orchConfig.deep_research = orchDeepResearch;
-    } else if (selectedOrchestrator === "qwen") {
-      orchConfig.model = orchModel || "qwen-3.8-max";
-      orchConfig.thinking_level_id = orchDeepResearch ? "auto" : (orchThinkingLevel || "auto");
-      orchConfig.thinking = orchDeepResearch ? "auto" : (orchThinkingLevel || "auto");
-      orchConfig.deep_research = orchDeepResearch;
-      orchConfig.web_search = orchWebSearch;
-      orchConfig.research_mode = orchResearchMode;
-      orchConfig.mode = "";
-      orchConfig.mode_id = "";
-    } else if (selectedOrchestrator === "claude") {
-      orchConfig.model = orchModel || "claude-sonnet-5.5";
-      orchConfig.thinking = orchThinkingLevel || "medium";
-      orchConfig.mode = "";
-    } else if (selectedOrchestrator === "deepseek") {
-      orchConfig.deep_thinking = orchDeepThinking;
-      orchConfig.web_search = orchWebSearch;
-      orchConfig.model = "";
-      orchConfig.model_id = "";
-      orchConfig.thinking = "";
-      orchConfig.thinking_level_id = "";
-      orchConfig.mode = "";
-      orchConfig.mode_id = "";
-    } else if (selectedOrchestrator === "chatgpt") {
-      orchConfig.web_search = orchWebSearch;
-      orchConfig.deep_research = orchDeepResearch;
-      orchConfig.deep_thinking = orchDeepThinking;
-      orchConfig.model = "";
-      orchConfig.model_id = "";
-      orchConfig.thinking = "";
-      orchConfig.thinking_level_id = "";
-      orchConfig.mode = "";
-      orchConfig.mode_id = "";
-    } else if (selectedOrchestrator === "perplexity") {
-      orchConfig.model = "auto";
-      orchConfig.model_id = "auto";
-      orchConfig.thinking = false;
-      orchConfig.deep_thinking = false;
-      orchConfig.web_search = true;
-      orchConfig.mode = "";
-      orchConfig.mode_id = "";
-    } else if (selectedOrchestrator === "kimi") {
-      orchConfig.model = orchModel || (orchDeepResearch ? "k3" : "instant");
-      orchConfig.model_id = orchModel || (orchDeepResearch ? "k3" : "instant");
-      orchConfig.thinking_level_id = orchThinkingLevel || "high";
-      orchConfig.thinking = orchThinkingLevel || "high";
-      orchConfig.deep_research = orchDeepResearch;
-      orchConfig.mode = "";
-      orchConfig.mode_id = "";
-    } else if (selectedOrchestrator === "grok") {
-      orchConfig.model = "";
-      orchConfig.model_id = "";
-      orchConfig.thinking = "";
-      orchConfig.thinking_level_id = "";
-      orchConfig.mode = "";
-      orchConfig.mode_id = "";
-    } else if (selectedOrchestrator === "zhipu") {
-      orchConfig.model = orchModel || "glm-5.3";
-      orchConfig.mode = orchMode || "high";
-    } else if (selectedOrchestrator === "minimax") {
-      orchConfig.model = orchModel || "m3";
-      orchConfig.model_id = orchModel || "m3";
-      orchConfig.deep_research = orchDeepResearch;
-    } else if (selectedOrchestrator === "meta") {
-      orchConfig.model = "";
-      orchConfig.model_id = "";
-      orchConfig.thinking = orchThinkingLevel === "thinking" ? "thinking" : "instant";
-      orchConfig.thinking_level_id = orchThinkingLevel === "thinking" ? "thinking" : "instant";
-      orchConfig.deep_thinking = orchThinkingLevel === "thinking";
-      orchConfig.deep_research = false;
-      orchConfig.mode = "";
-      orchConfig.mode_id = "";
-    }
+    const orchResolved = resolveSubProviderLiveConfig(
+      selectedOrchestrator,
+      {
+        ...selectionsMap,
+        [selectedOrchestrator]: {
+          ...selectionsMap[selectedOrchestrator],
+          model_id: orchModel,
+          thinking_level_id: orchThinkingLevel,
+          mode_id: orchMode,
+          deep_research: orchDeepResearch,
+          deep_thinking: orchDeepThinking,
+          web_search: orchWebSearch,
+          research_mode: orchResearchMode,
+        },
+      },
+      capabilitiesMap
+    );
 
-    // Build comprehensive lead config matching both string matching and DOM models
-    const leadConfig: Record<string, any> = {
-      model_id: leadModel,
-      model: leadModel,
-      thinking_level_id: leadThinkingLevel,
-      thinking: leadThinking,
-      mode_id: leadMode,
-      mode: leadMode,
-    };
-    if (selectedLead === "gemini") {
-      leadConfig.model = leadModel || "pro";
-      leadConfig.mode = "";
-      leadConfig.mode_id = "";
-      leadConfig.deep_research = leadDeepResearch;
-    } else if (selectedLead === "qwen") {
-      leadConfig.model = leadModel || "qwen-3.8-max";
-      leadConfig.thinking_level_id = leadDeepResearch ? "auto" : (leadThinkingLevel || "auto");
-      leadConfig.thinking = leadDeepResearch ? "auto" : (leadThinkingLevel || "auto");
-      leadConfig.deep_research = leadDeepResearch;
-      leadConfig.web_search = leadWebSearch;
-      leadConfig.research_mode = leadResearchMode;
-      leadConfig.mode = "";
-      leadConfig.mode_id = "";
-    } else if (selectedLead === "claude") {
-      leadConfig.model = leadModel || "claude-sonnet-5.5";
-      leadConfig.thinking = leadThinkingLevel || "medium";
-      leadConfig.mode = "";
-    } else if (selectedLead === "deepseek") {
-      leadConfig.deep_thinking = leadDeepThinking;
-      leadConfig.web_search = leadWebSearch;
-      leadConfig.model = "";
-      leadConfig.model_id = "";
-      leadConfig.thinking = "";
-      leadConfig.thinking_level_id = "";
-      leadConfig.mode = "";
-      leadConfig.mode_id = "";
-    } else if (selectedLead === "chatgpt") {
-      leadConfig.web_search = leadWebSearch;
-      leadConfig.deep_research = leadDeepResearch;
-      leadConfig.deep_thinking = leadDeepThinking;
-      leadConfig.model = "";
-      leadConfig.model_id = "";
-      leadConfig.thinking = "";
-      leadConfig.thinking_level_id = "";
-      leadConfig.mode = "";
-      leadConfig.mode_id = "";
-    } else if (selectedLead === "perplexity") {
-      leadConfig.model = "auto";
-      leadConfig.model_id = "auto";
-      leadConfig.thinking = false;
-      leadConfig.deep_thinking = false;
-      leadConfig.web_search = true;
-      leadConfig.mode = "";
-      leadConfig.mode_id = "";
-    } else if (selectedLead === "kimi") {
-      leadConfig.model = leadModel || (leadDeepResearch ? "k3" : "instant");
-      leadConfig.model_id = leadModel || (leadDeepResearch ? "k3" : "instant");
-      leadConfig.thinking_level_id = leadThinkingLevel || "high";
-      leadConfig.thinking = leadThinkingLevel || "high";
-      leadConfig.deep_research = leadDeepResearch;
-      leadConfig.mode = "";
-      leadConfig.mode_id = "";
-    } else if (selectedLead === "grok") {
-      leadConfig.model = "";
-      leadConfig.model_id = "";
-      leadConfig.thinking = "";
-      leadConfig.thinking_level_id = "";
-      leadConfig.mode = "";
-      leadConfig.mode_id = "";
-    } else if (selectedLead === "minimax") {
-      leadConfig.model = leadModel || "m3";
-      leadConfig.model_id = leadModel || "m3";
-      leadConfig.deep_research = leadDeepResearch;
-    } else if (selectedLead === "meta") {
-      leadConfig.model = "";
-      leadConfig.model_id = "";
-      leadConfig.thinking = leadThinkingLevel === "thinking" ? "thinking" : "instant";
-      leadConfig.thinking_level_id = leadThinkingLevel === "thinking" ? "thinking" : "instant";
-      leadConfig.deep_thinking = leadThinkingLevel === "thinking";
-      leadConfig.deep_research = false;
-      leadConfig.mode = "";
-      leadConfig.mode_id = "";
-    }
+    const leadResolved = resolveSubProviderLiveConfig(
+      selectedLead,
+      {
+        ...selectionsMap,
+        [selectedLead]: {
+          ...selectionsMap[selectedLead],
+          model_id: leadModel,
+          thinking_level_id: leadThinkingLevel,
+          mode_id: leadMode,
+          deep_research: leadDeepResearch,
+          deep_thinking: leadDeepThinking,
+          web_search: leadWebSearch,
+          research_mode: leadResearchMode,
+        },
+      },
+      capabilitiesMap
+    );
 
-    // Build real DOM configurations for all delegated sub-providers
     const subProviderConfigs: Record<string, any> = {};
     const subProviderCaps: Record<string, any> = {};
     selectedDelegatedProviders.forEach((pid) => {
@@ -1476,15 +415,28 @@ export function AgentConfigScreen({
     onStartAgentResearch({
       query: query.trim(),
       orchestrator_provider: selectedOrchestrator,
-      orchestrator_config: orchConfig,
+      orchestrator_config: {
+        ...orchResolved.configObj,
+        model: orchModel,
+        thinking: orchThinking,
+        mode: orchMode,
+      },
       delegated_providers: selectedDelegatedProviders,
       lead_provider: selectedLead,
-      lead_config: leadConfig,
+      lead_config: {
+        ...leadResolved.configObj,
+        model: leadModel,
+        thinking: leadThinking,
+        mode: leadMode,
+      },
       tone: selectedTone,
       provider_configs: subProviderConfigs,
       provider_capabilities: subProviderCaps,
     });
   };
+
+  const orchProviderObj = availableProviders.find((p) => p.id === selectedOrchestrator) || availableProviders[0];
+  const leadProviderObj = availableProviders.find((p) => p.id === selectedLead) || availableProviders[0];
 
   return (
     <div className="agent-config-overlay">
@@ -1514,1033 +466,85 @@ export function AgentConfigScreen({
 
         <form onSubmit={handleSubmit} className="agent-config-form">
           {/* Section 1: Research Topic Input */}
-          <div className="agent-section">
-            <label className="agent-section-label">
-              <span className="agent-section-step">1</span>
-              <span>Chủ đề / Đề tài Nghiên cứu (Research Topic)</span>
-            </label>
-            <textarea
-              className="agent-topic-input"
-              rows={3}
-              placeholder="Nhập câu hỏi hoặc chủ đề phức tạp cần điều phối đa tác nhân... (VD: Ứng dụng của Deep Learning trong đời sống và y học)"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              required
-            />
-            <div className="agent-suggestions-row">
-              <span style={{ fontSize: 11.5, color: "var(--text-muted)", alignSelf: "center", marginRight: 4 }}>
-                Gợi ý:
-              </span>
-              {SUGGESTED_AGENT_TOPICS.map((topic, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  className="agent-suggestion-pill"
-                  onClick={() => setQuery(topic)}
-                >
-                  {topic.length > 45 ? topic.slice(0, 45) + "..." : topic}
-                </button>
-              ))}
-            </div>
-          </div>
+          <AgentTopicSection query={query} setQuery={setQuery} />
 
-          {/* Section 2: Orchestrator Provider */}
+          {/* Section 2: Orchestrator Provider Selection & Fine-Tuning */}
           <div className="agent-section">
             <div className="agent-section-header-row">
               <label className="agent-section-label">
                 <span className="agent-section-step">2</span>
-                <span>Chọn Orchestrator Provider (Phân rã nhiệm vụ & Lập kế hoạch)</span>
+                <span>Chọn Orchestrator (Tác nhân Điều phối phân rã bài toán)</span>
               </label>
-              <span className="agent-role-pill">Phân tích & Tách nhánh</span>
+              <span className="agent-role-pill orch">Lập kế hoạch & Phân tách</span>
             </div>
             <p className="agent-section-desc">
-              Tác nhân này chịu trách nhiệm phân tích chủ đề, bóc tách thành các nhiệm vụ con và gán cho các chatbot phù hợp nhất kèm cấu hình Thinking.
+              Tác nhân chủ trì tiếp nhận đề tài của bạn, phân tích toàn diện và chia nhỏ thành các nhiệm vụ con (sub-topics) để giao cho các AI khác.
             </p>
 
-            <div className="agent-providers-grid">
-              {availableProviders.map((prov) => {
-                const isSelected = selectedOrchestrator === prov.id;
-                const isLive = capabilitiesMap[prov.id]?.is_live_dom;
-                return (
-                  <div
-                    key={`orch-${prov.id}`}
-                    className={`agent-provider-card ${isSelected ? "selected" : ""}`}
-                    onClick={() => setSelectedOrchestrator(prov.id)}
-                  >
-                    <div className="agent-provider-card-header">
-                      <div
-                        className="agent-provider-avatar"
-                        style={{ background: prov.avatarBg }}
-                      >
-                        <ModelBadgeLogo providerId={prov.id} size={15} />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                          <span className="agent-provider-name" title={prov.name}>{prov.name}</span>
-                          {isLive && (
-                            <span className="agent-card-mini-badge" title="Đã đồng bộ trực tiếp từ DOM">LIVE</span>
-                          )}
-                        </div>
-                        <div className="agent-provider-model" title={prov.modelName}>{prov.modelName}</div>
-                      </div>
-                      <input
-                        type="radio"
-                        name="orchestrator"
-                        checked={isSelected}
-                        onChange={() => setSelectedOrchestrator(prov.id)}
-                        className="agent-radio"
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <ProviderGridPicker
+              providers={availableProviders}
+              selectedProviderId={selectedOrchestrator}
+              onSelectProvider={setSelectedOrchestrator}
+              capabilitiesMap={capabilitiesMap}
+              nameRadioGroup="orchestrator_radio"
+              selectedCardClass="selected"
+            />
 
-            {/* Fine-tune config for selected orchestrator with DOM Resync */}
-            <div className="agent-provider-finetune">
-              <div className="agent-finetune-header">
-                <div className="agent-finetune-title">
-                  <BrainIcon size={14} color="var(--brand-blue)" />
-                  <span>Cấu hình Orchestrator (<strong>{orchProviderObj?.name || selectedOrchestrator.toUpperCase()}</strong>):</span>
-                  {orchCaps?.is_live_dom ? (
-                    <span className="agent-dom-badge live" title="Đã đồng bộ trực tiếp từ DOM của trình duyệt">
-                      LIVE DOM
-                    </span>
-                  ) : (
-                    <span className="agent-dom-badge cached" title="Cấu hình bộ đệm / mặc định. Bấm 'Đồng bộ DOM' để quét trực tiếp từ trình duyệt">
-                      CACHED
-                    </span>
-                  )}
-                  {orchCaps?.synced_at && (
-                    <span className="agent-synced-time">
-                      (Cập nhật: {formatSyncTime(orchCaps.synced_at)})
-                    </span>
-                  )}
-                </div>
-
-                {onSyncProvider && (
-                  <button
-                    type="button"
-                    className="agent-resync-btn"
-                    onClick={handleSyncOrchestrator}
-                    disabled={isSyncingOrch || loadingProvider === selectedOrchestrator}
-                    title={`Quét lại DOM của ${orchProviderObj?.name || selectedOrchestrator} để lấy cấu hình mới nhất`}
-                  >
-                    <RefreshIcon
-                      size={12}
-                      className={isSyncingOrch || loadingProvider === selectedOrchestrator ? "spin" : ""}
-                    />
-                    <span>
-                      {isSyncingOrch || loadingProvider === selectedOrchestrator
-                        ? "Đang quét DOM..."
-                        : "Đồng bộ DOM"}
-                    </span>
-                  </button>
-                )}
-              </div>
-
-              {orchSyncMessage && (
-                <div className={`agent-sync-feedback ${orchSyncMessage.startsWith("Lỗi") ? "error" : "success"}`}>
-                  {orchSyncMessage}
-                </div>
-              )}
-
-              <div className="agent-finetune-options">
-                {selectedOrchestrator === "deepseek" ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", width: "100%" }}>
-                    {/* DeepThink (R1) Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextVal = !orchDeepThinking;
-                        setOrchDeepThinking(nextVal);
-                        onUpdateSelection?.(selectedOrchestrator, { deep_thinking: nextVal });
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: "6px 12px",
-                        borderRadius: "var(--radius-sm, 6px)",
-                        border: `1.5px solid ${orchDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--border-default, #cbd5e1)"}`,
-                        backgroundColor: orchDeepThinking ? "var(--brand-blue-light, #eff6ff)" : "#ffffff",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: orchDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--text-secondary, #475569)",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                      }}
-                      title="Bật/Tắt mô hình suy luận sâu DeepSeek-R1 (Chain of Thought)"
-                    >
-                      <BrainIcon size={14} color={orchDeepThinking ? "var(--brand-blue, #2563eb)" : "#64748b"} />
-                      <span>DeepThink (R1)</span>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          padding: "1px 6px",
-                          borderRadius: 10,
-                          backgroundColor: orchDeepThinking ? "var(--brand-blue, #2563eb)" : "#e2e8f0",
-                          color: orchDeepThinking ? "#ffffff" : "#64748b",
-                        }}
-                      >
-                        {orchDeepThinking ? "BẬT" : "TẮT"}
-                      </span>
-                    </button>
-
-                    {/* Web Search Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextVal = !orchWebSearch;
-                        setOrchWebSearch(nextVal);
-                        onUpdateSelection?.(selectedOrchestrator, { web_search: nextVal });
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: "6px 12px",
-                        borderRadius: "var(--radius-sm, 6px)",
-                        border: `1.5px solid ${orchWebSearch ? "#059669" : "var(--border-default, #cbd5e1)"}`,
-                        backgroundColor: orchWebSearch ? "#ecfdf5" : "#ffffff",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: orchWebSearch ? "#059669" : "var(--text-secondary, #475569)",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                      }}
-                      title="Bật/Tắt tính năng tìm kiếm Web thời gian thực của DeepSeek"
-                    >
-                      <SearchIcon size={14} color={orchWebSearch ? "#059669" : "#64748b"} />
-                      <span>Tìm kiếm Web</span>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          padding: "1px 6px",
-                          borderRadius: 10,
-                          backgroundColor: orchWebSearch ? "#059669" : "#e2e8f0",
-                          color: orchWebSearch ? "#ffffff" : "#64748b",
-                        }}
-                      >
-                        {orchWebSearch ? "BẬT" : "TẮT"}
-                      </span>
-                    </button>
-                  </div>
-                ) : selectedOrchestrator === "chatgpt" ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", width: "100%" }}>
-                    {/* Web Search Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextVal = !orchWebSearch;
-                        setOrchWebSearch(nextVal);
-                        onUpdateSelection?.(selectedOrchestrator, { web_search: nextVal });
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: "6px 12px",
-                        borderRadius: "var(--radius-sm, 6px)",
-                        border: `1.5px solid ${orchWebSearch ? "#059669" : "var(--border-default, #cbd5e1)"}`,
-                        backgroundColor: orchWebSearch ? "#ecfdf5" : "#ffffff",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: orchWebSearch ? "#059669" : "var(--text-secondary, #475569)",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                      }}
-                      title="Bật/Tắt tìm kiếm Web thời gian thực của ChatGPT"
-                    >
-                      <SearchIcon size={14} color={orchWebSearch ? "#059669" : "#64748b"} />
-                      <span>Web Search</span>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          padding: "1px 6px",
-                          borderRadius: 10,
-                          backgroundColor: orchWebSearch ? "#059669" : "#e2e8f0",
-                          color: orchWebSearch ? "#ffffff" : "#64748b",
-                        }}
-                      >
-                        {orchWebSearch ? "BẬT" : "TẮT"}
-                      </span>
-                    </button>
-
-                    {/* Deep Research Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextVal = !orchDeepResearch;
-                        setOrchDeepResearch(nextVal);
-                        onUpdateSelection?.(selectedOrchestrator, { deep_research: nextVal });
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: "6px 12px",
-                        borderRadius: "var(--radius-sm, 6px)",
-                        border: `1.5px solid ${orchDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
-                        backgroundColor: orchDeepResearch ? "#f5f3ff" : "#ffffff",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: orchDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                      }}
-                      title="Bật/Tắt chế độ Deep Research của ChatGPT"
-                    >
-                      <SparklesIcon size={14} color={orchDeepResearch ? "#7c3aed" : "#64748b"} />
-                      <span>Deep Research</span>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          padding: "1px 6px",
-                          borderRadius: 10,
-                          backgroundColor: orchDeepResearch ? "#7c3aed" : "#e2e8f0",
-                          color: orchDeepResearch ? "#ffffff" : "#64748b",
-                        }}
-                      >
-                        {orchDeepResearch ? "BẬT" : "TẮT"}
-                      </span>
-                    </button>
-
-                    {/* Thinking Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextVal = !orchDeepThinking;
-                        setOrchDeepThinking(nextVal);
-                        onUpdateSelection?.(selectedOrchestrator, { deep_thinking: nextVal });
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: "6px 12px",
-                        borderRadius: "var(--radius-sm, 6px)",
-                        border: `1.5px solid ${orchDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--border-default, #cbd5e1)"}`,
-                        backgroundColor: orchDeepThinking ? "var(--brand-blue-light, #eff6ff)" : "#ffffff",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: orchDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--text-secondary, #475569)",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                      }}
-                      title="Bật/Tắt chế độ Thinking của ChatGPT"
-                    >
-                      <BrainIcon size={14} color={orchDeepThinking ? "var(--brand-blue, #2563eb)" : "#64748b"} />
-                      <span>Thinking</span>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          padding: "1px 6px",
-                          borderRadius: 10,
-                          backgroundColor: orchDeepThinking ? "var(--brand-blue, #2563eb)" : "#e2e8f0",
-                          color: orchDeepThinking ? "#ffffff" : "#64748b",
-                        }}
-                      >
-                        {orchDeepThinking ? "BẬT" : "TẮT"}
-                      </span>
-                    </button>
-                  </div>
-                ) : selectedOrchestrator === "meta" ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", width: "100%" }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextThinking = orchThinkingLevel === "thinking" ? "instant" : "thinking";
-                        setOrchThinkingLevel(nextThinking);
-                        setOrchThinking(nextThinking === "thinking");
-                        setOrchDeepThinking(nextThinking === "thinking");
-                        onUpdateSelection?.(selectedOrchestrator, {
-                          thinking_level_id: nextThinking,
-                          deep_thinking: nextThinking === "thinking",
-                        });
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: "6px 14px",
-                        borderRadius: "var(--radius-sm, 6px)",
-                        border: `1.5px solid ${orchThinkingLevel === "thinking" ? "var(--brand-blue, #2563eb)" : "var(--border-default, #cbd5e1)"}`,
-                        backgroundColor: orchThinkingLevel === "thinking" ? "var(--brand-blue-light, #eff6ff)" : "#ffffff",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: orchThinkingLevel === "thinking" ? "var(--brand-blue, #2563eb)" : "var(--text-secondary, #475569)",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                      }}
-                      title="Bật/Tắt chế độ Thinking của Meta AI (Thinking vs Instant)"
-                    >
-                      <BrainIcon size={14} color={orchThinkingLevel === "thinking" ? "var(--brand-blue, #2563eb)" : "#64748b"} />
-                      <span>Thinking Mode: <strong>{orchThinkingLevel === "thinking" ? "Thinking" : "Instant"}</strong></span>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          padding: "1px 6px",
-                          borderRadius: 10,
-                          backgroundColor: orchThinkingLevel === "thinking" ? "var(--brand-blue, #2563eb)" : "#e2e8f0",
-                          color: orchThinkingLevel === "thinking" ? "#ffffff" : "#64748b",
-                        }}
-                      >
-                        {orchThinkingLevel === "thinking" ? "THINKING" : "INSTANT"}
-                      </span>
-                    </button>
-                    <span style={{ fontSize: 12, color: "var(--text-muted, #64748b)", fontStyle: "italic" }}>
-                      (Meta AI DOM: Toggle trực tiếp giữa Thinking và Instant, không có dropdown chọn model)
-                    </span>
-                  </div>
-                ) : (
-                  <>
-                    {/* 1. Model Selector */}
-                    {orchModels.length > 0 && (
-                      <label className="agent-option-inline">
-                        <span>Mô hình:</span>
-                        <select
-                          value={orchModel}
-                          onChange={(e) => {
-                            const targetM = orchModels.find((m) => m.id === e.target.value);
-                            if (targetM?.disabled) return;
-                            const val = e.target.value;
-                            setOrchModel(val);
-                            onUpdateSelection?.(selectedOrchestrator, { model_id: val });
-                          }}
-                          className="agent-select"
-                        >
-                          {orchModels.map((m) => (
-                            <option key={m.id} value={m.id} disabled={m.disabled}>
-                              {m.label} {m.disabled ? "— [Upgrade]" : m.badge ? `[${m.badge}]` : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
-
-                    {/* 2. Reasoning Effort or Thinking Toggle */}
-                    {orchThinkingLevels.length > 0 ? (
-                      <label className="agent-option-inline">
-                        <span>Reasoning Effort:</span>
-                        <select
-                          disabled={selectedOrchestrator === "qwen" && orchDeepResearch}
-                          value={selectedOrchestrator === "qwen" && orchDeepResearch ? "auto" : orchThinkingLevel}
-                          onChange={(e) => {
-                            if (selectedOrchestrator === "qwen" && orchDeepResearch) return;
-                            const val = e.target.value;
-                            setOrchThinkingLevel(val);
-                            onUpdateSelection?.(selectedOrchestrator, { thinking_level_id: val });
-                          }}
-                          className="agent-select"
-                          style={selectedOrchestrator === "qwen" && orchDeepResearch ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
-                        >
-                          {selectedOrchestrator === "qwen" && orchDeepResearch ? (
-                            <option value="auto">Auto</option>
-                          ) : (
-                            orchThinkingLevels.map((lvl) => (
-                              <option key={lvl.id} value={lvl.id}>
-                                {lvl.label} {lvl.badge ? `[${lvl.badge}]` : ""}
-                              </option>
-                            ))
-                          )}
-                        </select>
-                      </label>
-                    ) : selectedOrchestrator === "copilot" || selectedOrchestrator === "chatgpt" || selectedOrchestrator === "grok" ? (
-                      selectedOrchestrator === "grok" ? (
-                        <span style={{ fontSize: 12, color: "var(--text-muted, #64748b)", fontStyle: "italic" }}>
-                          Tài khoản miễn phí — sử dụng cấu hình mặc định từ xAI Grok.
-                        </span>
-                      ) : null
-                    ) : selectedOrchestrator === "perplexity" ? (
-                      <button
-                        type="button"
-                        disabled
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-sm, 6px)",
-                          border: "1.5px solid var(--border-default, #cbd5e1)",
-                          backgroundColor: "#f8fafc",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: "var(--text-muted, #94a3b8)",
-                          cursor: "not-allowed",
-                          opacity: 0.7,
-                        }}
-                        title="Tính năng Thinking bị khóa trên tài khoản Perplexity miễn phí"
-                      >
-                        <BrainIcon size={14} color="#94a3b8" />
-                        <span>Thinking</span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: "1px 6px",
-                            borderRadius: 10,
-                            backgroundColor: "#e2e8f0",
-                            color: "#94a3b8",
-                          }}
-                        >
-                          TẮT (KHÓA)
-                        </span>
-                      </button>
-                    ) : (
-                      <label className="agent-checkbox-inline">
-                        <input
-                          type="checkbox"
-                          checked={orchThinking}
-                          onChange={(e) => setOrchThinking(e.target.checked)}
-                        />
-                        <span>Kích hoạt Thinking / Deep Reasoning Mode</span>
-                      </label>
-                    )}
-
-                    {/* Kimi Deep Research Toggle */}
-                    {selectedOrchestrator === "kimi" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextVal = !orchDeepResearch;
-                          setOrchDeepResearch(nextVal);
-                          if (nextVal && (orchModel === "instant" || !orchModel || orchModel === "default")) {
-                            setOrchModel("k3");
-                            onUpdateSelection?.(selectedOrchestrator, { deep_research: nextVal, model_id: "k3" });
-                          } else {
-                            onUpdateSelection?.(selectedOrchestrator, { deep_research: nextVal });
-                          }
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-sm, 6px)",
-                          border: `1.5px solid ${orchDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
-                          backgroundColor: orchDeepResearch ? "#f5f3ff" : "#ffffff",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: orchDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                        title="Bật/Tắt chế độ Deep Research của Moonshot Kimi"
-                      >
-                        <SparklesIcon size={14} color={orchDeepResearch ? "#7c3aed" : "#64748b"} />
-                        <span>Deep Research</span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: "1px 6px",
-                            borderRadius: 10,
-                            backgroundColor: orchDeepResearch ? "#7c3aed" : "#e2e8f0",
-                            color: orchDeepResearch ? "#ffffff" : "#64748b",
-                          }}
-                        >
-                          {orchDeepResearch ? "BẬT" : "TẮT"}
-                        </span>
-                      </button>
-                    )}
-
-                    {/* Qwen Web Search Toggle */}
-                    {selectedOrchestrator === "qwen" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextVal = !orchWebSearch;
-                          setOrchWebSearch(nextVal);
-                          onUpdateSelection?.(selectedOrchestrator, { web_search: nextVal });
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-sm, 6px)",
-                          border: `1.5px solid ${orchWebSearch ? "#059669" : "var(--border-default, #cbd5e1)"}`,
-                          backgroundColor: orchWebSearch ? "#ecfdf5" : "#ffffff",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: orchWebSearch ? "#059669" : "var(--text-secondary, #475569)",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                        title="Bật/Tắt tính năng tìm kiếm Web trên Qwen (+ Web search)"
-                      >
-                        <SearchIcon size={14} color={orchWebSearch ? "#059669" : "#64748b"} />
-                        <span>Web Search</span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: "1px 6px",
-                            borderRadius: 10,
-                            backgroundColor: orchWebSearch ? "#059669" : "#e2e8f0",
-                            color: orchWebSearch ? "#ffffff" : "#64748b",
-                          }}
-                        >
-                          {orchWebSearch ? "BẬT" : "TẮT"}
-                        </span>
-                      </button>
-                    )}
-
-                    {/* Qwen Deep Research Toggle */}
-                    {selectedOrchestrator === "qwen" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextVal = !orchDeepResearch;
-                          setOrchDeepResearch(nextVal);
-                          const updates: Partial<ProviderSelectionConfig> = { deep_research: nextVal };
-                          if (nextVal) {
-                            setOrchThinkingLevel("auto");
-                            updates.thinking_level_id = "auto";
-                          }
-                          onUpdateSelection?.(selectedOrchestrator, updates);
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-sm, 6px)",
-                          border: `1.5px solid ${orchDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
-                          backgroundColor: orchDeepResearch ? "#f5f3ff" : "#ffffff",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: orchDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                        title="Bật/Tắt chế độ Deep Research của Qwen (+ Deep Research)"
-                      >
-                        <SparklesIcon size={14} color={orchDeepResearch ? "#7c3aed" : "#64748b"} />
-                        <span>Deep Research</span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: "1px 6px",
-                            borderRadius: 10,
-                            backgroundColor: orchDeepResearch ? "#7c3aed" : "#e2e8f0",
-                            color: orchDeepResearch ? "#ffffff" : "#64748b",
-                          }}
-                        >
-                          {orchDeepResearch ? "BẬT" : "TẮT"}
-                        </span>
-                      </button>
-                    )}
-
-                    {/* Qwen Research Mode Toggle (when Deep Research is ON) */}
-                    {selectedOrchestrator === "qwen" && orchDeepResearch && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextMode = orchResearchMode === "advanced" ? "normal" : "advanced";
-                          setOrchResearchMode(nextMode);
-                          onUpdateSelection?.(selectedOrchestrator, { research_mode: nextMode });
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-sm, 6px)",
-                          border: `1.5px solid ${orchResearchMode === "advanced" ? "#9333ea" : "var(--border-default, #cbd5e1)"}`,
-                          backgroundColor: orchResearchMode === "advanced" ? "#f3e8ff" : "#ffffff",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: orchResearchMode === "advanced" ? "#9333ea" : "var(--text-secondary, #475569)",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                        title={orchResearchMode === "advanced"
-                          ? "Advanced - Devoting extra time to a deeper analysis"
-                          : "Normal - Fast, reliable responses for quick tasks"}
-                      >
-                        <SparklesIcon size={14} color={orchResearchMode === "advanced" ? "#9333ea" : "#64748b"} />
-                        <span>{orchResearchMode === "advanced" ? "Advanced" : "Normal"}</span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: "1px 6px",
-                            borderRadius: 10,
-                            backgroundColor: orchResearchMode === "advanced" ? "#9333ea" : "#e2e8f0",
-                            color: orchResearchMode === "advanced" ? "#ffffff" : "#64748b",
-                          }}
-                        >
-                          {orchResearchMode === "advanced" ? "BẬT" : "TẮT"}
-                        </span>
-                      </button>
-                    )}
-
-                    {/* Gemini Deep Research Toggle */}
-                    {selectedOrchestrator === "gemini" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextVal = !orchDeepResearch;
-                          setOrchDeepResearch(nextVal);
-                          onUpdateSelection?.(selectedOrchestrator, { deep_research: nextVal });
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-sm, 6px)",
-                          border: `1.5px solid ${orchDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
-                          backgroundColor: orchDeepResearch ? "#f5f3ff" : "#ffffff",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: orchDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                        title="Bật/Tắt tính năng Deep Research của Gemini (+ menu)"
-                      >
-                        <SparklesIcon size={14} color={orchDeepResearch ? "#7c3aed" : "#64748b"} />
-                        <span>Deep Research</span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: "1px 6px",
-                            borderRadius: 10,
-                            backgroundColor: orchDeepResearch ? "#7c3aed" : "#e2e8f0",
-                            color: orchDeepResearch ? "#ffffff" : "#64748b",
-                          }}
-                        >
-                          {orchDeepResearch ? "BẬT" : "TẮT"}
-                        </span>
-                      </button>
-                    )}
-
-                    {/* Mistral Deep Research Toggle */}
-                    {selectedOrchestrator === "mistral" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextVal = !orchDeepResearch;
-                          setOrchDeepResearch(nextVal);
-                          onUpdateSelection?.(selectedOrchestrator, { deep_research: nextVal });
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-sm, 6px)",
-                          border: `1.5px solid ${orchDeepResearch ? "#ea580c" : "var(--border-default, #cbd5e1)"}`,
-                          backgroundColor: orchDeepResearch ? "#fff7ed" : "#ffffff",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: orchDeepResearch ? "#ea580c" : "var(--text-secondary, #475569)",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                        title="Bật/Tắt chế độ Deep Research trên Mistral (tự động gõ @deep-research)"
-                      >
-                        <SparklesIcon size={14} color={orchDeepResearch ? "#ea580c" : "#64748b"} />
-                        <span>Deep Research</span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: "1px 6px",
-                            borderRadius: 10,
-                            backgroundColor: orchDeepResearch ? "#ea580c" : "#e2e8f0",
-                            color: orchDeepResearch ? "#ffffff" : "#64748b",
-                          }}
-                        >
-                          {orchDeepResearch ? "BẬT" : "TẮT"}
-                        </span>
-                      </button>
-                    )}
-
-                    {/* MiniMax Deep Research Toggle for Orchestrator */}
-                    {selectedOrchestrator === "minimax" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextVal = !orchDeepResearch;
-                          setOrchDeepResearch(nextVal);
-                          onUpdateSelection?.(selectedOrchestrator, { deep_research: nextVal });
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-sm, 6px)",
-                          border: `1.5px solid ${orchDeepResearch ? "#e2167e" : "var(--border-default, #cbd5e1)"}`,
-                          backgroundColor: orchDeepResearch ? "#fdf2f8" : "#ffffff",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: orchDeepResearch ? "#e2167e" : "var(--text-secondary, #475569)",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                        title="Bật/Tắt chế độ Deep Research trên MiniMax (+ button -> Skills -> deep-research)"
-                      >
-                        <SparklesIcon size={14} color={orchDeepResearch ? "#e2167e" : "#64748b"} />
-                        <span>Deep Research</span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: "1px 6px",
-                            borderRadius: 10,
-                            backgroundColor: orchDeepResearch ? "#e2167e" : "#e2e8f0",
-                            color: orchDeepResearch ? "#ffffff" : "#64748b",
-                          }}
-                        >
-                          {orchDeepResearch ? "BẬT" : "TẮT"}
-                        </span>
-                      </button>
-                    )}
-
-                    {/* 3. Mode Selector */}
-                    {orchModes.length > 0 && (
-                      <label className="agent-option-inline">
-                        <span>Chế độ (Mode):</span>
-                        <select
-                          value={orchMode}
-                          onChange={(e) => {
-                            setOrchMode(e.target.value);
-                            onUpdateSelection?.(selectedOrchestrator, { mode_id: e.target.value });
-                          }}
-                          className="agent-select"
-                        >
-                          {orchModes.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.label} {m.badge ? `[${m.badge}]` : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
+            <ProviderFinetuneSection
+              role="orchestrator"
+              provider={orchProviderObj}
+              caps={capabilitiesMap[selectedOrchestrator]}
+              model={orchModel}
+              setModel={setOrchModel}
+              thinkingLevel={orchThinkingLevel}
+              setThinkingLevel={setOrchThinkingLevel}
+              thinking={orchThinking}
+              setThinking={setOrchThinking}
+              deepThinking={orchDeepThinking}
+              setDeepThinking={setOrchDeepThinking}
+              webSearch={orchWebSearch}
+              setWebSearch={setOrchWebSearch}
+              deepResearch={orchDeepResearch}
+              setDeepResearch={setOrchDeepResearch}
+              researchMode={orchResearchMode}
+              setResearchMode={setOrchResearchMode}
+              mode={orchMode}
+              setMode={setOrchMode}
+              onUpdateSelection={onUpdateSelection}
+              onSync={handleSyncOrchestrator}
+              isSyncing={isSyncingOrch}
+              syncMessage={orchSyncMessage}
+              loadingProvider={loadingProvider}
+            />
           </div>
 
-          {/* Section 3: Sub Providers Delegation */}
-          <div className="agent-section">
-            <div className="agent-section-header-row">
-              <label className="agent-section-label">
-                <span className="agent-section-step">3</span>
-                <span>Chọn Sub-Providers được phép giao việc (Delegated Sub-Providers)</span>
-              </label>
-              <span className="agent-role-pill sub">Ủy quyền & Phân bổ nhánh</span>
-            </div>
-            <p className="agent-section-desc">
-              Chỉ các AI provider được tích chọn dưới đây mới được phép điều phối thực thi các nhánh nghiên cứu con. Orchestrator sẽ lập kế hoạch và phân rã bài toán dựa trên danh sách này.
-            </p>
+          {/* Section 3: Sub Providers Delegation & Batch Sync */}
+          <SubProvidersDelegationSection
+            availableProviders={availableProviders}
+            selectedDelegatedProviders={selectedDelegatedProviders}
+            toggleDelegatedProvider={toggleDelegatedProvider}
+            onSelectTopThinking={handleSelectTopThinkingDelegated}
+            onSelectAll={handleSelectAllDelegated}
+            onDeselectAll={handleDeselectAllDelegated}
+            capabilitiesMap={capabilitiesMap}
+            selectionsMap={selectionsMap}
+            onSyncProvider={onSyncProvider}
+            isSyncingAllSub={isSyncingAllSub}
+            onSyncAllSub={handleSyncAllSelectedSubProviders}
+            subSyncMessage={subSyncMessage}
+          />
 
-            {/* Quick Actions Toolbar */}
-            <div className="agent-subproviders-toolbar">
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)" }}>
-                  Trạng thái chọn:
-                </span>
-                <span
-                  className={`agent-counter-badge ${selectedDelegatedProviders.length === 0 ? "empty" : ""}`}
-                >
-                  {selectedDelegatedProviders.length} / {availableProviders.length} providers
-                </span>
-              </div>
-              <div className="agent-subproviders-actions">
-                <button
-                  type="button"
-                  className="agent-mini-action-btn primary"
-                  onClick={handleSelectTopThinkingDelegated}
-                  title="Chọn các mô hình suy luận chuyên sâu hàng đầu"
-                >
-                  ⚡ Top Reasoning
-                </button>
-                <button
-                  type="button"
-                  className="agent-mini-action-btn"
-                  onClick={handleSelectAllDelegated}
-                  title="Chọn tất cả 14 providers"
-                >
-                  Chọn tất cả
-                </button>
-                <button
-                  type="button"
-                  className="agent-mini-action-btn"
-                  onClick={handleDeselectAllDelegated}
-                  title="Bỏ chọn tất cả"
-                >
-                  Bỏ chọn tất cả
-                </button>
-                {onSyncProvider && (
-                  <button
-                    type="button"
-                    className="agent-mini-action-btn"
-                    onClick={handleSyncAllSelectedSubProviders}
-                    disabled={isSyncingAllSub || selectedDelegatedProviders.length === 0}
-                    title="Đồng bộ trực tiếp DOM cho toàn bộ sub-providers được chọn"
-                  >
-                    <RefreshIcon size={12} className={isSyncingAllSub ? "spin" : ""} />
-                    <span>{isSyncingAllSub ? "Đang quét DOM..." : "Đồng bộ DOM Sub"}</span>
-                  </button>
-                )}
-              </div>
-            </div>
+          {/* Section 3.5: Live Decomposition Prompt Preview */}
+          <OrchestratorPromptPreview
+            promptText={constructedOrchestratorPrompt}
+            orchestratorProvider={orchProviderObj}
+            orchestratorModel={orchModel}
+            selectedDelegatedCount={selectedDelegatedProviders.length}
+            selectedDelegatedProviders={selectedDelegatedProviders}
+            capabilitiesMap={capabilitiesMap}
+          />
 
-            {subSyncMessage && (
-              <div
-                className={`agent-sync-feedback ${subSyncMessage.startsWith("Lỗi") ? "error" : "success"}`}
-                style={{ margin: "8px 0" }}
-              >
-                {subSyncMessage}
-              </div>
-            )}
-
-            {selectedDelegatedProviders.length === 0 && (
-              <div className="agent-delegated-warning">
-                ⚠️ Vui lòng chọn ít nhất 1 sub-provider để Orchestrator có thể giao việc.
-              </div>
-            )}
-
-            <div className="agent-providers-grid">
-              {availableProviders.map((prov) => {
-                const isSelected = selectedDelegatedProviders.includes(prov.id);
-                const isLive = Boolean(capabilitiesMap[prov.id]?.is_live_dom);
-                const liveInfo = resolveSubProviderLiveConfig(prov.id, selectionsMap, capabilitiesMap);
-                return (
-                  <div
-                    key={`delegated-${prov.id}`}
-                    className={`agent-provider-card ${isSelected ? "selected delegated-selected" : ""}`}
-                    onClick={() => toggleDelegatedProvider(prov.id)}
-                  >
-                    <div className="agent-provider-card-header">
-                      {/* Checkbox indicator */}
-                      <div className={`agent-checkbox-card-indicator ${isSelected ? "checked" : ""}`}>
-                        {isSelected ? "✓" : ""}
-                      </div>
-
-                      <div
-                        className="agent-provider-avatar"
-                        style={{ background: prov.avatarBg }}
-                      >
-                        <ModelBadgeLogo providerId={prov.id} size={15} />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                          <span className="agent-provider-name" title={prov.name}>{prov.name}</span>
-                          {isLive ? (
-                            <span className="agent-card-mini-badge live" title="Đã đồng bộ trực tiếp từ DOM">LIVE</span>
-                          ) : (
-                            <span className="agent-card-mini-badge cached" title="Cấu hình bộ đệm">CACHED</span>
-                          )}
-                        </div>
-                        <div className="agent-provider-model" title={liveInfo.activeModel || prov.modelName}>
-                          {liveInfo.activeModel || prov.modelName}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Sub-Provider Active Live DOM Feature Chips */}
-                    <div className="agent-sub-chips-row">
-                      {liveInfo.isDeepResearch && (
-                        <span className="agent-sub-chip dr" title="Deep Research đang bật">Deep Research</span>
-                      )}
-                      {liveInfo.activeThinking && (
-                        <span className="agent-sub-chip think" title={`Reasoning: ${liveInfo.activeThinking}`}>
-                          🧠 {liveInfo.activeThinking}
-                        </span>
-                      )}
-                      {liveInfo.isDeepThinking && !liveInfo.activeThinking && (
-                        <span className="agent-sub-chip think" title="Deep Thinking R1">🧠 Think</span>
-                      )}
-                      {liveInfo.isWebSearch && (
-                        <span className="agent-sub-chip web" title="Tìm kiếm Web">🌐 Web</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Live DOM-Constructed Orchestration Prompt Preview */}
-            <div className="agent-prompt-preview-section">
-              <div className="agent-prompt-preview-header">
-                <div className="agent-prompt-preview-title">
-                  <span style={{ fontSize: 16 }}>📋</span>
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <strong>Prompt Phân Rã Sub-Tasks (Live DOM Synced)</strong>
-                      <span className="agent-prompt-badge">DOM Tự Động Đồng Bộ</span>
-                    </div>
-                    <span className="agent-prompt-preview-sub">
-                      Prompt điều phối được xây dựng tự động từ cấu hình DOM thực tế của {selectedDelegatedProviders.length} Sub-Providers được chọn.
-                    </span>
-                  </div>
-                </div>
-
-                <div className="agent-prompt-preview-actions">
-                  <button
-                    type="button"
-                    className="agent-prompt-copy-btn"
-                    onClick={() => {
-                      if (typeof navigator !== "undefined" && navigator.clipboard) {
-                        navigator.clipboard.writeText(constructedOrchestratorPrompt);
-                        setIsCopiedPrompt(true);
-                        setTimeout(() => setIsCopiedPrompt(false), 2000);
-                      }
-                    }}
-                    title="Sao chép toàn bộ Prompt điều phối đã tạo"
-                  >
-                    {isCopiedPrompt ? "✓ Đã sao chép!" : "📋 Sao chép Prompt"}
-                  </button>
-
-                  <button
-                    type="button"
-                    className="agent-prompt-toggle-btn"
-                    onClick={() => setIsPromptPreviewOpen(!isPromptPreviewOpen)}
-                    title={isPromptPreviewOpen ? "Thu gọn bản xem trước" : "Mở rộng xem trước"}
-                  >
-                    {isPromptPreviewOpen ? "▲ Thu gọn" : "▼ Xem Prompt"}
-                  </button>
-                </div>
-              </div>
-
-              {isPromptPreviewOpen && (
-                <div className="agent-prompt-preview-body">
-                  <div className="agent-prompt-preview-stats">
-                    <span className="agent-stat-tag">
-                      🎯 Orchestrator: <strong>{orchProviderObj?.name || selectedOrchestrator.toUpperCase()}</strong>
-                    </span>
-                    <span className="agent-stat-tag">
-                      👥 Sub-Providers: <strong>{selectedDelegatedProviders.length} providers</strong>
-                    </span>
-                    <span className="agent-stat-tag">
-                      🌐 Cấu hình DOM: <strong>{selectedDelegatedProviders.filter((p) => capabilitiesMap[p]?.is_live_dom).length} / {selectedDelegatedProviders.length} Live DOM</strong>
-                    </span>
-                  </div>
-                  <pre className="agent-prompt-preview-code">
-                    {constructedOrchestratorPrompt}
-                  </pre>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Section 4: Lead Provider */}
+          {/* Section 4: Lead Provider Selection & Fine-Tuning */}
           <div className="agent-section">
             <div className="agent-section-header-row">
               <label className="agent-section-label">
@@ -2553,818 +557,48 @@ export function AgentConfigScreen({
               Tác nhân chủ trì tiếp nhận toàn bộ kết quả từ các chatbot vệ tinh, kiểm chứng chéo và đúc kết thành báo cáo chuyên sâu hoàn chỉnh.
             </p>
 
-            <div className="agent-providers-grid">
-              {availableProviders.map((prov) => {
-                const isSelected = selectedLead === prov.id;
-                const isLive = capabilitiesMap[prov.id]?.is_live_dom;
-                return (
-                  <div
-                    key={`lead-${prov.id}`}
-                    className={`agent-provider-card ${isSelected ? "selected lead-selected" : ""}`}
-                    onClick={() => setSelectedLead(prov.id)}
-                  >
-                    <div className="agent-provider-card-header">
-                      <div
-                        className="agent-provider-avatar"
-                        style={{ background: prov.avatarBg }}
-                      >
-                        <ModelBadgeLogo providerId={prov.id} size={15} />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                          <span className="agent-provider-name" title={prov.name}>{prov.name}</span>
-                          {isLive && (
-                            <span className="agent-card-mini-badge" title="Đã đồng bộ trực tiếp từ DOM">LIVE</span>
-                          )}
-                        </div>
-                        <div className="agent-provider-model" title={prov.modelName}>{prov.modelName}</div>
-                      </div>
-                      <input
-                        type="radio"
-                        name="lead_provider"
-                        checked={isSelected}
-                        onChange={() => setSelectedLead(prov.id)}
-                        className="agent-radio"
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <ProviderGridPicker
+              providers={availableProviders}
+              selectedProviderId={selectedLead}
+              onSelectProvider={setSelectedLead}
+              capabilitiesMap={capabilitiesMap}
+              nameRadioGroup="lead_radio"
+              selectedCardClass="selected lead-selected"
+            />
 
-            {/* Fine-tune config for selected lead with DOM Resync */}
-            <div className="agent-provider-finetune">
-              <div className="agent-finetune-header">
-                <div className="agent-finetune-title">
-                  <BrainIcon size={14} color="#10a37f" />
-                  <span>Cấu hình Lead Provider (<strong>{leadProviderObj?.name || selectedLead.toUpperCase()}</strong>):</span>
-                  {leadCaps?.is_live_dom ? (
-                    <span className="agent-dom-badge live" title="Đã đồng bộ trực tiếp từ DOM của trình duyệt">
-                      LIVE DOM
-                    </span>
-                  ) : (
-                    <span className="agent-dom-badge cached" title="Cấu hình bộ đệm / mặc định. Bấm 'Đồng bộ DOM' để quét trực tiếp từ trình duyệt">
-                      CACHED
-                    </span>
-                  )}
-                  {leadCaps?.synced_at && (
-                    <span className="agent-synced-time">
-                      (Cập nhật: {formatSyncTime(leadCaps.synced_at)})
-                    </span>
-                  )}
-                </div>
-
-                {onSyncProvider && (
-                  <button
-                    type="button"
-                    className="agent-resync-btn"
-                    onClick={handleSyncLead}
-                    disabled={isSyncingLead || loadingProvider === selectedLead}
-                    title={`Quét lại DOM của ${leadProviderObj?.name || selectedLead} để lấy cấu hình mới nhất`}
-                  >
-                    <RefreshIcon
-                      size={12}
-                      className={isSyncingLead || loadingProvider === selectedLead ? "spin" : ""}
-                    />
-                    <span>
-                      {isSyncingLead || loadingProvider === selectedLead
-                        ? "Đang quét DOM..."
-                        : "Đồng bộ DOM"}
-                    </span>
-                  </button>
-                )}
-              </div>
-
-              {leadSyncMessage && (
-                <div className={`agent-sync-feedback ${leadSyncMessage.startsWith("Lỗi") ? "error" : "success"}`}>
-                  {leadSyncMessage}
-                </div>
-              )}
-
-              <div className="agent-finetune-options">
-                {selectedLead === "deepseek" ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", width: "100%" }}>
-                    {/* DeepThink (R1) Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextVal = !leadDeepThinking;
-                        setLeadDeepThinking(nextVal);
-                        onUpdateSelection?.(selectedLead, { deep_thinking: nextVal });
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: "6px 12px",
-                        borderRadius: "var(--radius-sm, 6px)",
-                        border: `1.5px solid ${leadDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--border-default, #cbd5e1)"}`,
-                        backgroundColor: leadDeepThinking ? "var(--brand-blue-light, #eff6ff)" : "#ffffff",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: leadDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--text-secondary, #475569)",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                      }}
-                      title="Bật/Tắt mô hình suy luận sâu DeepSeek-R1 (Chain of Thought)"
-                    >
-                      <BrainIcon size={14} color={leadDeepThinking ? "var(--brand-blue, #2563eb)" : "#64748b"} />
-                      <span>DeepThink (R1)</span>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          padding: "1px 6px",
-                          borderRadius: 10,
-                          backgroundColor: leadDeepThinking ? "var(--brand-blue, #2563eb)" : "#e2e8f0",
-                          color: leadDeepThinking ? "#ffffff" : "#64748b",
-                        }}
-                      >
-                        {leadDeepThinking ? "BẬT" : "TẮT"}
-                      </span>
-                    </button>
-
-                    {/* Web Search Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextVal = !leadWebSearch;
-                        setLeadWebSearch(nextVal);
-                        onUpdateSelection?.(selectedLead, { web_search: nextVal });
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: "6px 12px",
-                        borderRadius: "var(--radius-sm, 6px)",
-                        border: `1.5px solid ${leadWebSearch ? "#059669" : "var(--border-default, #cbd5e1)"}`,
-                        backgroundColor: leadWebSearch ? "#ecfdf5" : "#ffffff",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: leadWebSearch ? "#059669" : "var(--text-secondary, #475569)",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                      }}
-                      title="Bật/Tắt tính năng tìm kiếm Web thời gian thực của DeepSeek"
-                    >
-                      <SearchIcon size={14} color={leadWebSearch ? "#059669" : "#64748b"} />
-                      <span>Tìm kiếm Web</span>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          padding: "1px 6px",
-                          borderRadius: 10,
-                          backgroundColor: leadWebSearch ? "#059669" : "#e2e8f0",
-                          color: leadWebSearch ? "#ffffff" : "#64748b",
-                        }}
-                      >
-                        {leadWebSearch ? "BẬT" : "TẮT"}
-                      </span>
-                    </button>
-                  </div>
-                ) : selectedLead === "chatgpt" ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", width: "100%" }}>
-                    {/* Web Search Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextVal = !leadWebSearch;
-                        setLeadWebSearch(nextVal);
-                        onUpdateSelection?.(selectedLead, { web_search: nextVal });
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: "6px 12px",
-                        borderRadius: "var(--radius-sm, 6px)",
-                        border: `1.5px solid ${leadWebSearch ? "#059669" : "var(--border-default, #cbd5e1)"}`,
-                        backgroundColor: leadWebSearch ? "#ecfdf5" : "#ffffff",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: leadWebSearch ? "#059669" : "var(--text-secondary, #475569)",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                      }}
-                      title="Bật/Tắt tìm kiếm Web thời gian thực của ChatGPT"
-                    >
-                      <SearchIcon size={14} color={leadWebSearch ? "#059669" : "#64748b"} />
-                      <span>Web Search</span>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          padding: "1px 6px",
-                          borderRadius: 10,
-                          backgroundColor: leadWebSearch ? "#059669" : "#e2e8f0",
-                          color: leadWebSearch ? "#ffffff" : "#64748b",
-                        }}
-                      >
-                        {leadWebSearch ? "BẬT" : "TẮT"}
-                      </span>
-                    </button>
-
-                    {/* Deep Research Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextVal = !leadDeepResearch;
-                        setLeadDeepResearch(nextVal);
-                        onUpdateSelection?.(selectedLead, { deep_research: nextVal });
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: "6px 12px",
-                        borderRadius: "var(--radius-sm, 6px)",
-                        border: `1.5px solid ${leadDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
-                        backgroundColor: leadDeepResearch ? "#f5f3ff" : "#ffffff",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: leadDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                      }}
-                      title="Bật/Tắt chế độ Deep Research của ChatGPT"
-                    >
-                      <SparklesIcon size={14} color={leadDeepResearch ? "#7c3aed" : "#64748b"} />
-                      <span>Deep Research</span>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          padding: "1px 6px",
-                          borderRadius: 10,
-                          backgroundColor: leadDeepResearch ? "#7c3aed" : "#e2e8f0",
-                          color: leadDeepResearch ? "#ffffff" : "#64748b",
-                        }}
-                      >
-                        {leadDeepResearch ? "BẬT" : "TẮT"}
-                      </span>
-                    </button>
-
-                    {/* Thinking Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextVal = !leadDeepThinking;
-                        setLeadDeepThinking(nextVal);
-                        onUpdateSelection?.(selectedLead, { deep_thinking: nextVal });
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: "6px 12px",
-                        borderRadius: "var(--radius-sm, 6px)",
-                        border: `1.5px solid ${leadDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--border-default, #cbd5e1)"}`,
-                        backgroundColor: leadDeepThinking ? "var(--brand-blue-light, #eff6ff)" : "#ffffff",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: leadDeepThinking ? "var(--brand-blue, #2563eb)" : "var(--text-secondary, #475569)",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                      }}
-                      title="Bật/Tắt chế độ Thinking của ChatGPT"
-                    >
-                      <BrainIcon size={14} color={leadDeepThinking ? "var(--brand-blue, #2563eb)" : "#64748b"} />
-                      <span>Thinking</span>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          padding: "1px 6px",
-                          borderRadius: 10,
-                          backgroundColor: leadDeepThinking ? "var(--brand-blue, #2563eb)" : "#e2e8f0",
-                          color: leadDeepThinking ? "#ffffff" : "#64748b",
-                        }}
-                      >
-                        {leadDeepThinking ? "BẬT" : "TẮT"}
-                      </span>
-                    </button>
-                  </div>
-                ) : selectedLead === "meta" ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", width: "100%" }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextThinking = leadThinkingLevel === "thinking" ? "instant" : "thinking";
-                        setLeadThinkingLevel(nextThinking);
-                        setLeadThinking(nextThinking === "thinking");
-                        setLeadDeepThinking(nextThinking === "thinking");
-                        onUpdateSelection?.(selectedLead, {
-                          thinking_level_id: nextThinking,
-                          deep_thinking: nextThinking === "thinking",
-                        });
-                      }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        padding: "6px 14px",
-                        borderRadius: "var(--radius-sm, 6px)",
-                        border: `1.5px solid ${leadThinkingLevel === "thinking" ? "var(--brand-blue, #2563eb)" : "var(--border-default, #cbd5e1)"}`,
-                        backgroundColor: leadThinkingLevel === "thinking" ? "var(--brand-blue-light, #eff6ff)" : "#ffffff",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: leadThinkingLevel === "thinking" ? "var(--brand-blue, #2563eb)" : "var(--text-secondary, #475569)",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                      }}
-                      title="Bật/Tắt chế độ Thinking của Meta AI (Thinking vs Instant)"
-                    >
-                      <BrainIcon size={14} color={leadThinkingLevel === "thinking" ? "var(--brand-blue, #2563eb)" : "#64748b"} />
-                      <span>Thinking Mode: <strong>{leadThinkingLevel === "thinking" ? "Thinking" : "Instant"}</strong></span>
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          padding: "1px 6px",
-                          borderRadius: 10,
-                          backgroundColor: leadThinkingLevel === "thinking" ? "var(--brand-blue, #2563eb)" : "#e2e8f0",
-                          color: leadThinkingLevel === "thinking" ? "#ffffff" : "#64748b",
-                        }}
-                      >
-                        {leadThinkingLevel === "thinking" ? "THINKING" : "INSTANT"}
-                      </span>
-                    </button>
-                    <span style={{ fontSize: 12, color: "var(--text-muted, #64748b)", fontStyle: "italic" }}>
-                      (Meta AI DOM: Toggle trực tiếp giữa Thinking và Instant, không có dropdown chọn model)
-                    </span>
-                  </div>
-                ) : (
-                  <>
-                    {/* 1. Model Selector */}
-                    {leadModels.length > 0 && (
-                      <label className="agent-option-inline">
-                        <span>Mô hình:</span>
-                        <select
-                          value={leadModel}
-                          onChange={(e) => {
-                            const targetM = leadModels.find((m) => m.id === e.target.value);
-                            if (targetM?.disabled) return;
-                            const val = e.target.value;
-                            setLeadModel(val);
-                            onUpdateSelection?.(selectedLead, { model_id: val });
-                          }}
-                          className="agent-select"
-                        >
-                          {leadModels.map((m) => (
-                            <option key={m.id} value={m.id} disabled={m.disabled}>
-                              {m.label} {m.disabled ? "— [Upgrade]" : m.badge ? `[${m.badge}]` : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
-
-                    {/* 2. Reasoning Effort or Thinking Toggle */}
-                    {leadThinkingLevels.length > 0 ? (
-                      <label className="agent-option-inline">
-                        <span>Reasoning Effort:</span>
-                        <select
-                          disabled={selectedLead === "qwen" && leadDeepResearch}
-                          value={selectedLead === "qwen" && leadDeepResearch ? "auto" : leadThinkingLevel}
-                          onChange={(e) => {
-                            if (selectedLead === "qwen" && leadDeepResearch) return;
-                            const val = e.target.value;
-                            setLeadThinkingLevel(val);
-                            onUpdateSelection?.(selectedLead, { thinking_level_id: val });
-                          }}
-                          className="agent-select"
-                          style={selectedLead === "qwen" && leadDeepResearch ? { opacity: 0.7, cursor: "not-allowed" } : undefined}
-                        >
-                          {selectedLead === "qwen" && leadDeepResearch ? (
-                            <option value="auto">Auto</option>
-                          ) : (
-                            leadThinkingLevels.map((lvl) => (
-                              <option key={lvl.id} value={lvl.id}>
-                                {lvl.label} {lvl.badge ? `[${lvl.badge}]` : ""}
-                              </option>
-                            ))
-                          )}
-                        </select>
-                      </label>
-                    ) : selectedLead === "copilot" || selectedLead === "chatgpt" || selectedLead === "grok" ? (
-                      selectedLead === "grok" ? (
-                        <span style={{ fontSize: 12, color: "var(--text-muted, #64748b)", fontStyle: "italic" }}>
-                          Tài khoản miễn phí — sử dụng cấu hình mặc định từ xAI Grok.
-                        </span>
-                      ) : null
-                    ) : selectedLead === "perplexity" ? (
-                      <button
-                        type="button"
-                        disabled
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-sm, 6px)",
-                          border: "1.5px solid var(--border-default, #cbd5e1)",
-                          backgroundColor: "#f8fafc",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: "var(--text-muted, #94a3b8)",
-                          cursor: "not-allowed",
-                          opacity: 0.7,
-                        }}
-                        title="Tính năng Thinking bị khóa trên tài khoản Perplexity miễn phí"
-                      >
-                        <BrainIcon size={14} color="#94a3b8" />
-                        <span>Thinking</span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: "1px 6px",
-                            borderRadius: 10,
-                            backgroundColor: "#e2e8f0",
-                            color: "#94a3b8",
-                          }}
-                        >
-                          TẮT (KHÓA)
-                        </span>
-                      </button>
-                    ) : (
-                      <label className="agent-checkbox-inline">
-                        <input
-                          type="checkbox"
-                          checked={leadThinking}
-                          onChange={(e) => setLeadThinking(e.target.checked)}
-                        />
-                        <span>Kích hoạt Suy luận sâu (Thinking / Deep Research) cho Lead Provider</span>
-                      </label>
-                    )}
-
-                    {/* Kimi Deep Research Toggle */}
-                    {selectedLead === "kimi" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextVal = !leadDeepResearch;
-                          setLeadDeepResearch(nextVal);
-                          if (nextVal && (leadModel === "instant" || !leadModel || leadModel === "default")) {
-                            setLeadModel("k3");
-                            onUpdateSelection?.(selectedLead, { deep_research: nextVal, model_id: "k3" });
-                          } else {
-                            onUpdateSelection?.(selectedLead, { deep_research: nextVal });
-                          }
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-sm, 6px)",
-                          border: `1.5px solid ${leadDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
-                          backgroundColor: leadDeepResearch ? "#f5f3ff" : "#ffffff",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: leadDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                        title="Bật/Tắt chế độ Deep Research của Moonshot Kimi"
-                      >
-                        <SparklesIcon size={14} color={leadDeepResearch ? "#7c3aed" : "#64748b"} />
-                        <span>Deep Research</span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: "1px 6px",
-                            borderRadius: 10,
-                            backgroundColor: leadDeepResearch ? "#7c3aed" : "#e2e8f0",
-                            color: leadDeepResearch ? "#ffffff" : "#64748b",
-                          }}
-                        >
-                          {leadDeepResearch ? "BẬT" : "TẮT"}
-                        </span>
-                      </button>
-                    )}
-
-                    {/* Qwen Web Search Toggle */}
-                    {selectedLead === "qwen" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextVal = !leadWebSearch;
-                          setLeadWebSearch(nextVal);
-                          onUpdateSelection?.(selectedLead, { web_search: nextVal });
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-sm, 6px)",
-                          border: `1.5px solid ${leadWebSearch ? "#059669" : "var(--border-default, #cbd5e1)"}`,
-                          backgroundColor: leadWebSearch ? "#ecfdf5" : "#ffffff",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: leadWebSearch ? "#059669" : "var(--text-secondary, #475569)",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                        title="Bật/Tắt tính năng tìm kiếm Web trên Qwen (+ Web search)"
-                      >
-                        <SearchIcon size={14} color={leadWebSearch ? "#059669" : "#64748b"} />
-                        <span>Web Search</span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: "1px 6px",
-                            borderRadius: 10,
-                            backgroundColor: leadWebSearch ? "#059669" : "#e2e8f0",
-                            color: leadWebSearch ? "#ffffff" : "#64748b",
-                          }}
-                        >
-                          {leadWebSearch ? "BẬT" : "TẮT"}
-                        </span>
-                      </button>
-                    )}
-
-                    {/* Qwen Deep Research Toggle */}
-                    {selectedLead === "qwen" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextVal = !leadDeepResearch;
-                          setLeadDeepResearch(nextVal);
-                          const updates: Partial<ProviderSelectionConfig> = { deep_research: nextVal };
-                          if (nextVal) {
-                            setLeadThinkingLevel("auto");
-                            updates.thinking_level_id = "auto";
-                          }
-                          onUpdateSelection?.(selectedLead, updates);
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-sm, 6px)",
-                          border: `1.5px solid ${leadDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
-                          backgroundColor: leadDeepResearch ? "#f5f3ff" : "#ffffff",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: leadDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                        title="Bật/Tắt chế độ Deep Research của Qwen (+ Deep Research)"
-                      >
-                        <SparklesIcon size={14} color={leadDeepResearch ? "#7c3aed" : "#64748b"} />
-                        <span>Deep Research</span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: "1px 6px",
-                            borderRadius: 10,
-                            backgroundColor: leadDeepResearch ? "#7c3aed" : "#e2e8f0",
-                            color: leadDeepResearch ? "#ffffff" : "#64748b",
-                          }}
-                        >
-                          {leadDeepResearch ? "BẬT" : "TẮT"}
-                        </span>
-                      </button>
-                    )}
-
-                    {/* Qwen Research Mode Toggle (when Deep Research is ON) */}
-                    {selectedLead === "qwen" && leadDeepResearch && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextMode = leadResearchMode === "advanced" ? "normal" : "advanced";
-                          setLeadResearchMode(nextMode);
-                          onUpdateSelection?.(selectedLead, { research_mode: nextMode });
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-sm, 6px)",
-                          border: `1.5px solid ${leadResearchMode === "advanced" ? "#9333ea" : "var(--border-default, #cbd5e1)"}`,
-                          backgroundColor: leadResearchMode === "advanced" ? "#f3e8ff" : "#ffffff",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: leadResearchMode === "advanced" ? "#9333ea" : "var(--text-secondary, #475569)",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                        title={leadResearchMode === "advanced"
-                          ? "Advanced - Devoting extra time to a deeper analysis"
-                          : "Normal - Fast, reliable responses for quick tasks"}
-                      >
-                        <SparklesIcon size={14} color={leadResearchMode === "advanced" ? "#9333ea" : "#64748b"} />
-                        <span>{leadResearchMode === "advanced" ? "Advanced" : "Normal"}</span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: "1px 6px",
-                            borderRadius: 10,
-                            backgroundColor: leadResearchMode === "advanced" ? "#9333ea" : "#e2e8f0",
-                            color: leadResearchMode === "advanced" ? "#ffffff" : "#64748b",
-                          }}
-                        >
-                          {leadResearchMode === "advanced" ? "BẬT" : "TẮT"}
-                        </span>
-                      </button>
-                    )}
-
-                    {/* Gemini Deep Research Toggle */}
-                    {selectedLead === "gemini" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextVal = !leadDeepResearch;
-                          setLeadDeepResearch(nextVal);
-                          onUpdateSelection?.(selectedLead, { deep_research: nextVal });
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-sm, 6px)",
-                          border: `1.5px solid ${leadDeepResearch ? "#7c3aed" : "var(--border-default, #cbd5e1)"}`,
-                          backgroundColor: leadDeepResearch ? "#f5f3ff" : "#ffffff",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: leadDeepResearch ? "#7c3aed" : "var(--text-secondary, #475569)",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                        title="Bật/Tắt tính năng Deep Research của Gemini (+ menu)"
-                      >
-                        <SparklesIcon size={14} color={leadDeepResearch ? "#7c3aed" : "#64748b"} />
-                        <span>Deep Research</span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: "1px 6px",
-                            borderRadius: 10,
-                            backgroundColor: leadDeepResearch ? "#7c3aed" : "#e2e8f0",
-                            color: leadDeepResearch ? "#ffffff" : "#64748b",
-                          }}
-                        >
-                          {leadDeepResearch ? "BẬT" : "TẮT"}
-                        </span>
-                      </button>
-                    )}
-
-                    {/* Mistral Deep Research Toggle for Lead */}
-                    {selectedLead === "mistral" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextVal = !leadDeepResearch;
-                          setLeadDeepResearch(nextVal);
-                          onUpdateSelection?.(selectedLead, { deep_research: nextVal });
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-sm, 6px)",
-                          border: `1.5px solid ${leadDeepResearch ? "#ea580c" : "var(--border-default, #cbd5e1)"}`,
-                          backgroundColor: leadDeepResearch ? "#fff7ed" : "#ffffff",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: leadDeepResearch ? "#ea580c" : "var(--text-secondary, #475569)",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                        title="Bật/Tắt chế độ Deep Research trên Mistral (tự động gõ @deep-research)"
-                      >
-                        <SparklesIcon size={14} color={leadDeepResearch ? "#ea580c" : "#64748b"} />
-                        <span>Deep Research</span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: "1px 6px",
-                            borderRadius: 10,
-                            backgroundColor: leadDeepResearch ? "#ea580c" : "#e2e8f0",
-                            color: leadDeepResearch ? "#ffffff" : "#64748b",
-                          }}
-                        >
-                          {leadDeepResearch ? "BẬT" : "TẮT"}
-                        </span>
-                      </button>
-                    )}
-
-                    {/* MiniMax Deep Research Toggle for Lead */}
-                    {selectedLead === "minimax" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextVal = !leadDeepResearch;
-                          setLeadDeepResearch(nextVal);
-                          onUpdateSelection?.(selectedLead, { deep_research: nextVal });
-                        }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 8,
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-sm, 6px)",
-                          border: `1.5px solid ${leadDeepResearch ? "#e2167e" : "var(--border-default, #cbd5e1)"}`,
-                          backgroundColor: leadDeepResearch ? "#fdf2f8" : "#ffffff",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: leadDeepResearch ? "#e2167e" : "var(--text-secondary, #475569)",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                        }}
-                        title="Bật/Tắt chế độ Deep Research trên MiniMax (+ button -> Skills -> deep-research)"
-                      >
-                        <SparklesIcon size={14} color={leadDeepResearch ? "#e2167e" : "#64748b"} />
-                        <span>Deep Research</span>
-                        <span
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: "1px 6px",
-                            borderRadius: 10,
-                            backgroundColor: leadDeepResearch ? "#e2167e" : "#e2e8f0",
-                            color: leadDeepResearch ? "#ffffff" : "#64748b",
-                          }}
-                        >
-                          {leadDeepResearch ? "BẬT" : "TẮT"}
-                        </span>
-                      </button>
-                    )}
-
-                    {/* 3. Mode Selector */}
-                    {leadModes.length > 0 && (
-                      <label className="agent-option-inline">
-                        <span>Chế độ (Mode):</span>
-                        <select
-                          value={leadMode}
-                          onChange={(e) => {
-                            setLeadMode(e.target.value);
-                            onUpdateSelection?.(selectedLead, { mode_id: e.target.value });
-                          }}
-                          className="agent-select"
-                        >
-                          {leadModes.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.label} {m.badge ? `[${m.badge}]` : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
+            <ProviderFinetuneSection
+              role="lead"
+              provider={leadProviderObj}
+              caps={capabilitiesMap[selectedLead]}
+              model={leadModel}
+              setModel={setLeadModel}
+              thinkingLevel={leadThinkingLevel}
+              setThinkingLevel={setLeadThinkingLevel}
+              thinking={leadThinking}
+              setThinking={setLeadThinking}
+              deepThinking={leadDeepThinking}
+              setDeepThinking={setLeadDeepThinking}
+              webSearch={leadWebSearch}
+              setWebSearch={setLeadWebSearch}
+              deepResearch={leadDeepResearch}
+              setDeepResearch={setLeadDeepResearch}
+              researchMode={leadResearchMode}
+              setResearchMode={setLeadResearchMode}
+              mode={leadMode}
+              setMode={setLeadMode}
+              onUpdateSelection={onUpdateSelection}
+              onSync={handleSyncLead}
+              isSyncing={isSyncingLead}
+              syncMessage={leadSyncMessage}
+              loadingProvider={loadingProvider}
+            />
           </div>
 
           {/* Section 5: Report Tone Selection */}
-          <div className="agent-section">
-            <div className="agent-section-header-row">
-              <label className="agent-section-label">
-                <span className="agent-section-step">5</span>
-                <span>Chọn Văn phong Báo cáo (Lead Provider Tone)</span>
-              </label>
-              <span className="agent-role-pill tone">Định hình văn phong</span>
-            </div>
-            <p className="agent-section-desc">
-              Văn phong sẽ được chuyển thành chỉ thị hệ thống chuyên sâu cho Lead Provider để điều chỉnh cách cấu trúc, lập luận và diễn đạt.
-            </p>
-
-            <div className="agent-tones-grid">
-              {TONE_PRESETS.map((tone) => {
-                const isSelected = selectedTone === tone.id;
-                return (
-                  <div
-                    key={tone.id}
-                    className={`agent-tone-card ${isSelected ? "selected" : ""}`}
-                    onClick={() => setSelectedTone(tone.id)}
-                  >
-                    <div className="agent-tone-header">
-                      <span className="agent-tone-icon">{tone.icon}</span>
-                      <span className="agent-tone-badge">{tone.badge}</span>
-                    </div>
-                    <div className="agent-tone-name">{tone.label}</div>
-                    <div className="agent-tone-desc">{tone.description}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <AgentToneSection
+            selectedTone={selectedTone}
+            setSelectedTone={setSelectedTone}
+          />
 
           {/* Footer Submit */}
           <div className="agent-config-footer">

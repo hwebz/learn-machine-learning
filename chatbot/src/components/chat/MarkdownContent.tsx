@@ -3,7 +3,6 @@
 import React, { useEffect, useRef, useMemo } from "react";
 import { marked } from "marked";
 import hljs from "highlight.js";
-import katex from "katex";
 
 interface MarkdownContentProps {
   content: string;
@@ -646,20 +645,11 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
 
     const storeMath = (tex: string, displayMode: boolean) => {
       const key = `@@KATEX_MATH_${placeholderCounter++}@@`;
-      try {
-        const cleanTex = tex.trim();
-        const rendered = katex.renderToString(cleanTex, {
-          displayMode,
-          throwOnError: false,
-        });
-
-        const wrapper = displayMode
-          ? `<div class="katex-display-block">${rendered}</div>`
-          : `<span class="katex-inline-block">${rendered}</span>`;
-        mathPlaceholders.set(key, wrapper);
-      } catch (err) {
-        mathPlaceholders.set(key, `<span class="katex-error">${tex}</span>`);
-      }
+      const cleanTex = tex.trim();
+      const wrapper = displayMode
+        ? `<div class="katex-deferred katex-display-block" data-tex="${encodeURIComponent(cleanTex)}" data-display="true"><span class="katex-loading">$$\n${cleanTex}\n$$</span></div>`
+        : `<span class="katex-deferred katex-inline-block" data-tex="${encodeURIComponent(cleanTex)}" data-display="false"><span class="katex-loading">$${cleanTex}$</span></span>`;
+      mathPlaceholders.set(key, wrapper);
       return key;
     };
 
@@ -738,36 +728,68 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
     const container = containerRef.current;
     if (!container) return;
 
-    // 1. Dynamic Mermaid rendering
-    import("mermaid").then((m) => {
-      const mermaidInstance = m.default || m;
-      mermaidInstance.initialize({
-        startOnLoad: false,
-        theme: "default",
-        securityLevel: "loose",
-        fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+    // 1. Dynamic KaTeX rendering (only when math elements exist)
+    const mathEls = container.querySelectorAll<HTMLElement>(
+      ".katex-deferred:not([data-rendered='true'])"
+    );
+    if (mathEls.length > 0) {
+      import("katex").then((m) => {
+        const katexInstance = m.default || m;
+        mathEls.forEach((el) => {
+          const rawTex = decodeURIComponent(el.getAttribute("data-tex") || "");
+          const isDisplay = el.getAttribute("data-display") === "true";
+          try {
+            const rendered = katexInstance.renderToString(rawTex, {
+              displayMode: isDisplay,
+              throwOnError: false,
+            });
+            el.innerHTML = rendered;
+            el.setAttribute("data-rendered", "true");
+          } catch (err) {
+            console.warn("Failed to render KaTeX formula:", err);
+            el.innerHTML = `<span class="katex-error">${rawTex}</span>`;
+            el.setAttribute("data-rendered", "true");
+          }
+        });
+      }).catch((err) => {
+        console.warn("Failed to load KaTeX library dynamically:", err);
       });
+    }
 
-      const diagramBodies = container.querySelectorAll<HTMLElement>(
-        ".mermaid-diagram-body:not([data-rendered='true'])"
-      );
-      diagramBodies.forEach((bodyEl, idx) => {
-        const rawCode = decodeURIComponent(bodyEl.getAttribute("data-mermaid-code") || "");
-        if (!rawCode) return;
-        const svgId = `mermaid-svg-${Date.now()}-${idx}`;
-        mermaidInstance
-          .render(svgId, rawCode)
-          .then(({ svg }: { svg: string }) => {
-            bodyEl.innerHTML = svg;
-            bodyEl.setAttribute("data-rendered", "true");
-          })
-          .catch((err: any) => {
-            console.warn("Failed to render Mermaid diagram:", err);
-            bodyEl.innerHTML = `<div class="mermaid-error"><p>Could not render diagram</p><pre><code>${rawCode}</code></pre></div>`;
-            bodyEl.setAttribute("data-rendered", "true");
-          });
+    // 2. Dynamic Mermaid rendering (only when diagram bodies exist)
+    const diagramBodies = container.querySelectorAll<HTMLElement>(
+      ".mermaid-diagram-body:not([data-rendered='true'])"
+    );
+    if (diagramBodies.length > 0) {
+      import("mermaid").then((m) => {
+        const mermaidInstance = m.default || m;
+        mermaidInstance.initialize({
+          startOnLoad: false,
+          theme: "default",
+          securityLevel: "loose",
+          fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+        });
+
+        diagramBodies.forEach((bodyEl, idx) => {
+          const rawCode = decodeURIComponent(bodyEl.getAttribute("data-mermaid-code") || "");
+          if (!rawCode) return;
+          const svgId = `mermaid-svg-${Date.now()}-${idx}`;
+          mermaidInstance
+            .render(svgId, rawCode)
+            .then(({ svg }: { svg: string }) => {
+              bodyEl.innerHTML = svg;
+              bodyEl.setAttribute("data-rendered", "true");
+            })
+            .catch((err: any) => {
+              console.warn("Failed to render Mermaid diagram:", err);
+              bodyEl.innerHTML = `<div class="mermaid-error"><p>Could not render diagram</p><pre><code>${rawCode}</code></pre></div>`;
+              bodyEl.setAttribute("data-rendered", "true");
+            });
+        });
+      }).catch((err) => {
+        console.warn("Failed to load Mermaid library dynamically:", err);
       });
-    });
+    }
 
     // 2. Interactive checklist checkboxes handler
     const handleCheckboxChange = (e: Event) => {
