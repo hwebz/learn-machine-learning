@@ -621,6 +621,10 @@ textarea {
   gap: 28px;
 }
 
+.messages-scroll-container.agent-session {
+  padding-bottom: 225px;
+}
+
 .date-divider {
   display: flex;
   align-items: center;

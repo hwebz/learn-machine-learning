@@ -531,7 +531,11 @@ export function ChatArea({
       </header>
 
       {/* Message Stream */}
-      <div ref={messagesContainerRef} className="messages-scroll-container">
+      <div
+        ref={messagesContainerRef}
+        className={`messages-scroll-container ${isAgentSession ? "agent-session" : ""}`}
+        style={{ paddingBottom: isAgentSession ? "160px" : "250px" }}
+      >
         {/* Empty State / Welcome Screen when session has no messages */}
         {session.messages.length === 0 && (
           <WelcomeScreen
