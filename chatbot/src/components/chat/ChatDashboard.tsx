@@ -84,6 +84,7 @@ export function buildAssistantMessage(
     finished_at?: string | null;
     sources?: SourceLink[];
     claims?: any[];
+    disagreements?: any[];
     provider_runs?: Record<string, any> | any[];
     provider_options?: Record<string, any>;
     steps?: StepLog[];
@@ -102,8 +103,8 @@ export function buildAssistantMessage(
   const isAgent = jobData.job_type === "agent" || Boolean(jobData.orchestrator_provider);
   const providers = jobData.providers && jobData.providers.length > 0 ? jobData.providers : DEFAULT_SELECTED_PROVIDERS;
   const authorName = isAgent
-    ? `Deep Research Orchestrator (${(jobData.orchestrator_provider || "copilot").toUpperCase()} ➜ ${(jobData.lead_provider || "chatgpt").toUpperCase()})`
-    : `AI Research Engine${providers.length ? ' (' : ''}${providers.join(", ")}${providers.length ? ')' : ''}`;
+    ? 'Deep Research Orchestrator'
+    : 'AI Research Engine';
 
   const timestamp = jobData.finished_at
     ? new Date(jobData.finished_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
@@ -123,6 +124,7 @@ export function buildAssistantMessage(
     latencySeconds: 14.5,
     sources: jobData.sources || [],
     claims: jobData.claims || [],
+    disagreements: jobData.disagreements || [],
     provider_runs: jobData.provider_runs || {},
     provider_options: jobData.provider_options || {},
     factCheckStatus: jobData.status === "completed" ? "verified" : "unverified",
@@ -403,16 +405,16 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                   prev.map((s) =>
                     s.id === jobId || s.jobId === jobId
                       ? {
-                          ...s,
-                          status: finalResult.status as any,
-                          messages: upsertAssistantMessage(s.messages, asstMsg),
-                        }
+                        ...s,
+                        status: finalResult.status as any,
+                        messages: upsertAssistantMessage(s.messages, asstMsg),
+                      }
                       : s
                   )
                 );
               }
             }
-          } catch {}
+          } catch { }
           setIsGenerating(false);
           activeJobIdRef.current = null;
           activeUnsubscribeRef.current = null;
@@ -429,12 +431,12 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                   prev.map((s) =>
                     s.id === jobId || s.jobId === jobId
                       ? {
-                          ...s,
-                          status: (finalResult.status as any) || "completed",
-                          messages: upsertAssistantMessage(s.messages, asstMsg),
-                          orchestrator_dispatch:
-                            (finalResult as any).orchestrator_dispatch || s.orchestrator_dispatch,
-                        }
+                        ...s,
+                        status: (finalResult.status as any) || "completed",
+                        messages: upsertAssistantMessage(s.messages, asstMsg),
+                        orchestrator_dispatch:
+                          (finalResult as any).orchestrator_dispatch || s.orchestrator_dispatch,
+                      }
                       : s
                   )
                 );
@@ -833,9 +835,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     const resolvedQuery =
       userMsg?.content ||
       (activeSession.title &&
-      !activeSession.title.startsWith("Phiên mới") &&
-      !activeSession.title.startsWith("session-") &&
-      !activeSession.title.startsWith("Draft")
+        !activeSession.title.startsWith("Phiên mới") &&
+        !activeSession.title.startsWith("session-") &&
+        !activeSession.title.startsWith("Draft")
         ? activeSession.title
         : "");
 
@@ -1211,7 +1213,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               id: `msg-${jobAccepted.job_id}-asst`,
               jobId: jobAccepted.job_id,
               role: "assistant",
-              authorName: `Deep Research Orchestrator (${config.orchestrator_provider.toUpperCase()} ➜ ${config.lead_provider.toUpperCase()})`,
+              authorName: `Deep Research Orchestrator`,
               timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
               content: finalReport,
               providers: [config.orchestrator_provider, config.lead_provider],
@@ -1267,7 +1269,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                 id: `msg-${jobAccepted.job_id}-asst`,
                 jobId: jobAccepted.job_id,
                 role: "assistant",
-                authorName: `Deep Research Orchestrator (${config.orchestrator_provider.toUpperCase()} ➜ ${config.lead_provider.toUpperCase()})`,
+                authorName: `Deep Research Orchestrator`,
                 timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
                 content: finalResult.report_markdown,
                 providers: [config.orchestrator_provider, config.lead_provider],
@@ -1515,7 +1517,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           id: asstMsgId,
           jobId: currentJobId || undefined,
           role: "assistant",
-          authorName: `AI Research Engine${currentProviderIds.length ? ' (' : ''}${currentProviderIds.join(", ")}${currentProviderIds.length ? ')' : ''}`,
+          authorName: `AI Research Engine`,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           content: stoppedText,
           providers: currentProviderIds,
@@ -1645,6 +1647,16 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
       // 2. Subscribe to real-time SSE progress events
       const unsub = subscribeJobEvents(jobAccepted.job_id, {
+        onStatus: (newStatus) => {
+          if (isCancelledRef.current) return;
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === jobAccepted.job_id || s.jobId === jobAccepted.job_id
+                ? { ...s, status: newStatus as any }
+                : s
+            )
+          );
+        },
         onStep: (stepLog) => {
           if (isCancelledRef.current) return;
           setActiveSteps((prev) => [...prev, stepLog]);
@@ -1668,52 +1680,109 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               }
             }
 
-            const asstMsgId = `msg-${jobAccepted.job_id}-asst`;
-            const assistantMsg: Message = {
-              id: asstMsgId,
-              jobId: jobAccepted.job_id,
-              role: "assistant",
-              authorName: `AI Research Engine${currentProviderIds.length ? ' (' : ''}${currentProviderIds.join(", ")}${currentProviderIds.length ? ')' : ''}`,
-              timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-              content: result.report_markdown || "Đã hoàn thành nghiên cứu và tổng hợp câu trả lời từ các mô hình.",
+            const asstMsg = buildAssistantMessage(jobAccepted.job_id, {
+              report_markdown: result.report_markdown,
+              status: result.status || "completed",
               providers: currentProviderIds,
-              tokens: 1540,
-              latencySeconds: 10.8,
               sources: consolidatedSources,
               claims: result.claims || [],
               disagreements: result.disagreements || [],
               provider_runs: result.provider_runs || {},
               provider_options: (result as any).provider_options || capsHook.selectionsMap,
-              factCheckStatus: "verified",
               steps: latestSteps,
-            };
+              error: result.error,
+            });
 
-            setSessions((prev) =>
-              prev.map((s) => {
-                if (s.id !== jobAccepted.job_id && s.jobId !== jobAccepted.job_id) return s;
-                return {
-                  ...s,
-                  status: "completed",
-                  messages: upsertAssistantMessage(s.messages, assistantMsg),
-                };
-              })
-            );
+            if (asstMsg) {
+              setInspectedMessage(asstMsg);
+              setSessions((prev) =>
+                prev.map((s) => {
+                  if (s.id !== jobAccepted.job_id && s.jobId !== jobAccepted.job_id) return s;
+                  return {
+                    ...s,
+                    status: (result.status as any) || "completed",
+                    messages: upsertAssistantMessage(s.messages, asstMsg),
+                  };
+                })
+              );
+            }
             return latestSteps;
           });
           activeUnsubscribeRef.current = null;
           activeJobIdRef.current = null;
           setIsGenerating(false);
         },
-        onError: (err) => {
+        onError: async (err) => {
           if (isCancelledRef.current) return;
-          console.warn("SSE stream issue, falling back to multi-model simulation:", err);
+          console.warn("SSE stream issue:", err);
+          try {
+            const finalResult = await getResearchResult(jobAccepted.job_id);
+            if (finalResult && !isActiveJobStatus(finalResult.status)) {
+              setActiveSteps((latestSteps) => {
+                const asstMsg = buildAssistantMessage(jobAccepted.job_id, {
+                  ...finalResult,
+                  providers: currentProviderIds,
+                  steps: latestSteps,
+                });
+                if (asstMsg) {
+                  setInspectedMessage(asstMsg);
+                  setSessions((prev) =>
+                    prev.map((s) =>
+                      s.id === jobAccepted.job_id || s.jobId === jobAccepted.job_id
+                        ? {
+                            ...s,
+                            status: (finalResult.status as any) || "completed",
+                            messages: upsertAssistantMessage(s.messages, asstMsg),
+                          }
+                        : s
+                    )
+                  );
+                }
+                return latestSteps;
+              });
+              activeUnsubscribeRef.current = null;
+              activeJobIdRef.current = null;
+              setIsGenerating(false);
+              return;
+            }
+          } catch { }
           handleSimulatedMultiModelResponse(content, currentProviderIds);
         },
-        onDone: () => {
+        onDone: async () => {
           if (isCancelledRef.current) return;
-          activeUnsubscribeRef.current = null;
-          activeJobIdRef.current = null;
-          setIsGenerating(false);
+          try {
+            const finalResult = await getResearchResult(jobAccepted.job_id);
+            if (finalResult) {
+              setActiveSteps((latestSteps) => {
+                const asstMsg = buildAssistantMessage(jobAccepted.job_id, {
+                  ...finalResult,
+                  providers: currentProviderIds,
+                  steps: latestSteps,
+                });
+                if (asstMsg) {
+                  setInspectedMessage(asstMsg);
+                  setSessions((prev) =>
+                    prev.map((s) =>
+                      s.id === jobAccepted.job_id || s.jobId === jobAccepted.job_id
+                        ? {
+                            ...s,
+                            status: (finalResult.status as any) || "completed",
+                            messages: upsertAssistantMessage(s.messages, asstMsg),
+                          }
+                        : s
+                    )
+                  );
+                }
+                return latestSteps;
+              });
+            }
+          } catch (e) {
+            console.warn("Could not fetch final research result in onDone:", e);
+          } finally {
+            activeUnsubscribeRef.current = null;
+            activeJobIdRef.current = null;
+            setIsGenerating(false);
+          }
         },
       });
 
@@ -1776,7 +1845,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                 id: asstMsgId,
                 jobId: targetJobId,
                 role: "assistant",
-                authorName: `AI Research Engine${(result.providers || activeSession.selectedProviders || [provider]).length ? ' (' : ''}${(result.providers || activeSession.selectedProviders || [provider]).join(", ")}${(result.providers || activeSession.selectedProviders || [provider]).length ? ')' : ''}`,
+                authorName: `AI Research Engine`,
                 timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
                 content: result.report_markdown || "Đã cập nhật câu trả lời từ các mô hình.",
                 providers: result.providers || activeSession.selectedProviders || [provider],
@@ -1810,8 +1879,38 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             console.warn("Retry SSE issue:", err);
             setIsGenerating(false);
           },
-          onDone: () => {
-            setIsGenerating(false);
+          onDone: async () => {
+            try {
+              const finalResult = await getResearchResult(targetJobId);
+              if (finalResult) {
+                setActiveSteps((latestSteps) => {
+                  const asstMsg = buildAssistantMessage(targetJobId, {
+                    ...finalResult,
+                    steps: latestSteps,
+                  });
+                  if (asstMsg) {
+                    setSessions((prev) =>
+                      prev.map((s) => {
+                        if (s.id !== targetJobId && s.jobId !== targetJobId) return s;
+                        return {
+                          ...s,
+                          status: (finalResult.status as any) || "completed",
+                          messages: upsertAssistantMessage(s.messages, asstMsg),
+                        };
+                      })
+                    );
+                    setInspectedMessage(asstMsg);
+                  }
+                  return latestSteps;
+                });
+              }
+            } catch (e) {
+              console.warn("Could not fetch final retry result in onDone:", e);
+            } finally {
+              setIsGenerating(false);
+              activeJobIdRef.current = null;
+              activeUnsubscribeRef.current = null;
+            }
           },
         });
         activeUnsubscribeRef.current = unsub;
@@ -1889,7 +1988,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       const assistantMsg: Message = {
         id: asstMsgId,
         role: "assistant",
-        authorName: `AI Research Engine${activeInfoList.length ? ' (' : ''}${activeInfoList.map((p) => p.name).join(", ")}${activeInfoList.length ? ')' : ''}`,
+        authorName: `AI Research Engine`,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         content: simulatedMarkdown,
         providers: providerIds,
@@ -1991,9 +2090,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           currentQuery={
             (inspectedMessage
               ? activeSession.messages
-                  .slice(0, activeSession.messages.indexOf(inspectedMessage))
-                  .reverse()
-                  .find((m) => m.role === "user")?.content
+                .slice(0, activeSession.messages.indexOf(inspectedMessage))
+                .reverse()
+                .find((m) => m.role === "user")?.content
               : null) ||
             activeSession.messages.filter((m) => m.role === "user").pop()?.content ||
             (activeSession.messages.length > 0 ? activeSession.title : "")

@@ -586,35 +586,36 @@ export function ChatArea({
               <span className="author-name">{msg.authorName}</span>
               <span className="message-timestamp">{msg.timestamp}</span>
 
-              {/* Multi-provider badges if this message combined multiple models */}
-              {msg.providers && msg.providers.length > 0 && (
-                <div style={{ display: "flex", gap: 4, marginLeft: 8 }}>
-                  {msg.providers.map((pId) => {
-                    const pInfo = providers.find((p) => p.id === pId);
-                    return (
-                      <span
-                        key={pId}
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 600,
-                          padding: "2px 7px",
-                          borderRadius: 4,
-                          backgroundColor: "#f1f5f9",
-                          color: pInfo?.color || "var(--text-secondary)",
-                          border: "1px solid #e2e8f0",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 4,
-                        }}
-                      >
-                        <ModelBadgeLogo type={pInfo?.iconType || pId} size={12} />
-                        {pInfo?.name || pId}
-                      </span>
-                    );
-                  })}
-                </div>
-              )}
             </div>
+
+            {/* Multi-provider badges if this message combined multiple models */}
+            {msg.providers && msg.providers.length > 0 && (
+              <div style={{ display: "flex", gap: 4, marginLeft: 35, flexWrap: 'wrap' }}>
+                {msg.providers.map((pId) => {
+                  const pInfo = providers.find((p) => p.id === pId);
+                  return (
+                    <span
+                      key={pId}
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 600,
+                        padding: "2px 7px",
+                        borderRadius: 4,
+                        backgroundColor: "#f1f5f9",
+                        color: pInfo?.color || "var(--text-secondary)",
+                        border: "1px solid #e2e8f0",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                    >
+                      <ModelBadgeLogo type={pInfo?.iconType || pId} size={12} />
+                      {pInfo?.name || pId}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Message Body */}
             {msg.role === "user" ? (

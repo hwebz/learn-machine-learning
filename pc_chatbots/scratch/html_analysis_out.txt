@@ -1,0 +1,56 @@
+HTML size: 366917
+
+--- BUTTONS WITH LABELS OR IDS ---
+ATTRS:  class=" cursor-pointer p-0.5 flex rounded-sm hover:bg-stone-950/10 dark:hover:bg-black/10 transition-colors" | TEXT:  | SVG: True | RECT: False
+ATTRS:  id="sidebar-new-chat-button" class="px-3.5 py-2 w-full rounded-md inline-flex justify-start items-center gap-2 overflow-hidden text-start hover:bg-stone-950/5 dark:hover:bg-white/3" | TEXT: New Task | SVG: True | RECT: False
+ATTRS:  id="nux-folder-btn" class="flex-1 flex items-center gap-2 px-3.5 py-2 rounded-md hover:bg-stone-950/5 dark:hover:bg-white/3 data-[active=true]:bg-stone-950/5 dark:data-[active=true]:bg-white/5 transition-colors" draggable="false" data-active="false" | TEXT: Folder | SVG: True | RECT: False
+ATTRS:  class="shrink-0 self-stretch px-3.5 py-2 data-[active=true]:mb-1 rounded-md inline-flex justify-start items-center gap-1.5 hover:bg-bg-hover capitalize" id="chat-group-tab-zai-web" hidden="" data-active="true" | TEXT: zai-web | SVG: True | RECT: False
+ATTRS:  draggable="false" data-selected="true" class="w-full flex justify-between gap-2 whitespace-nowrap text-stone-950 dark:text-white text-ellipsis dark:data-[selected=true]:bg-bg-hover group-hover:bg-bg-hover px-3.5 py-2 rounded-md text-sm data-[selected=true]:bg-bg-hover" | TEXT: 4000 Năm Lịch Sử Trung Quốc | SVG: True | RECT: False
+ATTRS:  id="delete-chat-button" class="hidden" | TEXT:  | SVG: True | RECT: False
+ATTRS:  draggable="false" data-selected="false" class="w-full flex justify-between gap-2 whitespace-nowrap text-stone-950 dark:text-white text-ellipsis dark:data-[selected=true]:bg-bg-hover group-hover:bg-bg-hover px-3.5 py-2 rounded-md text-sm data-[selected=true]:bg-bg-hover" | TEXT: Đánh giá giải pháp tri thức tự động &amp; fact check | SVG: True | RECT: False
+ATTRS:  class="absolute top-1 right-1 p-2 rounded-lg text-text-primary/40" | TEXT:  | SVG: True | RECT: False
+ATTRS:  id="nux-user-menu-btn" class="flex min-w-0 w-full flex-1 items-center gap-1.5 rounded-[6px] p-1.5 text-left transition hover:bg-[#0d0d0d]/6 dark:hover:bg-white/6" aria-label="Open User Menu" | TEXT: Ha Manh Do | SVG: False | RECT: False
+ATTRS:  class="absolute right-2 flex size-9 shrink-0 items-center justify-center rounded-[6px] text-stone-950/80 transition hover:bg-[#0d0d0d]/6 dark:text-white/80 dark:hover:bg-white/6" aria-label="Open Settings" | TEXT:  | SVG: True | RECT: False
+ATTRS:  id="new-chat-button" aria-label="New Chat" class="navNewChat flex md:hidden cursor-pointer rounded-xl p-1 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-850 transition" | TEXT:  | SVG: True | RECT: False
+ATTRS:  class="modelSelectorButton relative font-primary cursor-default" aria-label="Select a model" id="model-selector-x-preview-l-button" aria-haspopup="menu" aria-expanded="false" data-state="closed" data-dropdown-menu-trigger="" type="button" disabled="" data-disabled="" | TEXT: GLM-5.3-Flash | SVG: False | RECT: False
+ATTRS:  class="invisible p-1 rounded-lg transition group-hover:visible hover:bg-black/5 dark:hover:bg-white/5 dark:hover:text-white hover:text-black" | TEXT:  | SVG: True | RECT: False
+ATTRS:  class="flex items-center gap-1 leading-5 text-[#0D0D0D] dark:text-[#fff]/30 svelte-bugqhi" | TEXT: Thought Process | SVG: True | RECT: True
+ATTRS:  class="flex gap-1 items-center px-1 cursor-pointer select-none svelte-2zdutr" type="button" | TEXT: Ran 1 commands | SVG: True | RECT: False
+ATTRS:  class="p-1" | TEXT:  | SVG: True | RECT: False
+ATTRS:  class="flex gap-1 items-center px-1 cursor-pointer select-none svelte-2zdutr" type="button" | TEXT: Explored 8 files，Ran 1 commands | SVG: True | RECT: False
+ATTRS:  class="flex gap-1 items-center px-1 cursor-pointer select-none svelte-2zdutr" type="button" | TEXT: Explored 3 files | SVG: True | RECT: False
+ATTRS:  class="flex gap-1 items-center px-1 cursor-pointer select-none svelte-2zdutr" type="button" | TEXT: Explored 1 files，Ran 1 commands | SVG: True | RECT: False
+ATTRS:  hidden="" class="flex p-1 rounded transition-colors hover:bg-gray-200 dark:hover:bg-gray-700 duration-150 text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 shrink-0" title="展开" | TEXT:  | SVG: True | RECT: False
+ATTRS:  class="flex gap-1 items-center px-1 cursor-pointer select-none svelte-2zdutr" type="button" | TEXT: Ran 1 commands | SVG: True | RECT: False
+ATTRS:  class="flex gap-1 items-center px-1 cursor-pointer select-none svelte-2zdutr" type="button" | TEXT: Wrote 1 files，Ran 1 commands | SVG: True | RECT: False
+ATTRS:  class="flex gap-1 items-center px-1 cursor-pointer select-none svelte-2zdutr" type="button" | TEXT: Wrote 2 files，Ran 2 commands | SVG: True | RECT: False
+ATTRS:  class="flex gap-1 items-center px-1 cursor-pointer select-none svelte-2zdutr" type="button" | TEXT: Explored 1 files | SVG: True | RECT: False
+ATTRS:  class="flex gap-1 items-center px-1 cursor-pointer select-none svelte-2zdutr" type="button" | TEXT: Explored 2 files | SVG: True | RECT: False
+ATTRS:  class="flex gap-1 items-center px-1 cursor-pointer select-none svelte-2zdutr" type="button" | TEXT: Wrote 1 files | SVG: True | RECT: False
+ATTRS:  class="flex gap-1 items-center px-1 cursor-pointer select-none svelte-2zdutr" type="button" | TEXT: Wrote 2 files | SVG: True | RECT: False
+ATTRS:  class="flex gap-1 items-center px-1 cursor-pointer select-none svelte-2zdutr" type="button" | TEXT: Explored 1 files，Wrote 1 files | SVG: True | RECT: False
+ATTRS:  class="flex gap-1 items-center px-1 cursor-pointer select-none svelte-2zdutr" type="button" | TEXT: Ran 1 commands | SVG: True | RECT: False
+ATTRS:  class="flex gap-1 items-center px-1 cursor-pointer select-none svelte-2zdutr" type="button" | TEXT: Wrote 1 files，Ran 1 commands | SVG: True | RECT: False
+ATTRS:  class="flex items-center cursor-default" | TEXT: Fix content typos and validate JS blocks | SVG: True | RECT: False
+ATTRS:  class="p-1.5 bg-white rounded-full border border-zinc-300 dark:border-white/80 pointer-events-auto dark:border-none dark:bg-white/20 shadow-[0px_0px_6px_0px_rgba(0,0,0,0.08)] text-stone-950/80 dark:text-white/80 disabled:opacity-40 disabled:cursor-not-allowed" | TEXT:  | SVG: True | RECT: False
+ATTRS:  class="p-1.5 bg-white rounded-full border border-zinc-300 dark:border-white/80 pointer-events-auto dark:border-none dark:bg-white/20 shadow-[0px_0px_6px_0px_rgba(0,0,0,0.08)] text-stone-950/80 dark:text-white/80" | TEXT:  | SVG: True | RECT: False
+ATTRS:  class="flex justify-between p-2 bg-[#F5F5F5] dark:bg-[#2B2B2B] rounded-tl-xl rounded-tr-xl border border-b-0 border-[#DBDBDB] dark:border-white/10" | TEXT: Todo Progress...     1/6 | SVG: True | RECT: False
+ATTRS:  id="upload-file-button" type="button" aria-label="More" class="rounded-lg bg-transparent p-1.5 outline-hidden transition-opacity focus:outline-hidden opacity-70 hover:opacity-100 " | TEXT:  | SVG: True | RECT: False
+ATTRS:  id="bits-c98" aria-haspopup="menu" aria-expanded="false" data-state="closed" data-dropdown-menu-trigger="" type="button" aria-label="Connect &amp; Notifications" class="flex h-7 w-fit max-w-[240px] shrink-0 items-center justify-center gap-1 overflow-hidden rounded-[99px] bg-[linear-gradient(90deg,rgba(0,0,0,0.04)_0%,rgba(0,0,0,0.04)_100%),linear-gradient(90deg,#FFFFFF_0%,#FFFFFF_100%)] pl-1 pr-2 py-1 shadow-[0px_0px_0px_1px_rgba(0,0,0,0.12)] transition-[background-color,box-shadow] duration-150 hover:bg-[linear-gradient(90deg,rgba(0,0,0,0.06)_0%,rgba(0,0,0,0.06)_100%),linear-gradient(90deg,#FFFFFF_0%,#FFFFFF_100%)] dark:bg-none dark:bg-[#292929] dark:shadow-[0px_0px_0px_1px_rgba(255,255,255,0.12)] dark:hover:bg-none dark:hover:bg-[#292929] @max-[500px]/input:pr-1" | TEXT: Connect IM | SVG: True | RECT: False
+ATTRS:  class="flex justify-center items-center p-2 bg-black rounded-full dark:bg-white/80 dark:rounded-md" | TEXT:  | SVG: False | RECT: False
+ATTRS:  class="tabTrigger flex items-center min-w-16 transition shrink-0 h-10 gap-1 px-3 py-2 rounded-none text-[13px] font-medium bg-[#f3f3f3] dark:bg-[#161616] text-[#0d0d0d]/40 dark:text-white/40 hover:bg-black/[0.03] dark:hover:bg-white/[0.04] data-[state=active]:bg-white dark:data-[state=active]:bg-[#0C0E10] data-[state=active]:text-[#0d0d0d]/80 dark:data-[state=active]:text-white/80 data-[state=active]:hover:bg-white dark:data-[state=active]:hover:bg-[#0C0E10]" id="bits-c141" role="tab" data-state="inactive" data-value="worklog.md" data-orientation="horizontal" aria-selected="false" data-tabs-trigger="" tabindex="-1" type="button" | TEXT: worklog.md | SVG: True | RECT: False
+ATTRS:  class="tabTrigger flex items-center min-w-16 transition shrink-0 h-10 gap-1 px-3 py-2 rounded-none text-[13px] font-medium bg-[#f3f3f3] dark:bg-[#161616] text-[#0d0d0d]/40 dark:text-white/40 hover:bg-black/[0.03] dark:hover:bg-white/[0.04] data-[state=active]:bg-white dark:data-[state=active]:bg-[#0C0E10] data-[state=active]:text-[#0d0d0d]/80 dark:data-[state=active]:text-white/80 data-[state=active]:hover:bg-white dark:data-[state=active]:hover:bg-[#0C0E10]" id="bits-c159" role="tab" data-state="inactive" data-value="scripts/fix_content.py" data-orientation="horizontal" aria-selected="false" data-tabs-trigger="" tabindex="-1" type="button" | TEXT: scripts/fix_content.py | SVG: True | RECT: False
+ATTRS:  class="p-2 rounded hover:bg-[#0d0d0d]/8 dark:hover:bg-[#fff]/8" title="Download file" | TEXT:  | SVG: True | RECT: False
+ATTRS:  class="flex items-center px-2 py-2 shrink-0 hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer" title="收起终端" | TEXT:  | SVG: True | RECT: False
+ATTRS:  class="flex items-center gap-1 mx-1 pl-1 h-8 text-sm font-medium transition-colors text-black dark:text-white" | TEXT: Terminal 1 | SVG: True | RECT: False
+ATTRS:  class="ml-1 p-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-opacity opacity-0 group-hover:opacity-100" | TEXT:  | SVG: True | RECT: False
+ATTRS:  id="chat-captcha-trigger" type="button" aria-hidden="true" tabindex="-1" style="position: absolute; left: -99999px; top: -99999px; width: 1px; height: 1px; opacity: 0;" | TEXT:  | SVG: False | RECT: False
+
+--- COPY REFERENCES ---
+<div id="bits-c97" data-state="closed" data-delay-duration="200" data-tooltip-trigger="" tabindex="0" type="button" class="flex" aria-label="Copy">
+
+--- STOP REFERENCES ---
+<div id="bits-c132" data-state="closed" data-delay-duration="200" data-tooltip-trigger="" tabindex="0" type="button" class="flex" aria-label="Stop">
+
+--- DOCX REFERENCES ---
+<link rel="modulepreload" as="script" crossorigin="" href="https://z-cdn.chatglm.cn/z-ai/frontend/prod-fe-1.1.107/assets/DocxViewer-oroSeEdB.js">

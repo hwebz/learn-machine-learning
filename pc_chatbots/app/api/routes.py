@@ -493,7 +493,7 @@ async def research_events(job_id: str) -> StreamingResponse:
                         await asyncio.wait_for(ev_notify.wait(), timeout=2.0)
                         ev_notify.clear()
                     except asyncio.TimeoutError:
-                        pass
+                        yield ": keepalive\n\n"
                 else:
                     await asyncio.sleep(0.02)
         finally:

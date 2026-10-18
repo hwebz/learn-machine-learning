@@ -503,6 +503,8 @@ providers:
       - { css: "button[aria-label*='停止']" }
       - { css: "button[class*='stop' i]" }
       - { css: "button[data-testid*='stop']" }
+      - { css: "button:has(svg rect)" }
+      - { css: "button:has([data-icon*='stop' i])" }
       - { css: "div.chat-assistant [class*='loading']" }
       - { css: "div.chat-assistant [class*='typing']" }
       - { css: "div.chat-assistant [class*='cursor']" }
@@ -513,19 +515,12 @@ providers:
       - { css: ".chat-assistant .cursor" }
       - { css: "div.chat-assistant svg.animate-spin" }
 
-    # Done when Copy button appears (answer rendered)
+    # Done when copy-response-button appears (answer rendered)
     done_indicator:
       - { css: "div.chat-assistant button.copy-response-button" }
-      - { css: "div.chat-assistant button[class*='copy' i]" }
-      - { css: "div.chat-assistant [aria-label*='Copy' i]" }
-      - { css: "div.chat-assistant button:has-text('Copy')" }
-      - { css: ".chat-assistant button[class*='copy' i]" }
-      - { css: ".chat-assistant [aria-label*='Copy' i]" }
+      - { css: ".chat-assistant button.copy-response-button" }
       - { css: "button.copy-response-button" }
       - { css: "div[aria-label='Copy'] button.copy-response-button" }
-      - { css: "button[aria-label*='Copy' i]" }
-      - { css: "button[class*='copy' i]" }
-      - { css: "button:has-text('Copy')" }
 
     # Answer is inside .chat-assistant
     answer_container:

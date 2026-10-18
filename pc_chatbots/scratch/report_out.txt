@@ -1,0 +1,146 @@
+# Research response
+
+## Zhipu response
+
+Thought Process
+
+
+ Ran 1 commands
+
+
+Tôi sẽ giúp bạn tạo tài liệu về **Lịch sử Trung Quốc 4000 năm**. Trước khi bắt tay vào viết, cho tôi hỏi nhanh một vài câu để tài liệu đúng với mong muốn của bạn nhất:
+
+
+Confirm Preferences
+
+
+ Completed
+
+
+Tuyệt vời! Tôi đã nắm rõ yêu cầu. Tóm tắt: **Tài liệu Word (.docx) ~25-35 trang**, viết theo **dòng thời gian triều đại**, phong cách **kể chuyện hấp dẫn** cho **độc giả phổ thông**, có **biểu đồ minh họa đầy đủ** và **chú thích Hán-Việt**, tập trung chính trị-triều đại nhưng vẫn bao quát mọi mặt.
+
+
+ Explored 8 files，Ran 1 commands
+
+
+Design system đã nắm được. Giờ tôi đọc tiếp các file quy tắc còn lại (common-rules, toc, chart-templates):
+
+
+ Explored 3 files
+
+
+Tất cả file quy tắc chính đã đọc xong. Giờ tôi đọc thêm file advanced (vì tài liệu có TOC + đa section + ảnh) và kiểm tra môi trường:
+
+
+ Explored 1 files，Ran 1 commands
+
+
+Mọi quy tắc của skill đã được nắm vững. Giờ tôi lập dàn ý chi tiết cho tài liệu:
+
+
+Todos
+
+
+6
+
+
+Đọc toàn bộ file skill docx (create.md, docx-js-core.md, design-system.md, common-rules.md, toc.md, chart-templates.md)
+
+
+high
+
+
+Lập dàn ý chi tiết tài liệu + ghi Outline tool
+
+
+high
+
+
+Tạo các biểu đồ minh họa (timeline 4000 năm, dân số, thống nhất-phân liệt, tuổi thọ triều đại)
+
+
+high
+
+
+Viết script tạo tài liệu Word đầy đủ nội dung
+
+
+high
+
+
+Chạy script, tạo file docx với mục lục và trang bìa
+
+
+high
+
+
+Chạy postcheck.py + add_toc_placeholders.py, sửa lỗi và bàn giao file
+
+
+high
+
+
+ Ran 1 commands
+
+
+Dàn ý đã chốt. Bây giờ tôi khởi tạo worklog, cài dependencies và bắt đầu tạo biểu đồ:
+
+
+ Wrote 1 files，Ran 1 commands
+
+
+Môi trường sẵn sàng (docx OK, matplotlib 3.9.2 hỗ trợ font fallback). Giờ tôi viết script tạo 4 biểu đồ:
+
+
+ Wrote 2 files，Ran 2 commands
+
+
+4 biểu đồ đã tạo xong. Kiểm tra nhanh chất lượng hiển thị tiếng Việt:
+
+
+ Explored 1 files
+
+
+Timeline đẹp, tiếng Việt hiển thị hoàn hảo. Kiểm tra tiếp 3 biểu đồ còn lại:
+
+
+ Explored 2 files
+
+
+Các biểu đồ đạt yêu cầu. Giờ tôi viết nội dung tài liệu (chia thành 3 module) và script tạo docx:
+
+
+ Wrote 1 files
+
+
+Sửa một lỗi chính tả nhỏ trong content1, rồi viết tiếp phần 2:
+
+
+ Wrote 2 files
+
+
+Tôi phát hiện một số lỗi soạn thảo trong content2 — sửa ngay trước khi quên:
+
+
+ Explored 1 files，Wrote 1 files
+
+
+MultiEdit thất bại vì chuỗi không khớp nguyên văn — có thể file chứa ký tự escape lạ. Kiểm tra syntax và sửa bằng script Python chính xác hơn:
+
+
+ Ran 1 commands
+
+
+Cả 2 file đều qua syntax check — nghĩa là các `\t`/`\n` là chuỗi escape trong JS (sẽ tạo tab/xuống dòng sai trong văn bản). Tôi viết script sửa chính xác:
+
+
+ Wrote 1 files，Ran 1 commands
+
+
+ Fix content typos and validate JS blocks
+
+## Provider issues
+
+- zhipu: partial
+
+The provider response is shown as returned; claims have not been independently verified.

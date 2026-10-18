@@ -141,3 +141,98 @@ async def test_zhipu_extract_answer_clean_dom() -> None:
 
     answer = await adapter._extract_answer(mock_page, prompt="xin chao")
     assert "Xin chào! Đây là câu trả lời từ GLM-5.3." in answer
+
+
+@pytest.mark.asyncio
+async def test_zhipu_response_ready_returns_true_when_copy_appeared_and_no_stop_icon() -> None:
+    adapter = ZhipuUIAdapter()
+    mock_page = MagicMock()
+
+    # Confirm Preferences not open
+    mock_page.evaluate = AsyncMock(side_effect=[
+        False,  # is_dialog_open
+        {"hasStop": False, "hasCopy": True},  # eval_res: copy button appeared, stop button not present
+    ])
+
+    empty = MagicMock()
+    empty.count = AsyncMock(return_value=0)
+    mock_page.locator = MagicMock(return_value=empty)
+
+    res = await adapter._response_ready(mock_page)
+    assert res is True
+
+
+@pytest.mark.asyncio
+async def test_zhipu_response_ready_returns_false_when_copy_missing() -> None:
+    adapter = ZhipuUIAdapter()
+    mock_page = MagicMock()
+
+    # Confirm Preferences not open
+    mock_page.evaluate = AsyncMock(side_effect=[
+        False,  # is_dialog_open
+        {"hasStop": False, "hasCopy": False},  # copy button not yet rendered
+    ])
+
+    empty = MagicMock()
+    empty.count = AsyncMock(return_value=0)
+    mock_page.locator = MagicMock(return_value=empty)
+
+    res = await adapter._response_ready(mock_page)
+    assert res is False
+
+
+@pytest.mark.asyncio
+async def test_zhipu_response_ready_returns_false_when_send_button_is_stop_icon() -> None:
+    adapter = ZhipuUIAdapter()
+    mock_page = MagicMock()
+
+    # Confirm Preferences not open
+    mock_page.evaluate = AsyncMock(side_effect=[
+        False,  # is_dialog_open
+        {"hasStop": True, "hasCopy": True},  # Stop icon is still present despite copy button appearing
+    ])
+
+    empty = MagicMock()
+    empty.count = AsyncMock(return_value=0)
+    mock_page.locator = MagicMock(return_value=empty)
+
+    res = await adapter._response_ready(mock_page)
+    assert res is False
+
+
+@pytest.mark.asyncio
+async def test_zhipu_extract_answer_with_docx_viewer() -> None:
+    adapter = ZhipuUIAdapter()
+    mock_page = MagicMock()
+
+    copy_coll = MagicMock()
+    copy_coll.count = AsyncMock(return_value=0)
+
+    asst_el = MagicMock()
+    asst_coll = MagicMock()
+    asst_coll.count = AsyncMock(return_value=1)
+    asst_coll.last = asst_el
+
+    def mock_locator(sel: str) -> Any:
+        if "copy" in sel:
+            return copy_coll
+        if "chat-assistant" in sel:
+            return asst_coll
+        empty = MagicMock()
+        empty.count = AsyncMock(return_value=0)
+        return empty
+
+    mock_page.locator = MagicMock(side_effect=mock_locator)
+
+    clean_html = "<div class='markdown'><p>Here is your generated document:</p></div>"
+    docx_html = "<div class='DocxViewer'><div class='docx-header'>Report.docx</div><div class='docx-body'><p>Content</p></div></div>"
+
+    mock_page.evaluate = AsyncMock(side_effect=[
+        clean_html,  # DOM extraction from .chat-assistant
+        docx_html,   # DocxViewer evaluation
+    ])
+
+    answer = await adapter._extract_answer(mock_page, prompt="generate report")
+    assert "Here is your generated document:" in answer
+    assert docx_html in answer
+    assert answer.endswith(docx_html)

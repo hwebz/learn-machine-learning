@@ -509,9 +509,10 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             return
 
         ok_count = sum(1 for status in run_statuses if status == "ok")
+        has_partial = any(status == "partial" for status in run_statuses) or bool(answers)
         if ok_count == len(run_statuses) and run_statuses:
             final_status = "completed"
-        elif ok_count > 0:
+        elif ok_count > 0 or has_partial:
             final_status = "partial"
         elif any(status == "needs_user_action" for status in run_statuses):
             final_status = "needs_user_action"
@@ -548,6 +549,7 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                         subtasks_done=job.subtasks_done,
                     ))
                     await session.commit()
+                    notify_job_event(job_id)
                 return
             session.add(Report(id=job_id, job_id=job_id, markdown=report))
             job.report_markdown = report
@@ -570,6 +572,7 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 subtasks_done=job.subtasks_done,
             ))
             await session.commit()
+        notify_job_event(job_id)
     except AdapterNeedsUserAction as exc:
         logger.warning("research_job_needs_user_action", job_id=job_id, reason=str(exc))
         async with SessionLocal() as session:
@@ -588,6 +591,7 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                     subtasks_done=job.subtasks_done,
                 ))
                 await session.commit()
+        notify_job_event(job_id)
 
     except Exception as exc:
         logger.exception("research_job_failed", job_id=job_id, error_type=type(exc).__name__)
@@ -600,6 +604,7 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 job.updated_at = utc_now()
                 session.add(JobEvent(job_id=job_id, status="failed", subtasks_total=job.subtasks_total, subtasks_done=job.subtasks_done))
                 await session.commit()
+        notify_job_event(job_id)
 
 
 async def worker_loop(queue: object) -> None:
