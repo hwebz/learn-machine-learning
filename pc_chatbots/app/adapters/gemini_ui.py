@@ -308,12 +308,15 @@ class GeminiUIAdapter(BrowserProviderAdapter):
 
                     return False
                 finally:
-                    # 6. Close the browser / page for Gemini
+                    # 6. Close the browser page and instance entirely
                     try:
-                        if self._session._ctx is not None and len(self._session._ctx.pages) <= 1:
-                            await page.goto("about:blank")
-                        else:
-                            await page.close()
+                        await page.close()
+                    except Exception:
+                        pass
+                    try:
+                        await self._session.close()
+                        from app.browser.session import BrowserSessionManager
+                        await BrowserSessionManager.close_session(self.name)
                     except Exception:
                         pass
         except Exception as exc:

@@ -477,8 +477,7 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 logger.info("subtask_cancelled_gracefully", provider=subtask.provider, job_id=job_id)
                 return
             finally:
-                if settings.work_mode == "async":
-                    await BrowserSessionManager.close_session(subtask.provider)
+                await BrowserSessionManager.close_session(subtask.provider)
 
         try:
             if settings.work_mode == "async":

@@ -422,6 +422,15 @@ async def _delete_remote_conversations(targets: list[tuple[str, str]]) -> None:
                 logger.info("remote_conversation_deletion_succeeded", provider=provider, url=url)
         except Exception as exc:  # noqa: BLE001
             logger.warning("remote_conversation_deletion_failed", provider=provider, url=url, error=str(exc))
+        finally:
+            try:
+                await BrowserSessionManager.close_session(provider)
+            except Exception:
+                pass
+    try:
+        await BrowserSessionManager.close_all()
+    except Exception:
+        pass
 
 
 @router.delete("/research/{job_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=protected)

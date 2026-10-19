@@ -311,6 +311,8 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             logger.error("orchestrator_provider_failed", provider=orchestrator_prov, error=str(exc))
             await _set_agent_status(job_id, "failed", message=f"Orchestrator ({orchestrator_prov}) gặp lỗi: {exc}")
             return
+        finally:
+            await BrowserSessionManager.close_session(orchestrator_prov)
 
         if cancel_event.is_set():
             await _set_agent_status(job_id, "cancelled")
@@ -477,6 +479,8 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 status_str = "error"
                 ans_text = f"Không thể lấy câu trả lời từ {prov}: {exc}"
                 res_sources = []
+            finally:
+                await BrowserSessionManager.close_session(prov)
 
             subtask_duration = round(time.monotonic() - subtask_start, 1)
             sub_conv_url = str(result.conversation_url) if getattr(result, "conversation_url", None) else None
@@ -622,6 +626,8 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             final_report = f"# Báo cáo Nghiên cứu: {research_topic}\n\n"
             for r in runs:
                 final_report += f"## {r.get('branch', r.get('provider'))}\n\n{r.get('answer_md', '')}\n\n"
+        finally:
+            await BrowserSessionManager.close_session(lead_prov)
 
         lead_duration = round(time.monotonic() - lead_start, 1)
 
@@ -686,6 +692,7 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 await session.commit()
 
         logger.info("run_agent_pipeline_finished", job_id=job_id, status=final_status)
+        await BrowserSessionManager.close_all()
 
     except asyncio.CancelledError:
         logger.info("run_agent_pipeline_cancelled", job_id=job_id)

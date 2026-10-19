@@ -216,3 +216,4 @@ async def test_gemini_ui_adapter_delete_conversation() -> None:
     mock_del_btn.click.assert_awaited()
     mock_confirm_btn.click.assert_awaited()
     mock_page.close.assert_awaited()
+    mock_session.close.assert_awaited()

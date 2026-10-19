@@ -266,10 +266,12 @@ class CapabilitiesRegistry:
             finally:
                 if page is not None:
                     try:
-                        if session._ctx is not None and len(session._ctx.pages) <= 1:
-                            await page.goto("about:blank")
-                        else:
-                            await page.close()
+                        await page.close()
+                    except Exception:
+                        pass
+                    try:
+                        await session.close()
+                        await BrowserSessionManager.close_session(p)
                     except Exception:
                         pass
 

@@ -683,12 +683,14 @@ class BrowserProviderAdapter(ABC):
                         artifact_dir=self._artifact_dir,
                     )
                     try:
-                        # Keep at least one tab alive (navigate to about:blank)
-                        # so Chromium doesn't exit when the last tab is closed.
-                        if self._session._ctx is not None and len(self._session._ctx.pages) <= 1:
-                            await page.goto("about:blank")
-                        else:
-                            await page.close()
+                        # Close the browser page and instance entirely
+                        await page.close()
+                    except Exception:  # noqa: BLE001
+                        pass
+                    try:
+                        await self._session.close()
+                        from app.browser.session import BrowserSessionManager
+                        await BrowserSessionManager.close_session(self.name)
                     except Exception:  # noqa: BLE001
                         pass
         except ProviderNeedsUserAction:
@@ -822,11 +824,15 @@ class BrowserProviderAdapter(ABC):
                     logger.warning("provider_delete_selectors_not_matched", provider=self.name, url=conversation_url)
                     return False
                 finally:
+                    # Close the browser page and instance entirely
                     try:
-                        if self._session._ctx is not None and len(self._session._ctx.pages) <= 1:
-                            await page.goto("about:blank")
-                        else:
-                            await page.close()
+                        await page.close()
+                    except Exception:
+                        pass
+                    try:
+                        await self._session.close()
+                        from app.browser.session import BrowserSessionManager
+                        await BrowserSessionManager.close_session(self.name)
                     except Exception:
                         pass
         except Exception as exc:
