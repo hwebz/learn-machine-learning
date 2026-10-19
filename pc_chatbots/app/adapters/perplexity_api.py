@@ -81,6 +81,9 @@ class PerplexityAgentAdapter:
             error=None if answer else "The API returned no answer text.",
         )
 
+    async def delete_conversation(self, conversation_url: str) -> bool:
+        return True
+
 
 def _answer_text(payload: dict[str, Any]) -> str:
     direct_text = payload.get("output_text")

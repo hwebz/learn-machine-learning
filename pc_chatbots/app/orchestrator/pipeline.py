@@ -161,6 +161,7 @@ async def _persist_subtask_result(
             "answer_markdown": answer_md.strip() if answer_md else "",
             "error": error,
             "options": prov_opts,
+            "conversation_url": conversation_url,
         })
         done_count = len(runs)
 
@@ -222,6 +223,8 @@ async def _persist_subtask_result(
             db_job.sources_json = json.dumps(sources)
             db_job.claims_json = json.dumps(claims)
             db_job.provider_runs_json = json.dumps(runs)
+            conv_map = {r["provider"]: r["conversation_url"] for r in runs if r.get("conversation_url")}
+            db_job.provider_conversations_json = json.dumps(conv_map)
             db_job.updated_at = utc_now()
             await session.commit()
         notify_job_event(job_id)
@@ -424,6 +427,7 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                         "response_preview": answer_preview,
                         "response_markdown": result.answer_markdown,
                         "sources_count": len(result.sources),
+                        "conversation_url": str(result.conversation_url) if result.conversation_url else None,
                         "elapsed_ms": elapsed_ms,
                     },
                 )
@@ -437,6 +441,7 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                         "options": prov_opts,
                         "error": result.error or f"Provider returned status {result.status}",
                         "artifact_paths": result.artifact_paths,
+                        "conversation_url": str(result.conversation_url) if result.conversation_url else None,
                         "elapsed_ms": elapsed_ms,
                     },
                 )
@@ -593,6 +598,26 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 await session.commit()
         notify_job_event(job_id)
 
+    except asyncio.CancelledError:
+        logger.info("run_pipeline_cancelled", job_id=job_id)
+        async with SessionLocal() as session:
+            job = await session.get(Job, job_id)
+            if job is not None and job.status not in TERMINAL_STATUSES:
+                job.status = "cancelled"
+                job.finished_at = utc_now()
+                job.updated_at = utc_now()
+                session.add(JobEvent(
+                    job_id=job_id,
+                    status="cancelled",
+                    message="Người dùng đã dừng phiên nghiên cứu.",
+                    subtasks_total=job.subtasks_total,
+                    subtasks_done=job.subtasks_done,
+                ))
+                await session.commit()
+        notify_job_event(job_id)
+        await BrowserSessionManager.close_all()
+        raise
+
     except Exception as exc:
         logger.exception("research_job_failed", job_id=job_id, error_type=type(exc).__name__)
         async with SessionLocal() as session:
@@ -608,23 +633,91 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
 
 
 async def worker_loop(queue: object) -> None:
+    logger.info("worker_loop_started")
     while True:
-        job_id = await queue.get()
-        event = queue.cancel_events.get(job_id)
+        try:
+            job_id = await queue.get()
+        except asyncio.CancelledError:
+            logger.info("worker_loop_cancelled_shutting_down")
+            break
+
+        event = getattr(queue, "cancel_events", {}).get(job_id)
         if event is None:
             event = asyncio.Event()
+
         try:
+            # 1. Verify job exists and is still runnable
             async with SessionLocal() as session:
                 job = await session.get(Job, job_id)
-                job_type = getattr(job, "job_type", "research") if job else "research"
+                if job is None:
+                    logger.warning("worker_job_not_found_skipping", job_id=job_id)
+                    continue
 
-            if job_type == "agent":
-                from app.orchestrator.agent_pipeline import run_agent_pipeline
-                await run_agent_pipeline(job_id, event)
-            else:
-                await run_pipeline(job_id, event)
+                if job.status in TERMINAL_STATUSES or event.is_set():
+                    logger.info("worker_job_already_terminal_skipping", job_id=job_id, status=job.status)
+                    if job.status not in TERMINAL_STATUSES and event.is_set():
+                        job.status = "cancelled"
+                        job.finished_at = utc_now()
+                        job.updated_at = utc_now()
+                        session.add(JobEvent(
+                            job_id=job_id,
+                            status="cancelled",
+                            message="Người dùng đã dừng phiên nghiên cứu.",
+                            subtasks_total=job.subtasks_total,
+                            subtasks_done=job.subtasks_done,
+                        ))
+                        await session.commit()
+                        notify_job_event(job_id)
+                    continue
+
+                job_type = getattr(job, "job_type", "research")
+
+            # 2. Run pipeline within a registered cancelable task
+            async def _run_job() -> None:
+                if job_type == "agent":
+                    from app.orchestrator.agent_pipeline import run_agent_pipeline
+                    await run_agent_pipeline(job_id, event)
+                else:
+                    await run_pipeline(job_id, event)
+
+            job_task = asyncio.create_task(_run_job(), name=f"job-{job_id}")
+            if hasattr(queue, "register_task"):
+                queue.register_task(job_id, job_task)
+
+            try:
+                await job_task
+            except asyncio.CancelledError:
+                logger.info("worker_job_task_cancelled", job_id=job_id)
+                async with SessionLocal() as session:
+                    db_j = await session.get(Job, job_id)
+                    if db_j is not None and db_j.status not in TERMINAL_STATUSES:
+                        db_j.status = "cancelled"
+                        db_j.finished_at = utc_now()
+                        db_j.updated_at = utc_now()
+                        session.add(JobEvent(
+                            job_id=job_id,
+                            status="cancelled",
+                            message="Người dùng đã dừng phiên nghiên cứu.",
+                            subtasks_total=db_j.subtasks_total,
+                            subtasks_done=db_j.subtasks_done,
+                        ))
+                        await session.commit()
+                notify_job_event(job_id)
+                await BrowserSessionManager.close_all()
+            except Exception as exc:
+                logger.exception("worker_job_task_failed", job_id=job_id, error=str(exc))
+            finally:
+                if hasattr(queue, "unregister_task"):
+                    queue.unregister_task(job_id)
+
+        except asyncio.CancelledError:
+            logger.info("worker_loop_cancelled_during_job", job_id=job_id)
+            break
+        except Exception as exc:
+            logger.exception("worker_loop_unexpected_error", job_id=job_id, error=str(exc))
         finally:
-            queue.done(job_id)
+            if hasattr(queue, "done"):
+                queue.done(job_id)
 
 
 async def retry_provider_subtask(job_id: str, provider: str) -> None:
@@ -800,12 +893,15 @@ async def retry_provider_subtask(job_id: str, provider: str) -> None:
 
         runs = json.loads(db_job.provider_runs_json) if db_job.provider_runs_json else []
         updated = False
+        res_conv_url = str(result.conversation_url) if result.conversation_url else None
         for r in runs:
             if r.get("provider") == prov:
                 r["status"] = result.status
                 r["elapsed_ms"] = elapsed_ms
                 r["answer_markdown"] = result.answer_markdown.strip() if result.answer_markdown else ""
                 r["error"] = result.error
+                if res_conv_url:
+                    r["conversation_url"] = res_conv_url
                 updated = True
                 break
         if not updated:
@@ -815,8 +911,11 @@ async def retry_provider_subtask(job_id: str, provider: str) -> None:
                 "elapsed_ms": elapsed_ms,
                 "answer_markdown": result.answer_markdown.strip() if result.answer_markdown else "",
                 "error": result.error,
+                "conversation_url": res_conv_url,
             })
         db_job.provider_runs_json = json.dumps(runs)
+        conv_map = {r["provider"]: r["conversation_url"] for r in runs if r.get("conversation_url")}
+        db_job.provider_conversations_json = json.dumps(conv_map)
 
         answers: list[str] = []
         for r in runs:

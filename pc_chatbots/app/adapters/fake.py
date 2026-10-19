@@ -92,14 +92,21 @@ class FakeAdapter:
             )
         else:
             answer = f"This is a placeholder response for the requested research. Provider: {self.name}."
+        conv_url = f"https://{self.name}.example.com/c/fake-{self.name}-123"
         return ProviderResult(
             provider=self.name,
             prompt=prompt,
             answer_markdown=answer,
             sources=[Source(url=source, title=title, snippet="Placeholder source from the fake adapter.")],
-            conversation_url=None,
+            conversation_url=conv_url,
             status="ok",
             started_at=started,
             finished_at=datetime.now(timezone.utc),
             artifact_paths=[],
         )
+
+    deleted_conversations: list[str] = []
+
+    async def delete_conversation(self, conversation_url: str) -> bool:
+        self.deleted_conversations.append(conversation_url)
+        return True

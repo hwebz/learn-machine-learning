@@ -10,15 +10,25 @@ class JobQueue:
     def __init__(self) -> None:
         self.items: asyncio.Queue[str] = asyncio.Queue()
         self.cancel_events: dict[str, asyncio.Event] = {}
+        self.running_tasks: dict[str, asyncio.Task[object]] = {}
 
     async def put(self, job_id: str) -> None:
         self.cancel_events[job_id] = asyncio.Event()
         await self.items.put(job_id)
 
+    def register_task(self, job_id: str, task: asyncio.Task[object]) -> None:
+        self.running_tasks[job_id] = task
+
+    def unregister_task(self, job_id: str) -> None:
+        self.running_tasks.pop(job_id, None)
+
     def cancel(self, job_id: str) -> asyncio.Event | None:
         event = self.cancel_events.get(job_id)
         if event is not None:
             event.set()
+        task = self.running_tasks.get(job_id)
+        if task is not None and not task.done():
+            task.cancel()
         return event
 
     async def get(self) -> str:
@@ -26,6 +36,7 @@ class JobQueue:
 
     def done(self, job_id: str) -> None:
         self.cancel_events.pop(job_id, None)
+        self.running_tasks.pop(job_id, None)
         self.items.task_done()
 
     async def events(self) -> AsyncIterator[str]:

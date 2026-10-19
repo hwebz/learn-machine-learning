@@ -1,6 +1,6 @@
 import { DepthMode, SourceLink, StepLog, ProviderLiveCapabilities } from "../types/chat";
 
-const DEFAULT_API_KEY = "changeme";
+export const DEFAULT_API_KEY = "changeme";
 
 export interface ResearchRequestPayload {
   query: string;
@@ -37,6 +37,9 @@ export interface ResearchResponseData {
   orchestrator_config?: Record<string, any>;
   lead_config?: Record<string, any>;
   providerConfigurations?: Record<string, any>;
+  orchestrator_conversation_url?: string;
+  lead_conversation_url?: string;
+  provider_conversations?: Record<string, string>;
 }
 
 export interface ResearchHistoryItem {
@@ -62,8 +65,25 @@ export interface ResearchHistoryItem {
   orchestrator_config?: Record<string, any>;
   lead_config?: Record<string, any>;
   providerConfigurations?: Record<string, any>;
+  orchestrator_conversation_url?: string;
+  lead_conversation_url?: string;
+  provider_conversations?: Record<string, string>;
   created_at?: string;
   finished_at?: string;
+}
+
+export interface ProviderConversationItem {
+  provider: string;
+  role: string;
+  url: string;
+  title?: string;
+  branch?: string;
+  branch_index?: number;
+}
+
+export interface JobConversationsResponse {
+  job_id: string;
+  conversations: ProviderConversationItem[];
 }
 
 export interface AgentResearchRequestPayload {
@@ -198,10 +218,12 @@ export async function updateResearchJob(
 
 export async function deleteResearchJob(
   jobId: string,
-  apiKey: string = DEFAULT_API_KEY
+  apiKey: string = DEFAULT_API_KEY,
+  options?: { deleteRemote?: boolean }
 ): Promise<boolean> {
   try {
-    const res = await fetch(`/api/backend/research/${jobId}`, {
+    const deleteRemote = options?.deleteRemote !== false;
+    const res = await fetch(`/api/backend/research/${jobId}?delete_remote=${deleteRemote}`, {
       method: "DELETE",
       headers: {
         "X-API-Key": apiKey,
@@ -216,6 +238,45 @@ export async function deleteResearchJob(
   } catch (err) {
     console.warn("Error deleting research job on backend:", err);
     return false;
+  }
+}
+
+export async function fetchJobConversations(
+  jobId: string,
+  apiKey: string = DEFAULT_API_KEY
+): Promise<JobConversationsResponse | null> {
+  try {
+    const res = await fetch(`/api/backend/research/${jobId}/conversations`, {
+      method: "GET",
+      headers: {
+        "X-API-Key": apiKey,
+      },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (err) {
+    console.warn("Failed to fetch job conversations:", err);
+    return null;
+  }
+}
+
+export async function deleteProviderChats(
+  jobId: string,
+  apiKey: string = DEFAULT_API_KEY
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    const res = await fetch(`/api/backend/research/${jobId}/delete-provider-chats`, {
+      method: "POST",
+      headers: {
+        "X-API-Key": apiKey,
+      },
+    });
+    if (!res.ok) return { success: false, message: `Lỗi máy chủ (${res.status})` };
+    const data = await res.json();
+    return { success: true, message: data.message };
+  } catch (err: any) {
+    return { success: false, message: err?.message || "Lỗi kết nối khi gửi yêu cầu xóa" };
   }
 }
 
@@ -297,6 +358,7 @@ export function subscribeJobEvents(
           citations: payloadData.citations || undefined,
           isThinking: Boolean(payloadData.is_thinking || data.event_type === "thinking"),
           streamingText: payloadData.streaming_text || payloadData.text_preview || undefined,
+          conversationUrl: payloadData.conversation_url || data.conversation_url || undefined,
         };
         callbacks.onStep(stepLog);
       }

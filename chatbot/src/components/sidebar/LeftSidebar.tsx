@@ -15,6 +15,7 @@ import {
   TrashIcon,
   CheckIcon,
   CloseIcon,
+  ExternalLinkIcon,
 } from "../icons/Icons";
 
 interface LeftSidebarProps {
@@ -31,6 +32,62 @@ interface LeftSidebarProps {
   onTogglePin: (id: string) => void;
   onRenameSession: (id: string, newTitle: string) => void;
   onDeleteSession: (id: string) => void;
+}
+
+function getSessionProviderConversations(session: ChatSession): { provider: string; role?: string; url: string }[] {
+  const result: { provider: string; role?: string; url: string }[] = [];
+  const seenUrls = new Set<string>();
+
+  const add = (prov: string, url?: string | null, role?: string) => {
+    if (url && typeof url === "string" && url.startsWith("http") && !seenUrls.has(url)) {
+      seenUrls.add(url);
+      result.push({ provider: prov, role, url });
+    }
+  };
+
+  if (session.orchestrator_conversation_url) {
+    add(session.orchestrator_provider || "Orchestrator", session.orchestrator_conversation_url, "Master Orchestrator");
+  }
+  if (session.lead_conversation_url) {
+    add(session.lead_provider || "Lead", session.lead_conversation_url, "Lead Synthesizer");
+  }
+  if (session.provider_conversations) {
+    for (const [p, u] of Object.entries(session.provider_conversations)) {
+      add(p, u, "Nhà cung cấp");
+    }
+  }
+
+  for (const msg of session.messages || []) {
+    if (msg.orchestrator_conversation_url) {
+      add(msg.orchestrator_provider || "Orchestrator", msg.orchestrator_conversation_url, "Master Orchestrator");
+    }
+    if (msg.lead_conversation_url) {
+      add(msg.lead_provider || "Lead", msg.lead_conversation_url, "Lead Synthesizer");
+    }
+    if (msg.provider_conversations) {
+      for (const [p, u] of Object.entries(msg.provider_conversations)) {
+        add(p, u, "Nhà cung cấp");
+      }
+    }
+    if (msg.provider_runs) {
+      const runs = Array.isArray(msg.provider_runs) ? msg.provider_runs : Object.values(msg.provider_runs);
+      for (const r of runs) {
+        if (r?.conversation_url) {
+          add(r.provider || "Nhà cung cấp", r.conversation_url, r.role || "Tác nhân");
+        }
+      }
+    }
+    if (msg.steps) {
+      for (const st of msg.steps) {
+        const url = st.conversationUrl || (st.data as any)?.conversation_url;
+        if (url) {
+          add(st.provider || (st.data as any)?.provider || "Nhà cung cấp", url);
+        }
+      }
+    }
+  }
+
+  return result;
 }
 
 export function LeftSidebar({
@@ -514,6 +571,69 @@ export function LeftSidebar({
               <p style={{ fontSize: 13.5, color: "var(--text-secondary)", lineHeight: 1.5, margin: 0 }}>
                 Bạn có chắc chắn muốn xóa cuộc trò chuyện <strong>"{confirmDeleteSession.title}"</strong> không? Phiên nghiên cứu này sẽ bị xóa khỏi lịch sử cả trên ứng dụng và backend.
               </p>
+
+              {(() => {
+                const relatedChats = getSessionProviderConversations(confirmDeleteSession);
+                if (relatedChats.length === 0) return null;
+                return (
+                  <div
+                    style={{
+                      marginTop: 14,
+                      padding: "10px 12px",
+                      background: "var(--bg-surface)",
+                      border: "1px solid var(--border-subtle)",
+                      borderRadius: "var(--radius-md)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: "var(--text-primary)",
+                        marginBottom: 6,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <ExternalLinkIcon size={13} color="var(--brand-blue)" />
+                      <span>{relatedChats.length} phiên chat liên quan trên nhà cung cấp sẽ tự động bị xóa:</span>
+                    </div>
+                    <ul
+                      style={{
+                        margin: 0,
+                        paddingLeft: 16,
+                        fontSize: 11.5,
+                        color: "var(--text-secondary)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                      }}
+                    >
+                      {relatedChats.map((c, idx) => (
+                        <li key={idx}>
+                          <strong style={{ textTransform: "capitalize", color: "var(--text-primary)" }}>
+                            {c.provider}
+                          </strong>
+                          {c.role ? ` (${c.role})` : ""}:{" "}
+                          <a
+                            href={c.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              color: "var(--brand-blue)",
+                              textDecoration: "underline",
+                              wordBreak: "break-all",
+                            }}
+                          >
+                            {c.url}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
             </div>
 
             <div

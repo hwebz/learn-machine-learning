@@ -34,6 +34,9 @@ class Job(SQLModel, table=True):
     lead_config_json: str | None = None
     tone: str | None = None
     orchestrator_dispatch_json: str | None = None
+    orchestrator_conversation_url: str | None = None
+    lead_conversation_url: str | None = None
+    provider_conversations_json: str = "{}"
 
 
 class JobEvent(SQLModel, table=True):

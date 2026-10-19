@@ -8,14 +8,16 @@ from uuid import uuid4
 
 from openai import AsyncOpenAI
 import structlog
-from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, Response, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlmodel import select
 
 from app.api.auth import require_api_key
 from app.api.schemas import (
     AgentResearchRequest,
+    JobConversationsResponse,
     JobUpdateRequest,
+    ProviderConversationItem,
     ResearchAccepted,
     ResearchRequest,
     ResearchResponse,
@@ -25,8 +27,8 @@ from app.api.schemas import (
 )
 from app.adapters.capabilities import CapabilitiesRegistry, VoiceTranscriberService
 from app.adapters.perplexity_api import PerplexityAgentAdapter
-from app.orchestrator.pipeline import _UI_ADAPTERS
-from app.orchestrator.step_emitter import subscribe_job, unsubscribe_job
+from app.orchestrator.pipeline import _UI_ADAPTERS, create_adapter
+from app.orchestrator.step_emitter import notify_job_event, subscribe_job, unsubscribe_job
 from app.browser.session import BrowserSessionManager
 from app.core.db import SessionLocal
 from app.core.config import detect_available_browsers, settings, update_runtime_settings
@@ -97,6 +99,19 @@ def _job_response(
     disagreements = _safe_json_loads(job.disagreements_json, [])
     config = _safe_json_loads(job.config_json, {})
     orchestrator_dispatch = _safe_json_loads(getattr(job, "orchestrator_dispatch_json", None), None)
+    provider_conversations = _safe_json_loads(getattr(job, "provider_conversations_json", None), {})
+    if not isinstance(provider_conversations, dict):
+        provider_conversations = {}
+    if not provider_conversations and isinstance(runs, list):
+        provider_conversations = {
+            r.get("provider_role_key") or r.get("provider"): r.get("conversation_url")
+            for r in runs
+            if isinstance(r, dict) and r.get("conversation_url")
+        }
+    if getattr(job, "orchestrator_conversation_url", None) and "orchestrator" not in provider_conversations:
+        provider_conversations["orchestrator"] = job.orchestrator_conversation_url
+    if getattr(job, "lead_conversation_url", None) and "lead" not in provider_conversations:
+        provider_conversations["lead"] = job.lead_conversation_url
 
     return ResearchResponse(
         job_id=job.id,
@@ -121,6 +136,9 @@ def _job_response(
         delegated_providers=config.get("delegated_providers") or [],
         orchestrator_config=_safe_json_loads(getattr(job, "orchestrator_config_json", None), None) or config.get("orchestrator_config"),
         lead_config=_safe_json_loads(getattr(job, "lead_config_json", None), None) or config.get("lead_config"),
+        orchestrator_conversation_url=getattr(job, "orchestrator_conversation_url", None),
+        lead_conversation_url=getattr(job, "lead_conversation_url", None),
+        provider_conversations=provider_conversations,
         error=job.error,
         created_at=job.created_at,
         finished_at=job.finished_at,
@@ -318,6 +336,19 @@ async def list_research(limit: int = 50) -> list[dict[str, Any]]:
             runs = _safe_json_loads(j.provider_runs_json, {})
             job_steps = [_event_to_step_dict(ev) for ev in events_by_job.get(j.id, [])]
             orchestrator_dispatch = _safe_json_loads(getattr(j, "orchestrator_dispatch_json", None), None)
+            provider_conversations = _safe_json_loads(getattr(j, "provider_conversations_json", None), {})
+            if not isinstance(provider_conversations, dict):
+                provider_conversations = {}
+            if not provider_conversations and isinstance(runs, list):
+                provider_conversations = {
+                    r.get("provider_role_key") or r.get("provider"): r.get("conversation_url")
+                    for r in runs
+                    if isinstance(r, dict) and r.get("conversation_url")
+                }
+            if getattr(j, "orchestrator_conversation_url", None) and "orchestrator" not in provider_conversations:
+                provider_conversations["orchestrator"] = j.orchestrator_conversation_url
+            if getattr(j, "lead_conversation_url", None) and "lead" not in provider_conversations:
+                provider_conversations["lead"] = j.lead_conversation_url
 
             result.append({
                 "job_id": j.id,
@@ -344,6 +375,9 @@ async def list_research(limit: int = 50) -> list[dict[str, Any]]:
                 "delegated_providers": config.get("delegated_providers") or [],
                 "orchestrator_config": _safe_json_loads(getattr(j, "orchestrator_config_json", None), None) or config.get("orchestrator_config"),
                 "lead_config": _safe_json_loads(getattr(j, "lead_config_json", None), None) or config.get("lead_config"),
+                "orchestrator_conversation_url": getattr(j, "orchestrator_conversation_url", None),
+                "lead_conversation_url": getattr(j, "lead_conversation_url", None),
+                "provider_conversations": provider_conversations,
                 "created_at": j.created_at.isoformat() if j.created_at else None,
                 "finished_at": j.finished_at.isoformat() if j.finished_at else None,
             })
@@ -378,11 +412,58 @@ async def update_research(job_id: str, payload: JobUpdateRequest) -> dict[str, A
         }
 
 
+async def _delete_remote_conversations(targets: list[tuple[str, str]]) -> None:
+    """Best-effort deletion of conversations on remote provider platforms in background."""
+    for provider, url in targets:
+        try:
+            adapter = create_adapter(provider)
+            if hasattr(adapter, "delete_conversation"):
+                await adapter.delete_conversation(url)
+                logger.info("remote_conversation_deletion_succeeded", provider=provider, url=url)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("remote_conversation_deletion_failed", provider=provider, url=url, error=str(exc))
+
+
 @router.delete("/research/{job_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=protected)
-async def delete_research(job_id: str) -> Response:
+async def delete_research(job_id: str, background_tasks: BackgroundTasks, request: Request, delete_remote: bool = True) -> Response:
+    if hasattr(request.app.state, "job_queue"):
+        request.app.state.job_queue.cancel(job_id)
+    targets: list[tuple[str, str]] = []
     async with SessionLocal() as session:
         job = await session.get(Job, job_id)
         if job is not None:
+            # Collect remote conversation URLs to delete
+            if delete_remote:
+                if getattr(job, "orchestrator_provider", None) and getattr(job, "orchestrator_conversation_url", None):
+                    targets.append((job.orchestrator_provider, job.orchestrator_conversation_url))
+                if getattr(job, "lead_provider", None) and getattr(job, "lead_conversation_url", None):
+                    targets.append((job.lead_provider, job.lead_conversation_url))
+
+                # Check runs from database
+                subtasks = (await session.exec(select(Subtask).where(Subtask.job_id == job_id))).all()
+                for st in subtasks:
+                    runs = (await session.exec(select(ProviderRun).where(ProviderRun.subtask_id == st.id))).all()
+                    for run in runs:
+                        if run.conversation_url:
+                            targets.append((run.provider, run.conversation_url))
+
+                # Fallback to provider_runs_json
+                parsed_runs = _safe_json_loads(job.provider_runs_json, [])
+                if isinstance(parsed_runs, list):
+                    for r in parsed_runs:
+                        if isinstance(r, dict) and r.get("conversation_url") and r.get("provider"):
+                            targets.append((r["provider"], r["conversation_url"]))
+
+                # Fallback to provider_conversations_json
+                parsed_convs = _safe_json_loads(getattr(job, "provider_conversations_json", None), {})
+                if isinstance(parsed_convs, dict):
+                    for k, u in parsed_convs.items():
+                        if not u:
+                            continue
+                        prov = k.split(":")[-1].split("_")[0] if ":" in k else k
+                        if prov in _UI_ADAPTERS or prov in {"fake", "perplexity", "router", "9router"}:
+                            targets.append((prov, u))
+
             # 1. Delete events
             events = (await session.exec(select(JobEvent).where(JobEvent.job_id == job_id))).all()
             for ev in events:
@@ -416,6 +497,17 @@ async def delete_research(job_id: str) -> Response:
             # 4. Delete the job record
             await session.delete(job)
             await session.commit()
+
+    # Schedule deletion of remote provider conversations in background
+    if delete_remote and targets:
+        seen: set[str] = set()
+        unique_targets: list[tuple[str, str]] = []
+        for p, u in targets:
+            if u not in seen:
+                seen.add(u)
+                unique_targets.append((p, u))
+        background_tasks.add_task(_delete_remote_conversations, unique_targets)
+
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -444,6 +536,89 @@ async def get_research_sources(job_id: str) -> list[dict[str, Any]]:
             }
             for s in sources
         ]
+
+
+@router.get("/research/{job_id}/conversations", response_model=JobConversationsResponse, dependencies=protected)
+async def get_job_conversations(job_id: str) -> JobConversationsResponse:
+    job = await _load_job(job_id)
+    items: list[ProviderConversationItem] = []
+    seen_urls: set[str] = set()
+
+    if getattr(job, "orchestrator_conversation_url", None) and getattr(job, "orchestrator_provider", None):
+        items.append(ProviderConversationItem(
+            provider=job.orchestrator_provider,
+            role="orchestrator",
+            url=job.orchestrator_conversation_url,
+            title="Master Orchestrator",
+        ))
+        seen_urls.add(job.orchestrator_conversation_url)
+
+    async with SessionLocal() as session:
+        subtasks = (await session.exec(select(Subtask).where(Subtask.job_id == job_id))).all()
+        for st in subtasks:
+            runs = (await session.exec(select(ProviderRun).where(ProviderRun.subtask_id == st.id))).all()
+            for r in runs:
+                if r.conversation_url and r.conversation_url not in seen_urls:
+                    seen_urls.add(r.conversation_url)
+                    items.append(ProviderConversationItem(
+                        provider=r.provider,
+                        role="subtask",
+                        url=r.conversation_url,
+                        title=f"Nhiệm vụ {r.provider}",
+                        branch=st.branch,
+                    ))
+
+    parsed_runs = _safe_json_loads(job.provider_runs_json, [])
+    if isinstance(parsed_runs, list):
+        for r in parsed_runs:
+            if isinstance(r, dict) and r.get("conversation_url") and r["conversation_url"] not in seen_urls:
+                seen_urls.add(r["conversation_url"])
+                items.append(ProviderConversationItem(
+                    provider=r.get("provider", "AI"),
+                    role=r.get("role", "subtask"),
+                    url=r["conversation_url"],
+                    title=r.get("branch") or f"Phiên chat {r.get('provider')}",
+                    branch=r.get("branch"),
+                    branch_index=r.get("branch_index"),
+                ))
+
+    if getattr(job, "lead_conversation_url", None) and getattr(job, "lead_provider", None) and job.lead_conversation_url not in seen_urls:
+        items.append(ProviderConversationItem(
+            provider=job.lead_provider,
+            role="lead",
+            url=job.lead_conversation_url,
+            title="Lead Synthesizer",
+        ))
+        seen_urls.add(job.lead_conversation_url)
+
+    parsed_convs = _safe_json_loads(getattr(job, "provider_conversations_json", None), {})
+    if isinstance(parsed_convs, dict):
+        for k, u in parsed_convs.items():
+            if u and u not in seen_urls:
+                seen_urls.add(u)
+                prov = k.split(":")[-1].split("_")[0] if ":" in k else k
+                items.append(ProviderConversationItem(
+                    provider=prov,
+                    role="provider",
+                    url=u,
+                    title=f"Phiên chat {prov}",
+                ))
+
+    return JobConversationsResponse(job_id=job.id, conversations=items)
+
+
+@router.post("/research/{job_id}/delete-provider-chats", dependencies=protected)
+async def delete_job_provider_chats(job_id: str, background_tasks: BackgroundTasks) -> dict[str, Any]:
+    conv_res = await get_job_conversations(job_id)
+    targets = [(c.provider, c.url) for c in conv_res.conversations]
+    if targets:
+        background_tasks.add_task(_delete_remote_conversations, targets)
+    return {
+        "job_id": job_id,
+        "targets_count": len(targets),
+        "targets": [{"provider": p, "url": u} for p, u in targets],
+        "message": f"Đã gửi lệnh xóa {len(targets)} phiên chat trên các nhà cung cấp.",
+    }
 
 
 @router.get("/research/{job_id}/events", dependencies=protected)
@@ -523,6 +698,7 @@ async def cancel_research(job_id: str, request: Request) -> Response:
             subtasks_done=job.subtasks_done,
         ))
         await session.commit()
+    notify_job_event(job_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

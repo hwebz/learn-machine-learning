@@ -19,7 +19,7 @@ class ProviderResult(BaseModel):
     prompt: str
     answer_markdown: str
     sources: list[Source]
-    conversation_url: HttpUrl | None = None
+    conversation_url: HttpUrl | str | None = None
     status: Literal["ok", "partial", "timeout", "needs_user_action", "error"]
     started_at: datetime
     finished_at: datetime
@@ -46,4 +46,6 @@ class ProviderAdapter(Protocol):
         mode: str = "default",
         on_step: StepCallback | None = None,
     ) -> ProviderResult: ...
+
+    async def delete_conversation(self, conversation_url: str) -> bool: ...
 

@@ -44,6 +44,7 @@ def test_ui_adapter_satisfies_provider_adapter_protocol(adapter_cls, name: str) 
     # so we assert the members exist rather than using isinstance()).
     assert hasattr(adapter, "health") and callable(adapter.health)
     assert hasattr(adapter, "ask") and callable(adapter.ask)
+    assert hasattr(adapter, "delete_conversation") and callable(adapter.delete_conversation)
     assert adapter.name == name
 
     health_sig = inspect.signature(adapter.health)
@@ -54,6 +55,9 @@ def test_ui_adapter_satisfies_provider_adapter_protocol(adapter_cls, name: str) 
     assert "timeout_s" in ask_sig.parameters
     assert ask_sig.parameters["prompt"].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
     assert ask_sig.parameters["timeout_s"].kind is inspect.Parameter.KEYWORD_ONLY
+
+    del_sig = inspect.signature(adapter.delete_conversation)
+    assert "conversation_url" in del_sig.parameters
 
 
 @pytest.mark.asyncio

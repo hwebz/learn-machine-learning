@@ -116,6 +116,7 @@ class ProviderRunResponse(BaseModel):
     branch_index: int | None = None
     subtask_id: str | None = None
     provider_role_key: str | None = None
+    conversation_url: str | None = None
     answer_markdown: str | None = None
     answer_md: str | None = None
 
@@ -144,8 +145,25 @@ class ResearchResponse(BaseModel):
     delegated_providers: list[str] | None = None
     orchestrator_config: dict[str, Any] | None = None
     lead_config: dict[str, Any] | None = None
+    orchestrator_conversation_url: str | None = None
+    lead_conversation_url: str | None = None
+    provider_conversations: dict[str, str] | None = None
     created_at: datetime
     finished_at: datetime | None
+
+
+class ProviderConversationItem(BaseModel):
+    provider: str
+    role: str
+    url: str
+    title: str | None = None
+    branch: str | None = None
+    branch_index: int | None = None
+
+
+class JobConversationsResponse(BaseModel):
+    job_id: str
+    conversations: list[ProviderConversationItem]
 
 
 class JobUpdateRequest(BaseModel):

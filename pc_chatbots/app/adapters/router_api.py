@@ -197,6 +197,9 @@ class RouterAPIAdapter:
             error=error_msg,
         )
 
+    async def delete_conversation(self, conversation_url: str) -> bool:
+        return True
+
 
 def _extract_answer_and_reasoning(payload: dict[str, Any]) -> tuple[str, str | None]:
     """Universal parser for OpenAI-compatible chat responses, thinking/reasoning tags,

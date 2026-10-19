@@ -22,6 +22,7 @@ import {
   deleteResearchJob,
   fetchConversationCitations,
   retryJobProvider,
+  DEFAULT_API_KEY,
 } from "../../lib/api";
 import { useProviderCapabilities } from "../../lib/useProviderCapabilities";
 
@@ -95,6 +96,9 @@ export function buildAssistantMessage(
     orchestrator_dispatch?: any[];
     delegated_providers?: string[];
     error?: string | null;
+    orchestrator_conversation_url?: string | null;
+    lead_conversation_url?: string | null;
+    provider_conversations?: Record<string, string>;
   }
 ): Message | null {
   const content = resolveAssistantContent(jobData.status, jobData.report_markdown, jobData.error);
@@ -135,6 +139,9 @@ export function buildAssistantMessage(
     tone: jobData.tone,
     orchestrator_dispatch: jobData.orchestrator_dispatch,
     delegated_providers: jobData.delegated_providers,
+    orchestrator_conversation_url: jobData.orchestrator_conversation_url || undefined,
+    lead_conversation_url: jobData.lead_conversation_url || undefined,
+    provider_conversations: jobData.provider_conversations || undefined,
   };
 }
 
@@ -163,16 +170,18 @@ export function upsertAssistantMessage(messages: Message[], newAsstMsg: Message)
   return [...messages, newAsstMsg];
 }
 
-const FALLBACK_SESSION: ChatSession = {
-  id: "session-fallback",
+const createFreshDraftSession = (id?: string): ChatSession => ({
+  id: id || `session-${Date.now()}`,
   title: "Phiên nghiên cứu mới",
   pinned: false,
   createdAt: "Vừa xong",
-  createdTimestamp: 0,
-  selectedProviders: DEFAULT_SELECTED_PROVIDERS,
-  selectedProvider: DEFAULT_SELECTED_PROVIDERS[0] || "copilot",
+  createdTimestamp: Date.now(),
+  selectedProviders: [],
+  selectedProvider: "",
   messages: [],
-};
+});
+
+const FALLBACK_SESSION: ChatSession = createFreshDraftSession("session-fallback");
 
 interface ChatDashboardProps {
   initialChatId?: string;
@@ -193,16 +202,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>(routeChatId || "");
   const [currentRouteChatId, setCurrentRouteChatId] = useState<string | undefined>(routeChatId);
-  const [draftSession, setDraftSession] = useState<ChatSession>(() => ({
-    id: "session-draft",
-    title: "Phiên nghiên cứu mới",
-    pinned: false,
-    createdAt: "Vừa xong",
-    createdTimestamp: Date.now(),
-    selectedProviders: DEFAULT_SELECTED_PROVIDERS,
-    selectedProvider: DEFAULT_SELECTED_PROVIDERS[0] || "copilot",
-    messages: [],
-  }));
+  const [draftSession, setDraftSession] = useState<ChatSession>(() => createFreshDraftSession("session-draft"));
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [activeSteps, setActiveSteps] = useState<StepLog[]>([]);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(false);
@@ -313,6 +313,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
           const rawJobStatus = (stepLog.data as any)?.job_status;
           const dispatch = stepLog.data?.dispatch;
+          const stepConvUrl = stepLog.conversationUrl || (stepLog.data as any)?.conversation_url;
+          const stepProv = stepLog.provider || (stepLog.data as any)?.provider;
+          const orchConvUrl = (stepLog.data as any)?.orch_conv_url;
+          const leadConvUrl = (stepLog.data as any)?.lead_conv_url;
 
           setSessions((prev) =>
             prev.map((s) => {
@@ -323,10 +327,17 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               } else if (dispatch && nextStatus === "orchestrating") {
                 nextStatus = "researching" as any;
               }
+              const updatedProviderConvs = { ...(s.provider_conversations || {}) };
+              if (stepConvUrl && stepProv) {
+                updatedProviderConvs[stepProv] = stepConvUrl;
+              }
               return {
                 ...s,
                 status: nextStatus,
                 orchestrator_dispatch: dispatch || s.orchestrator_dispatch,
+                orchestrator_conversation_url: orchConvUrl || s.orchestrator_conversation_url,
+                lead_conversation_url: leadConvUrl || s.lead_conversation_url,
+                provider_conversations: Object.keys(updatedProviderConvs).length > 0 ? updatedProviderConvs : s.provider_conversations,
               };
             })
           );
@@ -369,6 +380,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               orchestrator_dispatch:
                 (result as any).orchestrator_dispatch || jobMeta?.orchestrator_dispatch,
               delegated_providers: jobMeta?.delegated_providers,
+              orchestrator_conversation_url: result.orchestrator_conversation_url,
+              lead_conversation_url: result.lead_conversation_url,
+              provider_conversations: result.provider_conversations,
             });
 
             if (asstMsg) {
@@ -382,6 +396,14 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                     messages: upsertAssistantMessage(s.messages, asstMsg),
                     orchestrator_dispatch:
                       (result as any).orchestrator_dispatch || s.orchestrator_dispatch,
+                    orchestrator_conversation_url:
+                      result.orchestrator_conversation_url || s.orchestrator_conversation_url,
+                    lead_conversation_url:
+                      result.lead_conversation_url || s.lead_conversation_url,
+                    provider_conversations: {
+                      ...(s.provider_conversations || {}),
+                      ...(result.provider_conversations || {}),
+                    },
                   };
                 })
               );
@@ -516,6 +538,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               ...(((job as any).orchestrator_config && (job as any).orchestrator_provider) ? { [(job as any).orchestrator_provider]: (job as any).orchestrator_config } : {}),
               ...(((job as any).lead_config && (job as any).lead_provider) ? { [(job as any).lead_provider]: (job as any).lead_config } : {}),
             },
+            orchestrator_conversation_url: (job as any).orchestrator_conversation_url || undefined,
+            lead_conversation_url: (job as any).lead_conversation_url || undefined,
+            provider_conversations: (job as any).provider_conversations || undefined,
           });
         }
       }
@@ -565,6 +590,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                 ...(((directJob as any).orchestrator_config && (directJob as any).orchestrator_provider) ? { [(directJob as any).orchestrator_provider]: (directJob as any).orchestrator_config } : {}),
                 ...(((directJob as any).lead_config && (directJob as any).lead_provider) ? { [(directJob as any).lead_provider]: (directJob as any).lead_config } : {}),
               },
+              orchestrator_conversation_url: (directJob as any).orchestrator_conversation_url || undefined,
+              lead_conversation_url: (directJob as any).lead_conversation_url || undefined,
+              provider_conversations: (directJob as any).provider_conversations || undefined,
             };
             newSessions.unshift(directSession);
           }
@@ -617,6 +645,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             setInspectedMessage(undefined);
             setInspectedProvider(undefined);
             setIsRightSidebarOpen(false);
+            setDraftSession(createFreshDraftSession(freshId));
           }
           return validCombined;
         }
@@ -646,6 +675,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         const freshId = `session-${Date.now()}`;
         if (!activeJobIdRef.current && !isGenerating) {
           setActiveSessionId(freshId);
+          setDraftSession(createFreshDraftSession(freshId));
         }
         return activeRunningSessions;
       });
@@ -707,18 +737,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         setIsRightSidebarOpen(false);
         setIsProvidersModalOpen(false);
         setIsGenerating(false);
-        setDraftSession({
-          id: freshDraftId,
-          title: "Phiên nghiên cứu mới",
-          pinned: false,
-          createdAt: "Vừa xong",
-          createdTimestamp: Date.now(),
-          selectedProviders: (sessions[0]?.selectedProviders && sessions[0].selectedProviders.length > 0)
-            ? sessions[0].selectedProviders
-            : DEFAULT_SELECTED_PROVIDERS,
-          selectedProvider: sessions[0]?.selectedProvider || DEFAULT_SELECTED_PROVIDERS[0] || "copilot",
-          messages: [],
-        });
+        setDraftSession(createFreshDraftSession(freshDraftId));
       }
     };
 
@@ -743,6 +762,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         setInspectedMessage(undefined);
         setInspectedProvider(undefined);
         setIsRightSidebarOpen(false);
+        setDraftSession(createFreshDraftSession(freshDraftId));
       }
     }
   }, [currentRouteChatId, isGenerating, sessions, activeSessionId]);
@@ -1030,18 +1050,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       handleStopResearch();
     }
     const newId = `session-${Date.now()}`;
-    const cleanDraft: ChatSession = {
-      id: newId,
-      title: "Phiên nghiên cứu mới",
-      pinned: false,
-      createdAt: "Vừa xong",
-      createdTimestamp: Date.now(),
-      selectedProviders: (sessions[0]?.selectedProviders && sessions[0].selectedProviders.length > 0)
-        ? sessions[0].selectedProviders
-        : DEFAULT_SELECTED_PROVIDERS,
-      selectedProvider: sessions[0]?.selectedProvider || DEFAULT_SELECTED_PROVIDERS[0] || "copilot",
-      messages: [],
-    };
+    const cleanDraft = createFreshDraftSession(newId);
     setDraftSession(cleanDraft);
     setActiveSessionId(newId);
     setCurrentRouteChatId(undefined);
@@ -1365,7 +1374,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     markSessionAsDeleted(id, targetJobId);
 
     if (targetJobId) {
-      await deleteResearchJob(targetJobId);
+      await deleteResearchJob(targetJobId, DEFAULT_API_KEY, { deleteRemote: true });
     }
     const remaining = sessions.filter((s) => s.id !== id && s.jobId !== id);
     setSessions(remaining);
@@ -1381,18 +1390,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       setInspectedProvider(undefined);
       setIsRightSidebarOpen(false);
 
-      setDraftSession({
-        id: freshDraftId,
-        title: "Phiên nghiên cứu mới",
-        pinned: false,
-        createdAt: "Vừa xong",
-        createdTimestamp: Date.now(),
-        selectedProviders: (remaining[0]?.selectedProviders && remaining[0].selectedProviders.length > 0)
-          ? remaining[0].selectedProviders
-          : DEFAULT_SELECTED_PROVIDERS,
-        selectedProvider: remaining[0]?.selectedProvider || DEFAULT_SELECTED_PROVIDERS[0] || "copilot",
-        messages: [],
-      });
+      setDraftSession(createFreshDraftSession(freshDraftId));
 
       if (typeof window !== "undefined" && window.location.pathname !== "/") {
         window.history.pushState(null, "", "/");

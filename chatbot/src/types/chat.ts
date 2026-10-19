@@ -38,6 +38,7 @@ export interface StepLog {
   citations?: SourceLink[];
   isThinking?: boolean;
   streamingText?: string;
+  conversationUrl?: string;
 }
 
 export interface Message {
@@ -65,6 +66,9 @@ export interface Message {
   tone?: string;
   orchestrator_dispatch?: AgentDispatchPlanItem[];
   delegated_providers?: string[];
+  orchestrator_conversation_url?: string;
+  lead_conversation_url?: string;
+  provider_conversations?: Record<string, string>;
   jobId?: string;
 }
 
@@ -76,6 +80,7 @@ export interface AgentDispatchPlanItem {
   question: string;
   branch_index?: number;
   provider_role_key?: string;
+  conversation_url?: string;
 }
 
 import { ProviderSelectionConfig } from "./capabilities";
@@ -100,6 +105,9 @@ export interface ChatSession {
   tone?: string;
   orchestrator_dispatch?: AgentDispatchPlanItem[];
   delegated_providers?: string[];
+  orchestrator_conversation_url?: string;
+  lead_conversation_url?: string;
+  provider_conversations?: Record<string, string>;
 }
 
 export interface ProviderInfo {

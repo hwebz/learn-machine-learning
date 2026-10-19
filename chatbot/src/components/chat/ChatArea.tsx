@@ -317,6 +317,8 @@ export function ChatArea({
     activeSteps.some((st) => st.data?.role || st.data?.dispatch)
   );
 
+  const selectedCount = selectedProviders.length;
+
   const handleSend = () => {
     if (!isAgentSession && selectedCount === 0) {
       onOpenProvidersModal();
@@ -341,8 +343,6 @@ export function ChatArea({
     setIsCopied(id);
     setTimeout(() => setIsCopied(null), 2000);
   };
-
-  const selectedCount = selectedProviders.length;
 
   const currentActiveOptionsId = useMemo(() => {
     if (selectedProviders.some((p) => p.id === activeOptionsProviderId)) {

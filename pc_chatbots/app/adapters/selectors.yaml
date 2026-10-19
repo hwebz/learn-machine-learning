@@ -157,6 +157,34 @@ providers:
       - { css: "div.tool-attribution a[href^='http']" }
       - { css: "link-block a[href^='http']" }
       - { css: "sources-list a[href^='http']" }
+    delete_selectors:
+      menu_button:
+        - { css: "button:has(mat-icon[data-mat-icon-name='more_vert'])" }
+        - { css: "button:has(mat-icon:has-text('more_vert'))" }
+        - { css: "mat-icon[data-mat-icon-name='more_vert']" }
+        - { css: "button[aria-label*='Thao tác' i]" }
+        - { css: "button[aria-label*='Tùy chọn' i]" }
+        - { css: "button[aria-label*='More' i]" }
+        - { css: "button[aria-label*='more' i]" }
+        - { css: "button[aria-label*='thêm' i]" }
+      delete_button:
+        - { css: "[role='menuitem']:has-text('Xóa')" }
+        - { css: ".mat-mdc-menu-item:has-text('Xóa')" }
+        - { css: "button:has-text('Xóa')" }
+        - { css: "[role='menuitem']:has(mat-icon[data-mat-icon-name='delete'])" }
+        - { css: "button:has(mat-icon[data-mat-icon-name='delete'])" }
+        - { css: "[role='menuitem']:has-text('Delete')" }
+        - { css: "button:has-text('Delete')" }
+      confirm_button:
+        - { css: "[role='dialog'] button:has-text('Xóa')" }
+        - { css: "mat-dialog-actions button:has-text('Xóa')" }
+        - { css: ".mat-mdc-dialog-actions button:has-text('Xóa')" }
+        - { css: "[role='dialog'] button:has-text('Delete')" }
+        - { css: "button[data-test-id*='confirm' i]" }
+      toast_indicator:
+        - { css: "mat-snack-bar-container" }
+        - { css: ".mat-mdc-snack-bar-container" }
+        - { css: "snack-bar-container" }
 
   # ─────────────────────────────────────── ChatGPT
   chatgpt:

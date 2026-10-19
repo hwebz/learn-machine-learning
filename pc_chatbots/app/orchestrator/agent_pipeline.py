@@ -361,6 +361,7 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 sanitized_dispatch.append(item)
             dispatch_items = sanitized_dispatch
 
+        orch_conv_url = str(orch_res.conversation_url) if getattr(orch_res, "conversation_url", None) else None
         orch_duration = round(time.monotonic() - orch_start, 1)
         for idx, item in enumerate(dispatch_items, start=1):
             item["branch_index"] = idx
@@ -371,9 +372,18 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             db_j = await session.get(Job, job_id)
             if db_j is not None:
                 db_j.orchestrator_dispatch_json = json.dumps(dispatch_items, ensure_ascii=False)
+                db_j.orchestrator_conversation_url = orch_conv_url
                 db_j.subtasks_total = len(dispatch_items)
                 db_j.subtasks_done = 0
                 db_j.updated_at = utc_now()
+                session.add(ProviderRun(
+                    id=f"{job_id}:orchestrator:run",
+                    subtask_id=f"{job_id}:orchestrator",
+                    provider=orchestrator_prov,
+                    answer_md=orch_res.answer_markdown,
+                    conversation_url=orch_conv_url,
+                    status="ok",
+                ))
                 session.add(JobEvent(
                     job_id=job_id,
                     status="orchestrating",
@@ -383,7 +393,13 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                     message=f"Orchestrator ({orchestrator_prov}) đã phân rã thành {len(dispatch_items)} nhiệm vụ nghiên cứu chuyên sâu.",
                     subtasks_total=len(dispatch_items),
                     subtasks_done=0,
-                    data_json=json.dumps({"dispatch": dispatch_items, "role": "orchestrator", "provider_role_key": "orchestrator", "elapsed_s": orch_duration}, ensure_ascii=False),
+                    data_json=json.dumps({
+                        "dispatch": dispatch_items,
+                        "role": "orchestrator",
+                        "provider_role_key": "orchestrator",
+                        "elapsed_s": orch_duration,
+                        "conversation_url": orch_conv_url,
+                    }, ensure_ascii=False),
                 ))
                 await session.commit()
 
@@ -463,6 +479,7 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 res_sources = []
 
             subtask_duration = round(time.monotonic() - subtask_start, 1)
+            sub_conv_url = str(result.conversation_url) if getattr(result, "conversation_url", None) else None
             async with results_lock:
                 run_item = {
                     "provider": prov,
@@ -471,6 +488,7 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                     "status": status_str,
                     "answer_md": ans_text,
                     "answer_markdown": ans_text,
+                    "conversation_url": sub_conv_url,
                     "elapsed_ms": int(subtask_duration * 1000),
                     "elapsed_s": subtask_duration,
                     "subtask_id": st.id,
@@ -491,6 +509,7 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                         subtask_id=st.id,
                         provider=prov,
                         answer_md=ans_text,
+                        conversation_url=sub_conv_url,
                         status=status_str,
                     ))
 
@@ -530,6 +549,7 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                                 "role": "subtask",
                                 "subtask_id": st.id,
                                 "provider_role_key": role_key,
+                                "conversation_url": sub_conv_url,
                             }, ensure_ascii=False),
                         ))
                     await s.commit()
@@ -591,9 +611,11 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 start_time=lead_start,
             )
 
+        lead_conv_url = None
         try:
             lead_res = await lead_adapter.ask(lead_prompt, **lead_kwargs)
             final_report = lead_res.answer_markdown
+            lead_conv_url = str(lead_res.conversation_url) if getattr(lead_res, "conversation_url", None) else None
         except Exception as exc:
             logger.error("lead_synthesis_failed", provider=lead_prov, error=str(exc))
             # Fallback report compilation
@@ -616,9 +638,33 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             if db_j is not None and db_j.status not in TERMINAL_STATUSES:
                 db_j.status = final_status
                 db_j.report_markdown = final_report
+                db_j.lead_conversation_url = lead_conv_url
                 db_j.finished_at = utc_now()
                 db_j.updated_at = utc_now()
+
+                # Build consolidated map of all provider conversation URLs
+                all_convs: dict[str, str] = {}
+                if db_j.orchestrator_conversation_url:
+                    all_convs["orchestrator"] = db_j.orchestrator_conversation_url
+                if lead_conv_url:
+                    all_convs["lead"] = lead_conv_url
+                for r in runs:
+                    role_key = r.get("provider_role_key") or r.get("provider")
+                    if role_key and r.get("conversation_url"):
+                        all_convs[role_key] = r["conversation_url"]
+                        if r.get("provider") and r["provider"] not in all_convs:
+                            all_convs[r["provider"]] = r["conversation_url"]
+                db_j.provider_conversations_json = json.dumps(all_convs, ensure_ascii=False)
+
                 session.add(Report(id=job_id, job_id=job_id, markdown=final_report))
+                session.add(ProviderRun(
+                    id=f"{job_id}:lead:run",
+                    subtask_id=f"{job_id}:lead",
+                    provider=lead_prov,
+                    answer_md=final_report,
+                    conversation_url=lead_conv_url,
+                    status="ok" if final_status == "completed" else "partial",
+                ))
                 session.add(JobEvent(
                     job_id=job_id,
                     status=final_status,
@@ -634,11 +680,31 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                         "role": "lead",
                         "provider_role_key": "lead",
                         "tone": tone,
+                        "conversation_url": lead_conv_url,
                     }, ensure_ascii=False),
                 ))
                 await session.commit()
 
         logger.info("run_agent_pipeline_finished", job_id=job_id, status=final_status)
+
+    except asyncio.CancelledError:
+        logger.info("run_agent_pipeline_cancelled", job_id=job_id)
+        async with SessionLocal() as session:
+            db_j = await session.get(Job, job_id)
+            if db_j is not None and db_j.status not in TERMINAL_STATUSES:
+                db_j.status = "cancelled"
+                db_j.finished_at = utc_now()
+                db_j.updated_at = utc_now()
+                session.add(JobEvent(
+                    job_id=job_id,
+                    status="cancelled",
+                    event_type="progress",
+                    message="Người dùng đã dừng phiên nghiên cứu tác nhân.",
+                ))
+                await session.commit()
+        notify_job_event(job_id)
+        await BrowserSessionManager.close_all()
+        raise
 
     except Exception as exc:
         logger.exception("agent_pipeline_fatal_error", job_id=job_id, error=str(exc))

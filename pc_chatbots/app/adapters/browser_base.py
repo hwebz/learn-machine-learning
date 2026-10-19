@@ -391,7 +391,14 @@ class BrowserProviderAdapter(ABC):
                                     thinking_steps: list[dict[str, Any]] | None = None,
                                     **kwargs: Any,
                                 ) -> None:
-                                    nonlocal last_thinking_snapshot
+                                    nonlocal last_thinking_snapshot, conversation_url
+
+                                    try:
+                                        cur_page_url = page.url
+                                        if cur_page_url and cur_page_url.startswith(("http://", "https://")) and cur_page_url != target_url:
+                                            conversation_url = cur_page_url
+                                    except Exception:
+                                        pass
 
                                     steps_list = thinking_steps or []
                                     cits_list = citations or []
@@ -490,6 +497,7 @@ class BrowserProviderAdapter(ABC):
                                             "streaming_text": last_text,
                                             "elapsed_s": elapsed_s,
                                             "poll_count": poll_count,
+                                            "conversation_url": conversation_url,
                                         },
                                     )
 
@@ -657,10 +665,17 @@ class BrowserProviderAdapter(ABC):
 
                     try:
                         raw_url = page.url
-                        conversation_url = raw_url if raw_url.startswith(("http://", "https://")) else None
+                        if raw_url and raw_url.startswith(("http://", "https://")):
+                            conversation_url = raw_url
                     except Exception:  # noqa: BLE001
-                        conversation_url = None
+                        pass
                 finally:
+                    try:
+                        raw_url = page.url
+                        if raw_url and raw_url.startswith(("http://", "https://")):
+                            conversation_url = raw_url
+                    except Exception:  # noqa: BLE001
+                        pass
                     artifact_paths = await save_artifacts(
                         page,
                         job_tag=job_tag,
@@ -703,3 +718,117 @@ class BrowserProviderAdapter(ABC):
             artifact_paths=artifact_paths,
             error=error,
         )
+
+    async def delete_conversation(self, conversation_url: str) -> bool:
+        """Best-effort automated deletion of a chat conversation on the provider platform."""
+        if not conversation_url or not conversation_url.startswith(("http://", "https://")):
+            return False
+
+        logger.info("provider_delete_conversation_start", provider=self.name, url=conversation_url)
+        try:
+            async with self._session.exclusive():
+                page = await self._session.new_page(conversation_url)
+                try:
+                    try:
+                        await page.wait_for_load_state("domcontentloaded", timeout=7000)
+                    except Exception:
+                        pass
+                    await asyncio.sleep(2.0)
+
+                    # 1. ChatGPT API-level deletion check
+                    if self.name == "chatgpt":
+                        match = re.search(r"/c/([a-f0-9\-]+)", conversation_url)
+                        if match:
+                            conv_id = match.group(1)
+                            api_ok = await page.evaluate(
+                                """async (id) => {
+                                    try {
+                                        const res = await fetch(`/backend-api/conversation/${id}`, {
+                                            method: 'PATCH',
+                                            headers: {'Content-Type': 'application/json'},
+                                            body: JSON.stringify({is_visible: false})
+                                        });
+                                        return res.ok;
+                                    } catch (e) {
+                                        return false;
+                                    }
+                                }""",
+                                conv_id,
+                            )
+                            if api_ok:
+                                logger.info("chatgpt_conversation_deleted_via_api", conv_id=conv_id)
+                                return True
+
+                    # 2. Universal & configured selector chains
+                    delete_cfg = self._cfg.get("delete_chat") or {}
+                    menu_chain = delete_cfg.get("menu_button") or [
+                        {"css": "button[data-testid*='options' i]"},
+                        {"css": "button[data-testid*='menu' i]"},
+                        {"css": "button[aria-haspopup='menu']"},
+                        {"css": "button[aria-label*='Options' i]"},
+                        {"css": "button[aria-label*='More' i]"},
+                        {"css": "button[aria-label*='Tùy chọn' i]"},
+                        {"css": "button[aria-label*='Thao tác' i]"},
+                        {"css": "button[aria-label*='Chat actions' i]"},
+                    ]
+                    del_chain = delete_cfg.get("delete_button") or [
+                        {"css": "[role='menuitem']:has-text('Delete')"},
+                        {"css": "[role='menuitem']:has-text('Xóa')"},
+                        {"css": "button:has-text('Delete')"},
+                        {"css": "button:has-text('Xóa')"},
+                        {"css": "div[role='menuitem']:has-text('Delete')"},
+                    ]
+                    confirm_chain = delete_cfg.get("confirm_button") or [
+                        {"css": "[role='dialog'] button:has-text('Delete')"},
+                        {"css": "[role='dialog'] button:has-text('Xóa')"},
+                        {"css": "button[data-testid*='confirm' i]"},
+                        {"css": "button.btn-danger"},
+                        {"css": "button:has-text('Confirm')"},
+                        {"css": "button:has-text('Xác nhận')"},
+                    ]
+
+                    # Step A: Click options/overflow menu if present
+                    menu_btn, _ = await resolve_locator(page, menu_chain)
+                    if menu_btn is not None:
+                        try:
+                            if await menu_btn.is_visible(timeout=2000):
+                                await menu_btn.click(timeout=2000)
+                                await asyncio.sleep(0.5)
+                        except Exception:
+                            pass
+
+                    # Step B: Click Delete item
+                    del_btn, _ = await resolve_locator(page, del_chain)
+                    if del_btn is not None:
+                        try:
+                            if await del_btn.is_visible(timeout=2000):
+                                await del_btn.click(timeout=2000)
+                                await asyncio.sleep(0.5)
+                        except Exception:
+                            pass
+
+                    # Step C: Click Confirm Delete button
+                    confirm_btn, _ = await resolve_locator(page, confirm_chain)
+                    if confirm_btn is not None:
+                        try:
+                            if await confirm_btn.is_visible(timeout=2000):
+                                await confirm_btn.click(timeout=3000)
+                                await asyncio.sleep(1.0)
+                                logger.info("provider_conversation_deleted_via_ui", provider=self.name, url=conversation_url)
+                                return True
+                        except Exception:
+                            pass
+
+                    logger.warning("provider_delete_selectors_not_matched", provider=self.name, url=conversation_url)
+                    return False
+                finally:
+                    try:
+                        if self._session._ctx is not None and len(self._session._ctx.pages) <= 1:
+                            await page.goto("about:blank")
+                        else:
+                            await page.close()
+                    except Exception:
+                        pass
+        except Exception as exc:
+            logger.warning("provider_delete_conversation_error", provider=self.name, url=conversation_url, error=str(exc))
+            return False
