@@ -136,6 +136,9 @@ def _job_response(
         delegated_providers=config.get("delegated_providers") or [],
         orchestrator_config=_safe_json_loads(getattr(job, "orchestrator_config_json", None), None) or config.get("orchestrator_config"),
         lead_config=_safe_json_loads(getattr(job, "lead_config_json", None), None) or config.get("lead_config"),
+        summarization_provider=getattr(job, "summarization_provider", None) or config.get("summarization_provider"),
+        summarization_config=_safe_json_loads(getattr(job, "summarization_config_json", None), None) or config.get("summarization_config"),
+        context_summary=getattr(job, "context_summary", None),
         orchestrator_conversation_url=getattr(job, "orchestrator_conversation_url", None),
         lead_conversation_url=getattr(job, "lead_conversation_url", None),
         provider_conversations=provider_conversations,
@@ -287,20 +290,50 @@ async def create_research(payload: ResearchRequest, request: Request) -> Researc
 @router.post("/agent-research", response_model=ResearchAccepted, status_code=status.HTTP_202_ACCEPTED, dependencies=protected)
 async def create_agent_research(payload: AgentResearchRequest, request: Request) -> ResearchAccepted:
     job_id = str(uuid4())
-    job = Job(
-        id=job_id,
-        query=payload.query,
-        config_json=payload.model_dump_json(),
-        status="queued",
-        job_type="agent",
-        orchestrator_provider=payload.orchestrator_provider,
-        orchestrator_config_json=json.dumps(payload.orchestrator_config or {}),
-        lead_provider=payload.lead_provider,
-        lead_config_json=json.dumps(payload.lead_config or {}),
-        tone=payload.tone,
-        subtasks_total=1,
-    )
+    parent_job_id = payload.parent_job_id
+    conversation_id = job_id
+    initial_conv_urls: dict[str, str] = dict(payload.conversation_urls or {})
+
     async with SessionLocal() as session:
+        if parent_job_id:
+            parent_job = await session.get(Job, parent_job_id)
+            if parent_job is not None:
+                conversation_id = parent_job.conversation_id or parent_job.id
+                if not initial_conv_urls and parent_job.provider_conversations_json:
+                    try:
+                        initial_conv_urls = json.loads(parent_job.provider_conversations_json)
+                    except Exception:
+                        pass
+                elif parent_job.provider_conversations_json:
+                    try:
+                        parent_convs = json.loads(parent_job.provider_conversations_json)
+                        if isinstance(parent_convs, dict):
+                            for k, v in parent_convs.items():
+                                if k not in initial_conv_urls and v:
+                                    initial_conv_urls[k] = v
+                    except Exception:
+                        pass
+
+        initial_conv_json = json.dumps(initial_conv_urls, ensure_ascii=False) if initial_conv_urls else "{}"
+
+        job = Job(
+            id=job_id,
+            query=payload.query,
+            config_json=payload.model_dump_json(),
+            status="queued",
+            job_type="agent",
+            orchestrator_provider=payload.orchestrator_provider,
+            orchestrator_config_json=json.dumps(payload.orchestrator_config or {}),
+            lead_provider=payload.lead_provider,
+            lead_config_json=json.dumps(payload.lead_config or {}),
+            tone=payload.tone,
+            summarization_provider=payload.summarization_provider or "9router",
+            summarization_config_json=json.dumps(payload.summarization_config or {"model_id": "Daily"}),
+            subtasks_total=1,
+            parent_job_id=parent_job_id,
+            conversation_id=conversation_id,
+            provider_conversations_json=initial_conv_json,
+        )
         session.add(job)
         session.add(JobEvent(
             job_id=job_id,
@@ -318,6 +351,8 @@ async def create_agent_research(payload: AgentResearchRequest, request: Request)
         orchestrator=payload.orchestrator_provider,
         lead=payload.lead_provider,
         tone=payload.tone,
+        parent_job_id=parent_job_id,
+        conversation_id=conversation_id,
     )
     return ResearchAccepted(job_id=job_id)
 
@@ -393,6 +428,9 @@ async def list_research(limit: int = 50) -> list[dict[str, Any]]:
                 "delegated_providers": config.get("delegated_providers") or [],
                 "orchestrator_config": _safe_json_loads(getattr(j, "orchestrator_config_json", None), None) or config.get("orchestrator_config"),
                 "lead_config": _safe_json_loads(getattr(j, "lead_config_json", None), None) or config.get("lead_config"),
+                "summarization_provider": getattr(j, "summarization_provider", None) or config.get("summarization_provider"),
+                "summarization_config": _safe_json_loads(getattr(j, "summarization_config_json", None), None) or config.get("summarization_config"),
+                "context_summary": getattr(j, "context_summary", None),
                 "orchestrator_conversation_url": getattr(j, "orchestrator_conversation_url", None),
                 "lead_conversation_url": getattr(j, "lead_conversation_url", None),
                 "provider_conversations": provider_conversations,

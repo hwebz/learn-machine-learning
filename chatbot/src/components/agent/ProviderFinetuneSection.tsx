@@ -10,7 +10,7 @@ import {
 } from "../../lib/providerOptionsHelper";
 
 interface ProviderFinetuneSectionProps {
-  role: "orchestrator" | "lead";
+  role: "orchestrator" | "lead" | "summarizer";
   provider: ProviderInfo;
   caps?: ProviderLiveCapabilities;
   model: string;
@@ -63,8 +63,8 @@ function ProviderFinetuneSectionComponent({
   loadingProvider,
 }: ProviderFinetuneSectionProps) {
   const pid = provider.id.toLowerCase();
-  const titleColor = role === "orchestrator" ? "var(--brand-blue, #2563eb)" : "#10a37f";
-  const roleLabel = role === "orchestrator" ? "Cấu hình Orchestrator" : "Cấu hình Lead Provider";
+  const titleColor = role === "orchestrator" ? "var(--brand-blue, #2563eb)" : role === "summarizer" ? "#d97706" : "#10a37f";
+  const roleLabel = role === "orchestrator" ? "Cấu hình Orchestrator" : role === "summarizer" ? "Cấu hình Summarization Provider" : "Cấu hình Lead Provider";
 
   const availableModels = useMemo(() => {
     return getProviderModels(pid, caps, deepResearch, provider.modelName);

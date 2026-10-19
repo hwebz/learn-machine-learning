@@ -4,14 +4,15 @@ import { TONE_PRESETS } from "../../lib/constants";
 interface AgentToneSectionProps {
   selectedTone: string;
   setSelectedTone: (toneId: string) => void;
+  step?: number;
 }
 
-export function AgentToneSection({ selectedTone, setSelectedTone }: AgentToneSectionProps) {
+export function AgentToneSection({ selectedTone, setSelectedTone, step = 6 }: AgentToneSectionProps) {
   return (
     <div className="agent-section">
       <div className="agent-section-header-row">
         <label className="agent-section-label">
-          <span className="agent-section-step">5</span>
+          <span className="agent-section-step">{step}</span>
           <span>Chọn Văn phong Báo cáo (Lead Provider Tone)</span>
         </label>
         <span className="agent-role-pill tone">Định hình văn phong</span>

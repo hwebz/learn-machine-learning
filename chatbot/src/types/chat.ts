@@ -69,6 +69,9 @@ export interface Message {
   orchestrator_conversation_url?: string;
   lead_conversation_url?: string;
   provider_conversations?: Record<string, string>;
+  summarization_provider?: string;
+  summarization_config?: Record<string, any>;
+  context_summary?: string;
   jobId?: string;
 }
 
@@ -97,7 +100,7 @@ export interface ChatSession {
   selectedProvider?: string;
   depth?: DepthMode;
   jobId?: string;
-  status?: "queued" | "running" | "completed" | "partial" | "failed" | "cancelled" | "orchestrating" | "researching" | "leading";
+  status?: "queued" | "summarizing" | "running" | "completed" | "partial" | "failed" | "cancelled" | "orchestrating" | "researching" | "leading";
   providerConfigurations?: Record<string, ProviderSelectionConfig>;
   job_type?: "research" | "agent";
   orchestrator_provider?: string;
@@ -108,6 +111,9 @@ export interface ChatSession {
   orchestrator_conversation_url?: string;
   lead_conversation_url?: string;
   provider_conversations?: Record<string, string>;
+  summarization_provider?: string;
+  summarization_config?: Record<string, any>;
+  context_summary?: string;
 }
 
 export interface ProviderInfo {

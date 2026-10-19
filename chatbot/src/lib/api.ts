@@ -42,6 +42,9 @@ export interface ResearchResponseData {
   orchestrator_conversation_url?: string;
   lead_conversation_url?: string;
   provider_conversations?: Record<string, string>;
+  summarization_provider?: string;
+  summarization_config?: Record<string, any>;
+  context_summary?: string;
   parent_job_id?: string;
   conversation_id?: string;
 }
@@ -72,6 +75,9 @@ export interface ResearchHistoryItem {
   orchestrator_conversation_url?: string;
   lead_conversation_url?: string;
   provider_conversations?: Record<string, string>;
+  summarization_provider?: string;
+  summarization_config?: Record<string, any>;
+  context_summary?: string;
   parent_job_id?: string;
   conversation_id?: string;
   created_at?: string;
@@ -103,6 +109,10 @@ export interface AgentResearchRequestPayload {
   delegated_providers?: string[];
   provider_configs?: Record<string, any>;
   provider_capabilities?: Record<string, any>;
+  summarization_provider?: string;
+  summarization_config?: Record<string, any>;
+  conversation_urls?: Record<string, string>;
+  parent_job_id?: string;
 }
 
 export async function createAgentResearchJob(

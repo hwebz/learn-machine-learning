@@ -28,6 +28,8 @@ export interface AgentConfigScreenProps {
     orchestrator_config: Record<string, any>;
     lead_provider: string;
     lead_config: Record<string, any>;
+    summarization_provider: string;
+    summarization_config: Record<string, any>;
     tone: string;
     delegated_providers?: string[];
     provider_configs?: Record<string, any>;
@@ -46,6 +48,8 @@ export interface AgentConfigScreenProps {
   initialOrchestratorConfig?: Record<string, any>;
   initialLeadProvider?: string;
   initialLeadConfig?: Record<string, any>;
+  initialSummarizationProvider?: string;
+  initialSummarizationConfig?: Record<string, any>;
   initialDelegatedProviders?: string[];
   initialTone?: string;
 }
@@ -67,6 +71,8 @@ export function AgentConfigScreen({
   initialOrchestratorConfig,
   initialLeadProvider,
   initialLeadConfig,
+  initialSummarizationProvider,
+  initialSummarizationConfig,
   initialDelegatedProviders,
   initialTone,
 }: AgentConfigScreenProps) {
@@ -114,7 +120,24 @@ export function AgentConfigScreen({
   const [isSyncingLead, setIsSyncingLead] = useState(false);
   const [leadSyncMessage, setLeadSyncMessage] = useState<string | null>(null);
 
-  // 5. Tone & Submit State
+  // 5. Summarization Provider State (Default: 9router with Daily model)
+  const [selectedSummarizer, setSelectedSummarizer] = useState<string>(
+    initialSummarizationProvider || "9router"
+  );
+  const [sumThinking, setSumThinking] = useState<boolean>(true);
+  const [sumThinkingLevel, setSumThinkingLevel] = useState<string>("auto");
+  const [sumModel, setSumModel] = useState<string>(
+    initialSummarizationConfig?.model_id || initialSummarizationConfig?.model || "Daily"
+  );
+  const [sumMode, setSumMode] = useState<string>("");
+  const [sumDeepThinking, setSumDeepThinking] = useState<boolean>(false);
+  const [sumWebSearch, setSumWebSearch] = useState<boolean>(false);
+  const [sumDeepResearch, setSumDeepResearch] = useState<boolean>(false);
+  const [sumResearchMode, setSumResearchMode] = useState<string>("normal");
+  const [isSyncingSum, setIsSyncingSum] = useState(false);
+  const [sumSyncMessage, setSumSyncMessage] = useState<string | null>(null);
+
+  // 6. Tone & Submit State
   const [selectedTone, setSelectedTone] = useState<string>(
     initialTone || "professional"
   );
@@ -124,12 +147,13 @@ export function AgentConfigScreen({
   useEffect(() => {
     if (initialOrchestratorProvider) setSelectedOrchestrator(initialOrchestratorProvider);
     if (initialLeadProvider) setSelectedLead(initialLeadProvider);
+    if (initialSummarizationProvider) setSelectedSummarizer(initialSummarizationProvider);
     if (initialDelegatedProviders && initialDelegatedProviders.length > 0) {
       setSelectedDelegatedProviders(initialDelegatedProviders);
     }
     if (initialTone) setSelectedTone(initialTone);
     if (initialQuery !== undefined) setQuery(initialQuery);
-  }, [initialOrchestratorProvider, initialLeadProvider, initialDelegatedProviders, initialTone, initialQuery]);
+  }, [initialOrchestratorProvider, initialLeadProvider, initialSummarizationProvider, initialDelegatedProviders, initialTone, initialQuery]);
 
   // Load capabilities if missing
   useEffect(() => {
@@ -143,6 +167,12 @@ export function AgentConfigScreen({
       onLoadCapabilities(selectedLead);
     }
   }, [selectedLead, capabilitiesMap, onLoadCapabilities]);
+
+  useEffect(() => {
+    if (onLoadCapabilities && selectedSummarizer && !capabilitiesMap[selectedSummarizer]) {
+      onLoadCapabilities(selectedSummarizer);
+    }
+  }, [selectedSummarizer, capabilitiesMap, onLoadCapabilities]);
 
   // Merged selections for active providers
   const orchSel = useMemo(() => {
@@ -178,6 +208,28 @@ export function AgentConfigScreen({
       research_mode: configMerged.research_mode || base.research_mode,
     };
   }, [selectionsMap, selectedLead, initialLeadProvider, initialLeadConfig]);
+
+  const sumSel = useMemo(() => {
+    const base = selectionsMap[selectedSummarizer] || {};
+    const configMerged = selectedSummarizer === initialSummarizationProvider ? initialSummarizationConfig : undefined;
+    if (!configMerged) {
+      return {
+        ...base,
+        model_id: selectedSummarizer === "9router" ? "Daily" : base.model_id,
+      };
+    }
+    return {
+      ...base,
+      ...configMerged,
+      model_id: configMerged.model_id || configMerged.model || (selectedSummarizer === "9router" ? "Daily" : base.model_id),
+      thinking_level_id: configMerged.thinking_level_id || (typeof configMerged.thinking === "string" ? configMerged.thinking : undefined) || base.thinking_level_id,
+      mode_id: configMerged.mode_id || configMerged.mode || base.mode_id,
+      deep_research: configMerged.deep_research !== undefined ? configMerged.deep_research : base.deep_research,
+      deep_thinking: configMerged.deep_thinking !== undefined ? configMerged.deep_thinking : base.deep_thinking,
+      web_search: configMerged.web_search !== undefined ? configMerged.web_search : base.web_search,
+      research_mode: configMerged.research_mode || base.research_mode,
+    };
+  }, [selectionsMap, selectedSummarizer, initialSummarizationProvider, initialSummarizationConfig]);
 
   // Sync Orchestrator local state when provider or selection changes
   useEffect(() => {
@@ -265,6 +317,53 @@ export function AgentConfigScreen({
     }
   }, [selectedLead, capabilitiesMap, leadSel]);
 
+  // Sync Summarizer local state when provider or selection changes
+  useEffect(() => {
+    const caps = capabilitiesMap[selectedSummarizer];
+    const isDr = sumSel?.deep_research !== undefined ? sumSel.deep_research : (caps?.deep_research ?? false);
+    const isDt = sumSel?.deep_thinking !== undefined ? sumSel.deep_thinking : (caps?.deep_thinking ?? false);
+    const isWs = sumSel?.web_search !== undefined ? sumSel.web_search : (caps?.web_search ?? false);
+
+    setSumDeepResearch(isDr);
+    setSumDeepThinking(isDt);
+    setSumWebSearch(isWs);
+    setSumResearchMode(sumSel?.research_mode || caps?.research_mode || "normal");
+
+    if (initialSummarizationConfig?.model_id || initialSummarizationConfig?.model) {
+      setSumModel(initialSummarizationConfig.model_id || initialSummarizationConfig.model);
+    } else if (selectedSummarizer === "9router") {
+      setSumModel("Daily");
+    } else if (sumSel?.model_id) {
+      setSumModel(sumSel.model_id);
+    } else if (caps?.selected_model_id) {
+      setSumModel(caps.selected_model_id);
+    } else if (caps?.available_models && caps.available_models.length > 0) {
+      setSumModel(caps.available_models[0].id);
+    } else {
+      setSumModel("Daily");
+    }
+
+    if (sumSel?.thinking_level_id) {
+      setSumThinkingLevel(sumSel.thinking_level_id);
+    } else if (caps?.selected_thinking_level_id) {
+      setSumThinkingLevel(caps.selected_thinking_level_id);
+    } else if (caps?.thinking_levels && caps.thinking_levels.length > 0) {
+      setSumThinkingLevel(caps.thinking_levels[0].id);
+    } else {
+      setSumThinkingLevel(selectedSummarizer === "meta" && isDt ? "thinking" : "auto");
+    }
+
+    if (sumSel?.mode_id) {
+      setSumMode(sumSel.mode_id);
+    } else if (caps?.selected_mode_id) {
+      setSumMode(caps.selected_mode_id);
+    } else if (caps?.modes && caps.modes.length > 0) {
+      setSumMode(caps.modes[0].id);
+    } else {
+      setSumMode("");
+    }
+  }, [selectedSummarizer, capabilitiesMap, sumSel]);
+
   // Live Decomposition Prompt Construction
   const constructedOrchestratorPrompt = useMemo(() => {
     return constructOrchestrationPrompt(
@@ -336,6 +435,24 @@ export function AgentConfigScreen({
     }
   }, [isSyncingLead, onSyncProvider, selectedLead]);
 
+  const handleSyncSummarizer = useCallback(async () => {
+    if (isSyncingSum || !onSyncProvider) return;
+    setIsSyncingSum(true);
+    setSumSyncMessage(null);
+    try {
+      const res = await onSyncProvider(selectedSummarizer);
+      const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      setSumSyncMessage(`✓ Đã đồng bộ DOM thành công lúc ${timeStr}`);
+      if (res?.selected_model_id) setSumModel(res.selected_model_id);
+      if (res?.selected_thinking_level_id) setSumThinkingLevel(res.selected_thinking_level_id);
+      if (res?.selected_mode_id) setSumMode(res.selected_mode_id);
+    } catch (err: any) {
+      setSumSyncMessage(`Lỗi đồng bộ DOM: ${err?.message || "Không thể kết nối"}`);
+    } finally {
+      setIsSyncingSum(false);
+    }
+  }, [isSyncingSum, onSyncProvider, selectedSummarizer]);
+
   const handleSyncAllSelectedSubProviders = useCallback(async () => {
     if (isSyncingAllSub || !onSyncProvider || selectedDelegatedProviders.length === 0) return;
     setIsSyncingAllSub(true);
@@ -402,6 +519,24 @@ export function AgentConfigScreen({
       capabilitiesMap
     );
 
+    const sumResolved = resolveSubProviderLiveConfig(
+      selectedSummarizer,
+      {
+        ...selectionsMap,
+        [selectedSummarizer]: {
+          ...selectionsMap[selectedSummarizer],
+          model_id: sumModel,
+          thinking_level_id: sumThinkingLevel,
+          mode_id: sumMode,
+          deep_research: sumDeepResearch,
+          deep_thinking: sumDeepThinking,
+          web_search: sumWebSearch,
+          research_mode: sumResearchMode,
+        },
+      },
+      capabilitiesMap
+    );
+
     const subProviderConfigs: Record<string, any> = {};
     const subProviderCaps: Record<string, any> = {};
     selectedDelegatedProviders.forEach((pid) => {
@@ -429,6 +564,13 @@ export function AgentConfigScreen({
         thinking: leadThinking,
         mode: leadMode,
       },
+      summarization_provider: selectedSummarizer,
+      summarization_config: {
+        ...sumResolved.configObj,
+        model: sumModel,
+        thinking: sumThinking,
+        mode: sumMode,
+      },
       tone: selectedTone,
       provider_configs: subProviderConfigs,
       provider_capabilities: subProviderCaps,
@@ -437,6 +579,7 @@ export function AgentConfigScreen({
 
   const orchProviderObj = availableProviders.find((p) => p.id === selectedOrchestrator) || availableProviders[0];
   const leadProviderObj = availableProviders.find((p) => p.id === selectedLead) || availableProviders[0];
+  const summarizerProviderObj = availableProviders.find((p) => p.id === selectedSummarizer) || availableProviders[0];
 
   return (
     <div className="agent-config-overlay">
@@ -594,10 +737,70 @@ export function AgentConfigScreen({
             />
           </div>
 
-          {/* Section 5: Report Tone Selection */}
+          {/* Section 5: Summarization Provider Selection & Fine-Tuning */}
+          <div className="agent-section">
+            <div className="agent-section-header-row">
+              <label className="agent-section-label">
+                <span className="agent-section-step">5</span>
+                <span>Chọn Summarization Provider (Tóm tắt bối cảnh các vòng)</span>
+              </label>
+              <span
+                className="agent-role-pill summarizer"
+                style={{
+                  background: "rgba(217, 119, 6, 0.15)",
+                  color: "#d97706",
+                  borderColor: "rgba(217, 119, 6, 0.3)",
+                }}
+              >
+                Tóm tắt bối cảnh
+              </span>
+            </div>
+            <p className="agent-section-desc">
+              Tác nhân chạy tuần tự trước khi chia nhỏ nhiệm vụ ở các vòng tiếp theo (round 2+) để cô đọng ngữ cảnh các vòng trước, tránh vượt quá giới hạn token. Mặc định là 9router (Daily).
+            </p>
+
+            <ProviderGridPicker
+              providers={availableProviders}
+              selectedProviderId={selectedSummarizer}
+              onSelectProvider={setSelectedSummarizer}
+              capabilitiesMap={capabilitiesMap}
+              nameRadioGroup="summarizer_radio"
+              selectedCardClass="selected summarizer-selected"
+            />
+
+            <ProviderFinetuneSection
+              role="summarizer"
+              provider={summarizerProviderObj}
+              caps={capabilitiesMap[selectedSummarizer]}
+              model={sumModel}
+              setModel={setSumModel}
+              thinkingLevel={sumThinkingLevel}
+              setThinkingLevel={setSumThinkingLevel}
+              thinking={sumThinking}
+              setThinking={setSumThinking}
+              deepThinking={sumDeepThinking}
+              setDeepThinking={setSumDeepThinking}
+              webSearch={sumWebSearch}
+              setWebSearch={setSumWebSearch}
+              deepResearch={sumDeepResearch}
+              setDeepResearch={setSumDeepResearch}
+              researchMode={sumResearchMode}
+              setResearchMode={setSumResearchMode}
+              mode={sumMode}
+              setMode={setSumMode}
+              onUpdateSelection={onUpdateSelection}
+              onSync={handleSyncSummarizer}
+              isSyncing={isSyncingSum}
+              syncMessage={sumSyncMessage}
+              loadingProvider={loadingProvider}
+            />
+          </div>
+
+          {/* Section 6: Report Tone Selection */}
           <AgentToneSection
             selectedTone={selectedTone}
             setSelectedTone={setSelectedTone}
+            step={6}
           />
 
           {/* Footer Submit */}

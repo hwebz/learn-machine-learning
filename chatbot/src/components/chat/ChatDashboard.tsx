@@ -95,6 +95,9 @@ export function buildAssistantMessage(
     tone?: string;
     orchestrator_dispatch?: any[];
     delegated_providers?: string[];
+    summarization_provider?: string | null;
+    summarization_config?: Record<string, any>;
+    context_summary?: string | null;
     error?: string | null;
     orchestrator_conversation_url?: string | null;
     lead_conversation_url?: string | null;
@@ -146,6 +149,9 @@ export function buildAssistantMessage(
     job_type: isAgent ? "agent" : "research",
     orchestrator_provider: jobData.orchestrator_provider,
     lead_provider: jobData.lead_provider,
+    summarization_provider: jobData.summarization_provider || undefined,
+    summarization_config: jobData.summarization_config || undefined,
+    context_summary: jobData.context_summary || undefined,
     tone: jobData.tone,
     orchestrator_dispatch: jobData.orchestrator_dispatch,
     delegated_providers: jobData.delegated_providers,
@@ -578,12 +584,16 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             job_type: (latestJob as any).job_type || (rootJob as any).job_type || "research",
             orchestrator_provider: (latestJob as any).orchestrator_provider,
             lead_provider: (latestJob as any).lead_provider,
+            summarization_provider: (latestJob as any).summarization_provider || (rootJob as any).summarization_provider,
+            summarization_config: (latestJob as any).summarization_config || (rootJob as any).summarization_config,
+            context_summary: (latestJob as any).context_summary || (rootJob as any).context_summary,
             tone: (latestJob as any).tone,
             orchestrator_dispatch: (latestJob as any).orchestrator_dispatch,
             delegated_providers: (latestJob as any).delegated_providers,
             providerConfigurations: (latestJob as any).providerConfigurations || (latestJob as any).provider_options || {
               ...(((latestJob as any).orchestrator_config && (latestJob as any).orchestrator_provider) ? { [(latestJob as any).orchestrator_provider]: (latestJob as any).orchestrator_config } : {}),
               ...(((latestJob as any).lead_config && (latestJob as any).lead_provider) ? { [(latestJob as any).lead_provider]: (latestJob as any).lead_config } : {}),
+              ...(((latestJob as any).summarization_config && (latestJob as any).summarization_provider) ? { [(latestJob as any).summarization_provider]: (latestJob as any).summarization_config } : {}),
             },
             orchestrator_conversation_url: (latestJob as any).orchestrator_conversation_url || undefined,
             lead_conversation_url: (latestJob as any).lead_conversation_url || undefined,
@@ -630,12 +640,16 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               job_type: (directJob as any).job_type || "research",
               orchestrator_provider: (directJob as any).orchestrator_provider,
               lead_provider: (directJob as any).lead_provider,
+              summarization_provider: (directJob as any).summarization_provider,
+              summarization_config: (directJob as any).summarization_config,
+              context_summary: (directJob as any).context_summary,
               tone: (directJob as any).tone,
               orchestrator_dispatch: (directJob as any).orchestrator_dispatch,
               delegated_providers: (directJob as any).delegated_providers,
               providerConfigurations: (directJob as any).providerConfigurations || (directJob as any).provider_options || {
                 ...(((directJob as any).orchestrator_config && (directJob as any).orchestrator_provider) ? { [(directJob as any).orchestrator_provider]: (directJob as any).orchestrator_config } : {}),
                 ...(((directJob as any).lead_config && (directJob as any).lead_provider) ? { [(directJob as any).lead_provider]: (directJob as any).lead_config } : {}),
+                ...(((directJob as any).summarization_config && (directJob as any).summarization_provider) ? { [(directJob as any).summarization_provider]: (directJob as any).summarization_config } : {}),
               },
               orchestrator_conversation_url: (directJob as any).orchestrator_conversation_url || undefined,
               lead_conversation_url: (directJob as any).lead_conversation_url || undefined,
@@ -920,9 +934,27 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       capsHook.selectionsMap?.[resolvedLead] ||
       activeSession.messages.find((m) => m.provider_options?.[resolvedLead])?.provider_options?.[resolvedLead];
 
+    // 8. Summarization provider:
+    const rawSum =
+      activeSession.summarization_provider ||
+      activeSession.messages.find((m) => m.summarization_provider)?.summarization_provider ||
+      "9router";
+    const resolvedSum = rawSum || "9router";
+
+    // 9. Summarization config (defaults to model Daily for 9router):
+    const sumConfig =
+      activeSession.summarization_config ||
+      activeSession.providerConfigurations?.[resolvedSum] ||
+      activeSession.messages.find((m) => m.summarization_config)?.summarization_config ||
+      (resolvedSum === "9router"
+        ? { model_id: "Daily" }
+        : (capsHook.selectionsMap?.[resolvedSum] || { model_id: "Daily" }));
+
     return {
       initialOrchestratorProvider: resolvedOrch,
       initialLeadProvider: resolvedLead,
+      initialSummarizationProvider: resolvedSum,
+      initialSummarizationConfig: sumConfig,
       initialDelegatedProviders: resolvedDelegated,
       initialTone: resolvedTone,
       initialQuery: resolvedQuery,
@@ -1128,6 +1160,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     orchestrator_config: Record<string, any>;
     lead_provider: string;
     lead_config: Record<string, any>;
+    summarization_provider: string;
+    summarization_config: Record<string, any>;
     tone: string;
     delegated_providers?: string[];
     provider_configs?: Record<string, any>;
@@ -1151,12 +1185,15 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       job_type: "agent",
       orchestrator_provider: config.orchestrator_provider,
       lead_provider: config.lead_provider,
+      summarization_provider: config.summarization_provider,
+      summarization_config: config.summarization_config,
       tone: config.tone,
       delegated_providers: config.delegated_providers,
       provider_options: {
         ...(config.provider_configs || {}),
         [config.orchestrator_provider]: config.orchestrator_config,
         [config.lead_provider]: config.lead_config,
+        [config.summarization_provider]: config.summarization_config,
       },
     };
 
@@ -1174,12 +1211,15 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       job_type: "agent",
       orchestrator_provider: config.orchestrator_provider,
       lead_provider: config.lead_provider,
+      summarization_provider: config.summarization_provider,
+      summarization_config: config.summarization_config,
       tone: config.tone,
       delegated_providers: config.delegated_providers,
       providerConfigurations: {
         ...(config.provider_configs || {}),
         [config.orchestrator_provider]: config.orchestrator_config,
         [config.lead_provider]: config.lead_config,
+        [config.summarization_provider]: config.summarization_config,
       },
     };
 
@@ -1199,6 +1239,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         orchestrator_config: config.orchestrator_config,
         lead_provider: config.lead_provider,
         lead_config: config.lead_config,
+        summarization_provider: config.summarization_provider,
+        summarization_config: config.summarization_config,
         tone: config.tone,
         delegated_providers: config.delegated_providers,
         provider_configs: config.provider_configs,
@@ -1243,6 +1285,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
           const rawJobStatus = (stepLog.data as any)?.job_status;
           const dispatch = stepLog.data?.dispatch;
+          const stepConvUrl = stepLog.conversationUrl || (stepLog.data as any)?.conversation_url;
+          const stepProv = stepLog.provider || (stepLog.data as any)?.provider;
+          const orchConvUrl = (stepLog.data as any)?.orch_conv_url;
+          const leadConvUrl = (stepLog.data as any)?.lead_conv_url;
 
           setSessions((prev) =>
             prev.map((s) => {
@@ -1250,13 +1296,22 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               let nextStatus = s.status;
               if (rawJobStatus && rawJobStatus !== "running") {
                 nextStatus = rawJobStatus as any;
+              } else if (stepLog.step === "summarizing") {
+                nextStatus = "summarizing" as any;
               } else if (dispatch && nextStatus === "orchestrating") {
                 nextStatus = "researching" as any;
+              }
+              const updatedProviderConvs = { ...(s.provider_conversations || {}) };
+              if (stepConvUrl && stepProv) {
+                updatedProviderConvs[stepProv] = stepConvUrl;
               }
               return {
                 ...s,
                 status: nextStatus,
                 orchestrator_dispatch: dispatch || s.orchestrator_dispatch,
+                orchestrator_conversation_url: orchConvUrl || s.orchestrator_conversation_url,
+                lead_conversation_url: leadConvUrl || s.lead_conversation_url,
+                provider_conversations: Object.keys(updatedProviderConvs).length > 0 ? updatedProviderConvs : s.provider_conversations,
               };
             })
           );
@@ -1281,13 +1336,20 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               job_type: "agent",
               orchestrator_provider: config.orchestrator_provider,
               lead_provider: config.lead_provider,
+              summarization_provider: config.summarization_provider,
+              summarization_config: config.summarization_config,
+              context_summary: (result as any).context_summary,
               tone: config.tone,
               orchestrator_dispatch: (result as any).orchestrator_dispatch,
               delegated_providers: config.delegated_providers,
               provider_options: {
                 [config.orchestrator_provider]: config.orchestrator_config,
                 [config.lead_provider]: config.lead_config,
+                [config.summarization_provider]: config.summarization_config,
               },
+              orchestrator_conversation_url: result.orchestrator_conversation_url,
+              lead_conversation_url: result.lead_conversation_url,
+              provider_conversations: result.provider_conversations,
             };
 
             setSessions((prev) =>
@@ -1299,9 +1361,19 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                     messages: upsertAssistantMessage(s.messages, assistantMsg),
                     orchestrator_dispatch: (result as any).orchestrator_dispatch || s.orchestrator_dispatch,
                     delegated_providers: config.delegated_providers || s.delegated_providers,
+                    summarization_provider: config.summarization_provider || s.summarization_provider,
+                    summarization_config: config.summarization_config || s.summarization_config,
+                    context_summary: (result as any).context_summary || s.context_summary,
+                    orchestrator_conversation_url: result.orchestrator_conversation_url || s.orchestrator_conversation_url,
+                    lead_conversation_url: result.lead_conversation_url || s.lead_conversation_url,
+                    provider_conversations: {
+                      ...(s.provider_conversations || {}),
+                      ...(result.provider_conversations || {}),
+                    },
                     providerConfigurations: s.providerConfigurations || {
                       [config.orchestrator_provider]: config.orchestrator_config,
                       [config.lead_provider]: config.lead_config,
+                      [config.summarization_provider]: config.summarization_config,
                     },
                   }
                   : s
@@ -1337,13 +1409,20 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                 job_type: "agent",
                 orchestrator_provider: config.orchestrator_provider,
                 lead_provider: config.lead_provider,
+                summarization_provider: config.summarization_provider,
+                summarization_config: config.summarization_config,
+                context_summary: finalResult.context_summary,
                 tone: config.tone,
                 orchestrator_dispatch: finalResult.orchestrator_dispatch,
                 delegated_providers: config.delegated_providers,
                 provider_options: {
                   [config.orchestrator_provider]: config.orchestrator_config,
                   [config.lead_provider]: config.lead_config,
+                  [config.summarization_provider]: config.summarization_config,
                 },
+                orchestrator_conversation_url: finalResult.orchestrator_conversation_url,
+                lead_conversation_url: finalResult.lead_conversation_url,
+                provider_conversations: finalResult.provider_conversations,
               };
 
               setSessions((prev) =>
@@ -1355,9 +1434,19 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                       messages: upsertAssistantMessage(s.messages, assistantMsg),
                       orchestrator_dispatch: finalResult.orchestrator_dispatch || s.orchestrator_dispatch,
                       delegated_providers: config.delegated_providers || s.delegated_providers,
+                      summarization_provider: config.summarization_provider || s.summarization_provider,
+                      summarization_config: config.summarization_config || s.summarization_config,
+                      context_summary: finalResult.context_summary || s.context_summary,
+                      orchestrator_conversation_url: finalResult.orchestrator_conversation_url || s.orchestrator_conversation_url,
+                      lead_conversation_url: finalResult.lead_conversation_url || s.lead_conversation_url,
+                      provider_conversations: {
+                        ...(s.provider_conversations || {}),
+                        ...(finalResult.provider_conversations || {}),
+                      },
                       providerConfigurations: s.providerConfigurations || {
                         [config.orchestrator_provider]: config.orchestrator_config,
                         [config.lead_provider]: config.lead_config,
+                        [config.summarization_provider]: config.summarization_config,
                       },
                     }
                     : s
@@ -1605,12 +1694,31 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       activeUnsubscribeRef.current = null;
     }
 
+    const isAgentSession = activeSession.job_type === "agent" || Boolean(activeSession.orchestrator_provider);
+    const parentJobId = activeSession.jobId || activeSession.messages.filter((m) => m.jobId).pop()?.jobId;
+
+    const orchProv = activeSession.orchestrator_provider || activeSessionAgentDefaults.initialOrchestratorProvider || "gemini";
+    const leadProv = activeSession.lead_provider || activeSessionAgentDefaults.initialLeadProvider || "chatgpt";
+    const sumProv = activeSession.summarization_provider || activeSessionAgentDefaults.initialSummarizationProvider || "9router";
+    const orchConf = activeSession.providerConfigurations?.[orchProv] || activeSessionAgentDefaults.initialOrchestratorConfig || {};
+    const leadConf = activeSession.providerConfigurations?.[leadProv] || activeSessionAgentDefaults.initialLeadConfig || {};
+    const sumConf = activeSession.summarization_config || activeSessionAgentDefaults.initialSummarizationConfig || { model_id: "Daily" };
+    const toneVal = activeSession.tone || activeSessionAgentDefaults.initialTone || "professional";
+    const delegatedProvs = activeSession.delegated_providers || activeSessionAgentDefaults.initialDelegatedProviders;
+
     const userMessage: Message = {
       id: `msg-${Date.now()}`,
       role: "user",
       authorName: "Researcher",
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       content,
+      job_type: isAgentSession ? "agent" : undefined,
+      orchestrator_provider: isAgentSession ? orchProv : undefined,
+      lead_provider: isAgentSession ? leadProv : undefined,
+      summarization_provider: isAgentSession ? sumProv : undefined,
+      summarization_config: isAgentSession ? sumConf : undefined,
+      tone: isAgentSession ? toneVal : undefined,
+      delegated_providers: isAgentSession ? delegatedProvs : undefined,
     };
 
     const updatedTitle =
@@ -1629,7 +1737,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         id: activeSessionId || `session-${Date.now()}`,
         title: updatedTitle,
         messages: [userMessage],
-        status: "running",
+        status: isAgentSession ? "orchestrating" : "running",
         createdAt: "Vừa xong",
         createdTimestamp: Date.now(),
       };
@@ -1642,7 +1750,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               ...s,
               title: updatedTitle,
               messages: [...s.messages, userMessage],
-              status: "running",
+              status: isAgentSession ? "orchestrating" : "running",
             }
             : s
         )
@@ -1656,7 +1764,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
     const currentProviderIds = activeProviderIds;
     if (!inspectedProvider) {
-      setInspectedProvider(currentProviderIds[0]?.toLowerCase() || "copilot");
+      setInspectedProvider(isAgentSession ? orchProv.toLowerCase() : (currentProviderIds[0]?.toLowerCase() || "copilot"));
     }
 
     try {
@@ -1665,9 +1773,21 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       if (activeSession.provider_conversations) {
         Object.assign(existingConvUrls, activeSession.provider_conversations);
       }
+      if (activeSession.orchestrator_conversation_url) {
+        existingConvUrls["orchestrator"] = activeSession.orchestrator_conversation_url;
+      }
+      if (activeSession.lead_conversation_url) {
+        existingConvUrls["lead"] = activeSession.lead_conversation_url;
+      }
       for (const m of activeSession.messages) {
         if (m.provider_conversations) {
           Object.assign(existingConvUrls, m.provider_conversations);
+        }
+        if (m.orchestrator_conversation_url) {
+          existingConvUrls["orchestrator"] = m.orchestrator_conversation_url;
+        }
+        if (m.lead_conversation_url) {
+          existingConvUrls["lead"] = m.lead_conversation_url;
         }
         if (Array.isArray(m.provider_runs)) {
           for (const r of m.provider_runs) {
@@ -1677,32 +1797,48 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           }
         }
       }
-      const filteredConvUrls: Record<string, string> = {};
-      for (const pId of currentProviderIds) {
-        if (existingConvUrls[pId]) {
-          filteredConvUrls[pId] = existingConvUrls[pId];
+
+      let jobAccepted: any;
+
+      if (isAgentSession) {
+        jobAccepted = await createAgentResearchJob({
+          query: content,
+          orchestrator_provider: orchProv,
+          orchestrator_config: orchConf,
+          lead_provider: leadProv,
+          lead_config: leadConf,
+          summarization_provider: sumProv,
+          summarization_config: sumConf,
+          tone: toneVal,
+          delegated_providers: delegatedProvs,
+          provider_configs: activeSession.providerConfigurations,
+          conversation_urls: Object.keys(existingConvUrls).length > 0 ? existingConvUrls : undefined,
+          parent_job_id: parentJobId || undefined,
+        });
+      } else {
+        const filteredConvUrls: Record<string, string> = {};
+        for (const pId of currentProviderIds) {
+          if (existingConvUrls[pId]) {
+            filteredConvUrls[pId] = existingConvUrls[pId];
+          }
         }
+        const sanitizedOptions: Record<string, any> = {};
+        for (const [pId, opts] of Object.entries(capsHook.selectionsMap || {})) {
+          const pCaps = capsHook.capabilitiesMap[pId];
+          const isFree = pId === "chatgpt" && pCaps?.account_type === "free";
+          sanitizedOptions[pId] = {
+            ...opts,
+            model_id: isFree ? "none" : opts.model_id,
+          };
+        }
+        jobAccepted = await createResearchJob({
+          query: content,
+          providers: currentProviderIds,
+          provider_options: sanitizedOptions,
+          conversation_urls: Object.keys(filteredConvUrls).length > 0 ? filteredConvUrls : undefined,
+          parent_job_id: parentJobId || undefined,
+        });
       }
-      const parentJobId = activeSession.jobId || activeSession.messages.filter((m) => m.jobId).pop()?.jobId;
-
-      // Dispatch research job to backend with all selected providers & conversation URLs
-      const sanitizedOptions: Record<string, any> = {};
-      for (const [pId, opts] of Object.entries(capsHook.selectionsMap || {})) {
-        const pCaps = capsHook.capabilitiesMap[pId];
-        const isFree = pId === "chatgpt" && pCaps?.account_type === "free";
-        sanitizedOptions[pId] = {
-          ...opts,
-          model_id: isFree ? "none" : opts.model_id,
-        };
-      }
-
-      const jobAccepted = await createResearchJob({
-        query: content,
-        providers: currentProviderIds,
-        provider_options: sanitizedOptions,
-        conversation_urls: Object.keys(filteredConvUrls).length > 0 ? filteredConvUrls : undefined,
-        parent_job_id: parentJobId || undefined,
-      });
 
       if (isCancelledRef.current) {
         cancelResearchJob(jobAccepted.job_id).catch(() => { });
@@ -1725,7 +1861,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       setSessions((prev) =>
         prev.map((s) =>
           s.id === targetSessionId || s.jobId === targetSessionId
-            ? { ...s, id: resolvedSessionId, jobId: jobAccepted.job_id, status: "running" }
+            ? { ...s, id: resolvedSessionId, jobId: jobAccepted.job_id, status: isAgentSession ? "orchestrating" : "running" }
             : s
         )
       );
@@ -1746,6 +1882,39 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         onStep: (stepLog) => {
           if (isCancelledRef.current) return;
           setActiveSteps((prev) => [...prev, stepLog]);
+
+          const rawJobStatus = (stepLog.data as any)?.job_status;
+          const dispatch = stepLog.data?.dispatch;
+          const stepConvUrl = stepLog.conversationUrl || (stepLog.data as any)?.conversation_url;
+          const stepProv = stepLog.provider || (stepLog.data as any)?.provider;
+          const orchConvUrl = (stepLog.data as any)?.orch_conv_url;
+          const leadConvUrl = (stepLog.data as any)?.lead_conv_url;
+
+          setSessions((prev) =>
+            prev.map((s) => {
+              if (s.id !== resolvedSessionId && s.jobId !== jobAccepted.job_id && !s.messages.some((m) => m.jobId === jobAccepted.job_id)) return s;
+              let nextStatus = s.status;
+              if (rawJobStatus && rawJobStatus !== "running") {
+                nextStatus = rawJobStatus as any;
+              } else if (stepLog.step === "summarizing") {
+                nextStatus = "summarizing" as any;
+              } else if (dispatch && nextStatus === "orchestrating") {
+                nextStatus = "researching" as any;
+              }
+              const updatedProviderConvs = { ...(s.provider_conversations || {}) };
+              if (stepConvUrl && stepProv) {
+                updatedProviderConvs[stepProv] = stepConvUrl;
+              }
+              return {
+                ...s,
+                status: nextStatus,
+                orchestrator_dispatch: dispatch || s.orchestrator_dispatch,
+                orchestrator_conversation_url: orchConvUrl || s.orchestrator_conversation_url,
+                lead_conversation_url: leadConvUrl || s.lead_conversation_url,
+                provider_conversations: Object.keys(updatedProviderConvs).length > 0 ? updatedProviderConvs : s.provider_conversations,
+              };
+            })
+          );
         },
         onResult: (result) => {
           if (isCancelledRef.current) return;
@@ -1769,7 +1938,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             const asstMsg = buildAssistantMessage(jobAccepted.job_id, {
               report_markdown: result.report_markdown,
               status: result.status || "completed",
-              providers: currentProviderIds,
+              providers: isAgentSession ? [orchProv, leadProv] : currentProviderIds,
               sources: consolidatedSources,
               claims: result.claims || [],
               disagreements: result.disagreements || [],
@@ -1777,7 +1946,18 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               provider_options: (result as any).provider_options || capsHook.selectionsMap,
               steps: latestSteps,
               error: result.error,
-              provider_conversations: result.provider_conversations || filteredConvUrls,
+              job_type: isAgentSession ? "agent" : "research",
+              orchestrator_provider: isAgentSession ? orchProv : undefined,
+              lead_provider: isAgentSession ? leadProv : undefined,
+              summarization_provider: isAgentSession ? sumProv : undefined,
+              summarization_config: isAgentSession ? sumConf : undefined,
+              context_summary: (result as any).context_summary,
+              tone: isAgentSession ? toneVal : undefined,
+              orchestrator_dispatch: (result as any).orchestrator_dispatch,
+              delegated_providers: isAgentSession ? delegatedProvs : undefined,
+              orchestrator_conversation_url: result.orchestrator_conversation_url,
+              lead_conversation_url: result.lead_conversation_url,
+              provider_conversations: result.provider_conversations || existingConvUrls,
             });
 
             if (asstMsg) {
@@ -1787,12 +1967,18 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                   if (s.id !== resolvedSessionId && s.jobId !== jobAccepted.job_id && !s.messages.some((m) => m.jobId === jobAccepted.job_id)) return s;
                   const mergedConvUrls = {
                     ...(s.provider_conversations || {}),
-                    ...(filteredConvUrls || {}),
+                    ...existingConvUrls,
                     ...(result.provider_conversations || {}),
                   };
                   return {
                     ...s,
                     status: (result.status as any) || "completed",
+                    orchestrator_dispatch: (result as any).orchestrator_dispatch || s.orchestrator_dispatch,
+                    orchestrator_conversation_url: result.orchestrator_conversation_url || s.orchestrator_conversation_url,
+                    lead_conversation_url: result.lead_conversation_url || s.lead_conversation_url,
+                    summarization_provider: isAgentSession ? (sumProv || s.summarization_provider) : s.summarization_provider,
+                    summarization_config: isAgentSession ? (sumConf || s.summarization_config) : s.summarization_config,
+                    context_summary: (result as any).context_summary || s.context_summary,
                     provider_conversations: mergedConvUrls,
                     messages: upsertAssistantMessage(s.messages, asstMsg),
                   };
@@ -1814,8 +2000,20 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               setActiveSteps((latestSteps) => {
                 const asstMsg = buildAssistantMessage(jobAccepted.job_id, {
                   ...finalResult,
-                  providers: currentProviderIds,
+                  providers: isAgentSession ? [orchProv, leadProv] : currentProviderIds,
                   steps: latestSteps,
+                  job_type: isAgentSession ? "agent" : "research",
+                  orchestrator_provider: isAgentSession ? orchProv : undefined,
+                  lead_provider: isAgentSession ? leadProv : undefined,
+                  summarization_provider: isAgentSession ? sumProv : undefined,
+                  summarization_config: isAgentSession ? sumConf : undefined,
+                  context_summary: finalResult.context_summary,
+                  tone: isAgentSession ? toneVal : undefined,
+                  orchestrator_dispatch: finalResult.orchestrator_dispatch,
+                  delegated_providers: isAgentSession ? delegatedProvs : undefined,
+                  orchestrator_conversation_url: finalResult.orchestrator_conversation_url,
+                  lead_conversation_url: finalResult.lead_conversation_url,
+                  provider_conversations: finalResult.provider_conversations || existingConvUrls,
                 });
                 if (asstMsg) {
                   setInspectedMessage(asstMsg);
@@ -1825,9 +2023,15 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                         ? {
                             ...s,
                             status: (finalResult.status as any) || "completed",
+                            orchestrator_dispatch: finalResult.orchestrator_dispatch || s.orchestrator_dispatch,
+                            orchestrator_conversation_url: finalResult.orchestrator_conversation_url || s.orchestrator_conversation_url,
+                            lead_conversation_url: finalResult.lead_conversation_url || s.lead_conversation_url,
+                            summarization_provider: isAgentSession ? (sumProv || s.summarization_provider) : s.summarization_provider,
+                            summarization_config: isAgentSession ? (sumConf || s.summarization_config) : s.summarization_config,
+                            context_summary: finalResult.context_summary || s.context_summary,
                             provider_conversations: {
                               ...(s.provider_conversations || {}),
-                              ...(filteredConvUrls || {}),
+                              ...existingConvUrls,
                               ...(finalResult.provider_conversations || {}),
                             },
                             messages: upsertAssistantMessage(s.messages, asstMsg),
@@ -1844,7 +2048,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               return;
             }
           } catch { }
-          handleSimulatedMultiModelResponse(content, currentProviderIds);
+          handleSimulatedMultiModelResponse(content, isAgentSession ? [orchProv, leadProv] : currentProviderIds);
         },
         onDone: async () => {
           if (isCancelledRef.current) return;
@@ -1854,8 +2058,20 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               setActiveSteps((latestSteps) => {
                 const asstMsg = buildAssistantMessage(jobAccepted.job_id, {
                   ...finalResult,
-                  providers: currentProviderIds,
+                  providers: isAgentSession ? [orchProv, leadProv] : currentProviderIds,
                   steps: latestSteps,
+                  job_type: isAgentSession ? "agent" : "research",
+                  orchestrator_provider: isAgentSession ? orchProv : undefined,
+                  lead_provider: isAgentSession ? leadProv : undefined,
+                  summarization_provider: isAgentSession ? sumProv : undefined,
+                  summarization_config: isAgentSession ? sumConf : undefined,
+                  context_summary: finalResult.context_summary,
+                  tone: isAgentSession ? toneVal : undefined,
+                  orchestrator_dispatch: finalResult.orchestrator_dispatch,
+                  delegated_providers: isAgentSession ? delegatedProvs : undefined,
+                  orchestrator_conversation_url: finalResult.orchestrator_conversation_url,
+                  lead_conversation_url: finalResult.lead_conversation_url,
+                  provider_conversations: finalResult.provider_conversations || existingConvUrls,
                 });
                 if (asstMsg) {
                   setInspectedMessage(asstMsg);
@@ -1865,9 +2081,15 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                         ? {
                             ...s,
                             status: (finalResult.status as any) || "completed",
+                            orchestrator_dispatch: finalResult.orchestrator_dispatch || s.orchestrator_dispatch,
+                            orchestrator_conversation_url: finalResult.orchestrator_conversation_url || s.orchestrator_conversation_url,
+                            lead_conversation_url: finalResult.lead_conversation_url || s.lead_conversation_url,
+                            summarization_provider: isAgentSession ? (sumProv || s.summarization_provider) : s.summarization_provider,
+                            summarization_config: isAgentSession ? (sumConf || s.summarization_config) : s.summarization_config,
+                            context_summary: finalResult.context_summary || s.context_summary,
                             provider_conversations: {
                               ...(s.provider_conversations || {}),
-                              ...(filteredConvUrls || {}),
+                              ...existingConvUrls,
                               ...(finalResult.provider_conversations || {}),
                             },
                             messages: upsertAssistantMessage(s.messages, asstMsg),
@@ -2258,6 +2480,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           initialOrchestratorConfig={activeSessionAgentDefaults.initialOrchestratorConfig}
           initialLeadProvider={activeSessionAgentDefaults.initialLeadProvider}
           initialLeadConfig={activeSessionAgentDefaults.initialLeadConfig}
+          initialSummarizationProvider={activeSessionAgentDefaults.initialSummarizationProvider}
+          initialSummarizationConfig={activeSessionAgentDefaults.initialSummarizationConfig}
           initialDelegatedProviders={activeSessionAgentDefaults.initialDelegatedProviders}
           initialTone={activeSessionAgentDefaults.initialTone}
         />

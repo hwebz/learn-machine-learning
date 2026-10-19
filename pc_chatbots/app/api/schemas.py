@@ -12,7 +12,7 @@ ProviderName = Literal[
     "9router", "router",
 ]
 JobStatus = Literal[
-    "queued", "orchestrating", "planning", "researching", "extracting", "verifying", "synthesizing", "leading",
+    "queued", "summarizing", "orchestrating", "planning", "researching", "extracting", "verifying", "synthesizing", "leading",
     "completed", "partial", "failed", "needs_user_action", "cancelled",
 ]
 
@@ -46,6 +46,10 @@ class AgentResearchRequest(BaseModel):
     delegated_providers: list[ProviderName] | None = Field(default=None)
     provider_configs: dict[str, Any] | None = Field(default_factory=dict)
     provider_capabilities: dict[str, Any] | None = Field(default_factory=dict)
+    summarization_provider: ProviderName | None = Field(default="9router")
+    summarization_config: dict[str, Any] | None = Field(default_factory=lambda: {"model_id": "Daily"})
+    conversation_urls: dict[str, str] | None = Field(default=None)
+    parent_job_id: str | None = Field(default=None)
 
     @field_validator("query")
     @classmethod
@@ -150,6 +154,9 @@ class ResearchResponse(BaseModel):
     orchestrator_conversation_url: str | None = None
     lead_conversation_url: str | None = None
     provider_conversations: dict[str, str] | None = None
+    summarization_provider: str | None = None
+    summarization_config: dict[str, Any] | None = None
+    context_summary: str | None = None
     parent_job_id: str | None = None
     conversation_id: str | None = None
     created_at: datetime

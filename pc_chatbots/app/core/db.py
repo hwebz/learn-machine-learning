@@ -59,6 +59,9 @@ async def init_db() -> None:
                 "orchestrator_conversation_url": "VARCHAR",
                 "lead_conversation_url": "VARCHAR",
                 "provider_conversations_json": "TEXT DEFAULT '{}'",
+                "summarization_provider": "VARCHAR",
+                "summarization_config_json": "TEXT",
+                "context_summary": "TEXT",
                 "parent_job_id": "VARCHAR",
                 "conversation_id": "VARCHAR",
             }

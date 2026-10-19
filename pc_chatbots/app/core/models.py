@@ -37,6 +37,9 @@ class Job(SQLModel, table=True):
     orchestrator_conversation_url: str | None = None
     lead_conversation_url: str | None = None
     provider_conversations_json: str = "{}"
+    summarization_provider: str | None = None
+    summarization_config_json: str | None = None
+    context_summary: str | None = None
     parent_job_id: str | None = Field(default=None, index=True)
     conversation_id: str | None = Field(default=None, index=True)
 
