@@ -41,6 +41,8 @@ class PerplexityAgentAdapter:
         timeout_s: int,
         mode: str = "default",
         on_step: StepCallback | None = None,
+        conversation_url: str | None = None,
+        **kwargs: Any,
     ) -> ProviderResult:
         started_at = datetime.now(timezone.utc)
         preset = "high" if mode == "deep" else self.preset

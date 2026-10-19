@@ -281,6 +281,7 @@ class BrowserProviderAdapter(ABC):
         timeout_s: int,
         mode: str = "default",
         on_step: StepCallback | None = None,
+        conversation_url: str | None = None,
     ) -> ProviderResult:
         started_at = datetime.now(timezone.utc)
         bucket = _bucket_for(self.name)
@@ -308,12 +309,16 @@ class BrowserProviderAdapter(ABC):
         completion_text = ""
         sources: list[Source] = []
         live_polled_citations: list[dict[str, Any]] = []
-        conversation_url: str | None = None
 
         try:
             async with self._session.exclusive():
-                target_url = self._cfg.get("new_chat_url", "")
-                await _notify("navigating", f"Đang mở trang web {self.name} ({target_url})...", {"url": target_url})
+                target_url = conversation_url or self._cfg.get("new_chat_url", "")
+                nav_msg = (
+                    f"Đang mở cuộc trò chuyện trước đó trên {self.name} ({target_url})..."
+                    if conversation_url
+                    else f"Đang mở trang web {self.name} ({target_url})..."
+                )
+                await _notify("navigating", nav_msg, {"url": target_url})
                 page = await self._session.new_page(target_url)
                 try:
                     from app.browser.waits import detect_blocking_state
@@ -349,6 +354,27 @@ class BrowserProviderAdapter(ABC):
                                 await _notify("selecting_mode", f"Đang cấu hình chế độ nghiên cứu ({mode}) cho {self.name}...")
                             await self._select_mode(page, mode)
 
+                            baseline_text = ""
+                            initial_answer_count = 0
+                            initial_done_count = 0
+                            if conversation_url:
+                                try:
+                                    from app.browser.waits import _answer_text
+                                    ans_chain = self._cfg.get("answer_container", [])
+                                    ans_loc, _ = await resolve_locator(page, ans_chain)
+                                    if ans_loc is not None:
+                                        initial_answer_count = await ans_loc.count()
+                                        if initial_answer_count > 0:
+                                            baseline_text = await _answer_text(page, ans_chain, provider=self.name)
+                                except Exception:
+                                    pass
+                                try:
+                                    done_loc, _ = await resolve_locator(page, self._cfg.get("done_indicator", []))
+                                    if done_loc is not None:
+                                        initial_done_count = await done_loc.count()
+                                except Exception:
+                                    pass
+
                             await _notify("entering_prompt", f"Đang nhập câu hỏi vào ô chat của {self.name}...")
                             try:
                                 await self._enter_prompt(page, input_locator, prompt)
@@ -370,6 +396,7 @@ class BrowserProviderAdapter(ABC):
                                     await submit_locator.click()
                                 if status != "error":
                                     await _notify("submitting", f"Đã gửi câu hỏi đến {self.name}, đang chờ xử lý...")
+                                    await asyncio.sleep(1.2)  # Give the SPA time to transition to generating
                             if status not in {"error", "needs_user_action"}:
                                 await _notify("generating", f"Đang đợi {self.name} sinh câu trả lời (thời gian tối đa {timeout_s}s)...")
                                 # Per-provider completion overrides (e.g., Mistral's
@@ -512,6 +539,9 @@ class BrowserProviderAdapter(ABC):
                                     response_ready=self._response_ready,
                                     thinking_interval_s=settings.thinking_interval_check,
                                     response_interval_s=settings.response_interval_check,
+                                    baseline_text=baseline_text,
+                                    initial_answer_count=initial_answer_count,
+                                    initial_done_count=initial_done_count,
                                 )
                                 # Some sites (e.g., Kimi) finish with "System is
                                 # currently busy..." and a Retry button — retry a
@@ -537,6 +567,9 @@ class BrowserProviderAdapter(ABC):
                                         on_poll=_on_thinking_poll,
                                         thinking_interval_s=settings.thinking_interval_check,
                                         response_interval_s=settings.response_interval_check,
+                                        baseline_text=baseline_text,
+                                        initial_answer_count=initial_answer_count,
+                                        initial_done_count=initial_done_count,
                                     )
                                 completion_text = completion.text
                                 if completion.reason == "blocked":

@@ -116,6 +116,16 @@ export function buildAssistantMessage(
       ? new Date(jobData.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       : "";
 
+  const runsList = Array.isArray(jobData.provider_runs)
+    ? jobData.provider_runs
+    : Object.values(jobData.provider_runs || {});
+  const resolvedConvUrls: Record<string, string> = { ...(jobData.provider_conversations || {}) };
+  for (const r of runsList) {
+    if (r && r.provider && r.conversation_url) {
+      resolvedConvUrls[r.provider] = r.conversation_url;
+    }
+  }
+
   return {
     id: `msg-${jobId}-asst`,
     jobId,
@@ -141,7 +151,7 @@ export function buildAssistantMessage(
     delegated_providers: jobData.delegated_providers,
     orchestrator_conversation_url: jobData.orchestrator_conversation_url || undefined,
     lead_conversation_url: jobData.lead_conversation_url || undefined,
-    provider_conversations: jobData.provider_conversations || undefined,
+    provider_conversations: Object.keys(resolvedConvUrls).length > 0 ? resolvedConvUrls : undefined,
   };
 }
 
@@ -490,63 +500,100 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
       const newSessions: ChatSession[] = [];
       if (historyJobs && historyJobs.length > 0) {
+        // Group jobs by conversation_id (fallback to job_id)
+        const groups = new Map<string, typeof historyJobs>();
         for (const job of historyJobs) {
           if (deletedIds.has(job.job_id)) {
             continue;
           }
+          const convId = job.conversation_id || job.job_id;
+          if (!groups.has(convId)) {
+            groups.set(convId, []);
+          }
+          groups.get(convId)!.push(job);
+        }
 
-          const jobProviders = job.providers && job.providers.length > 0
-            ? job.providers
-            : DEFAULT_SELECTED_PROVIDERS;
+        for (const [convId, groupJobs] of groups.entries()) {
+          // Sort group jobs chronologically (oldest first for message history)
+          const sortedJobs = [...groupJobs].sort((a, b) => {
+            const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+            const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+            return ta - tb;
+          });
 
-          const userMsg: Message = {
-            id: `msg-${job.job_id}-user`,
-            role: "user",
-            authorName: "Researcher",
-            timestamp: job.created_at
-              ? new Date(job.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-              : "Trước đó",
-            content: job.query,
-          };
+          const rootJob = sortedJobs[0];
+          const latestJob = sortedJobs[sortedJobs.length - 1];
 
-          const assistantMsg = buildAssistantMessage(job.job_id, job);
-          const assistantMsgs: Message[] = assistantMsg ? [assistantMsg] : [];
+          const messages: Message[] = [];
+          const mergedConvUrls: Record<string, string> = {};
 
-          const initialTitle = (job as any).title || (job.query.length > 36 ? job.query.slice(0, 36) + "..." : job.query);
-          const isPinned = Boolean((job as any).pinned);
+          for (const job of sortedJobs) {
+            const userMsg: Message = {
+              id: `msg-${job.job_id}-user`,
+              role: "user",
+              authorName: "Researcher",
+              timestamp: job.created_at
+                ? new Date(job.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                : "Trước đó",
+              content: job.query,
+            };
+            messages.push(userMsg);
+            const assistantMsg = buildAssistantMessage(job.job_id, job);
+            if (assistantMsg) {
+              messages.push(assistantMsg);
+            }
+            if (job.provider_conversations) {
+              Object.assign(mergedConvUrls, job.provider_conversations);
+            }
+            if (job.provider_runs && typeof job.provider_runs === "object") {
+              const runList = Array.isArray(job.provider_runs) ? job.provider_runs : Object.values(job.provider_runs);
+              for (const r of runList) {
+                if (r && r.provider && r.conversation_url) {
+                  mergedConvUrls[r.provider] = r.conversation_url;
+                }
+              }
+            }
+          }
+
+          const jobProviders = latestJob.providers && latestJob.providers.length > 0
+            ? latestJob.providers
+            : (rootJob.providers && rootJob.providers.length > 0 ? rootJob.providers : DEFAULT_SELECTED_PROVIDERS);
+
+          const initialTitle = (rootJob as any).title || (rootJob.query.length > 36 ? rootJob.query.slice(0, 36) + "..." : rootJob.query);
+          const isPinned = Boolean((rootJob as any).pinned || (latestJob as any).pinned);
 
           newSessions.push({
-            id: job.job_id,
-            jobId: job.job_id,
+            id: convId,
+            jobId: latestJob.job_id,
             title: initialTitle,
             pinned: isPinned,
-            createdAt: job.created_at
-              ? new Date(job.created_at).toLocaleDateString([], { month: "short", day: "numeric" })
+            createdAt: rootJob.created_at
+              ? new Date(rootJob.created_at).toLocaleDateString([], { month: "short", day: "numeric" })
               : "Gần đây",
-            createdTimestamp: job.created_at ? new Date(job.created_at).getTime() : Date.now(),
+            createdTimestamp: rootJob.created_at ? new Date(rootJob.created_at).getTime() : Date.now(),
             selectedProviders: jobProviders,
             selectedProvider: jobProviders[0] || "copilot",
-            status: job.status,
-            messages: [userMsg, ...assistantMsgs],
-            job_type: (job as any).job_type || "research",
-            orchestrator_provider: (job as any).orchestrator_provider,
-            lead_provider: (job as any).lead_provider,
-            tone: (job as any).tone,
-            orchestrator_dispatch: (job as any).orchestrator_dispatch,
-            delegated_providers: (job as any).delegated_providers,
-            providerConfigurations: (job as any).providerConfigurations || (job as any).provider_options || {
-              ...(((job as any).orchestrator_config && (job as any).orchestrator_provider) ? { [(job as any).orchestrator_provider]: (job as any).orchestrator_config } : {}),
-              ...(((job as any).lead_config && (job as any).lead_provider) ? { [(job as any).lead_provider]: (job as any).lead_config } : {}),
+            status: latestJob.status,
+            messages,
+            job_type: (latestJob as any).job_type || (rootJob as any).job_type || "research",
+            orchestrator_provider: (latestJob as any).orchestrator_provider,
+            lead_provider: (latestJob as any).lead_provider,
+            tone: (latestJob as any).tone,
+            orchestrator_dispatch: (latestJob as any).orchestrator_dispatch,
+            delegated_providers: (latestJob as any).delegated_providers,
+            providerConfigurations: (latestJob as any).providerConfigurations || (latestJob as any).provider_options || {
+              ...(((latestJob as any).orchestrator_config && (latestJob as any).orchestrator_provider) ? { [(latestJob as any).orchestrator_provider]: (latestJob as any).orchestrator_config } : {}),
+              ...(((latestJob as any).lead_config && (latestJob as any).lead_provider) ? { [(latestJob as any).lead_provider]: (latestJob as any).lead_config } : {}),
             },
-            orchestrator_conversation_url: (job as any).orchestrator_conversation_url || undefined,
-            lead_conversation_url: (job as any).lead_conversation_url || undefined,
-            provider_conversations: (job as any).provider_conversations || undefined,
+            orchestrator_conversation_url: (latestJob as any).orchestrator_conversation_url || undefined,
+            lead_conversation_url: (latestJob as any).lead_conversation_url || undefined,
+            provider_conversations: Object.keys(mergedConvUrls).length > 0 ? mergedConvUrls : undefined,
           });
         }
       }
 
       // If a specific conversation was requested via route and not found in top 50, fetch directly
-      if (targetId && !newSessions.some((s) => s.id === targetId || s.jobId === targetId)) {
+      if (targetId && !newSessions.some((s) => s.id === targetId || s.jobId === targetId || s.messages.some((m) => m.jobId === targetId))) {
         try {
           const directJob = await getResearchResult(targetId);
           if (directJob && directJob.job_id) {
@@ -1371,11 +1418,21 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     const session = sessions.find((s) => s.id === id || s.jobId === id);
     const targetJobId = session?.jobId || (!id.startsWith("session-") ? id : undefined);
 
-    markSessionAsDeleted(id, targetJobId);
-
-    if (targetJobId) {
-      await deleteResearchJob(targetJobId, DEFAULT_API_KEY, { deleteRemote: true });
+    const jobIdsToDelete = new Set<string>();
+    if (targetJobId) jobIdsToDelete.add(targetJobId);
+    if (!id.startsWith("session-")) jobIdsToDelete.add(id);
+    if (session?.messages) {
+      for (const m of session.messages) {
+        if (m.jobId) jobIdsToDelete.add(m.jobId);
+      }
     }
+
+    markSessionAsDeleted(id, targetJobId);
+    for (const jId of jobIdsToDelete) {
+      markSessionAsDeleted(jId, jId);
+      deleteResearchJob(jId, DEFAULT_API_KEY, { deleteRemote: true }).catch(() => {});
+    }
+
     const remaining = sessions.filter((s) => s.id !== id && s.jobId !== id);
     setSessions(remaining);
 
@@ -1603,7 +1660,32 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     }
 
     try {
-      // 1. Dispatch research job to backend with all selected providers
+      // 1. Collect stored conversation URLs from previous rounds in this session
+      const existingConvUrls: Record<string, string> = {};
+      if (activeSession.provider_conversations) {
+        Object.assign(existingConvUrls, activeSession.provider_conversations);
+      }
+      for (const m of activeSession.messages) {
+        if (m.provider_conversations) {
+          Object.assign(existingConvUrls, m.provider_conversations);
+        }
+        if (Array.isArray(m.provider_runs)) {
+          for (const r of m.provider_runs) {
+            if (r.provider && r.conversation_url) {
+              existingConvUrls[r.provider] = r.conversation_url;
+            }
+          }
+        }
+      }
+      const filteredConvUrls: Record<string, string> = {};
+      for (const pId of currentProviderIds) {
+        if (existingConvUrls[pId]) {
+          filteredConvUrls[pId] = existingConvUrls[pId];
+        }
+      }
+      const parentJobId = activeSession.jobId || activeSession.messages.filter((m) => m.jobId).pop()?.jobId;
+
+      // Dispatch research job to backend with all selected providers & conversation URLs
       const sanitizedOptions: Record<string, any> = {};
       for (const [pId, opts] of Object.entries(capsHook.selectionsMap || {})) {
         const pCaps = capsHook.capabilitiesMap[pId];
@@ -1618,6 +1700,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         query: content,
         providers: currentProviderIds,
         provider_options: sanitizedOptions,
+        conversation_urls: Object.keys(filteredConvUrls).length > 0 ? filteredConvUrls : undefined,
+        parent_job_id: parentJobId || undefined,
       });
 
       if (isCancelledRef.current) {
@@ -1625,23 +1709,27 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         return;
       }
 
+      const targetSessionId = activeSessionId;
+      const isDraft = targetSessionId.startsWith("session-");
+      const resolvedSessionId = isDraft ? jobAccepted.job_id : targetSessionId;
+
       activeJobIdRef.current = jobAccepted.job_id;
       setCurrentRouteChatId(jobAccepted.job_id);
 
-      // Update URL to /chat/{job_id} for shareable direct route
-      if (typeof window !== "undefined") {
+      // Update URL to /chat/{job_id} for shareable direct route on first question
+      if (typeof window !== "undefined" && isDraft) {
         window.history.replaceState(null, "", `/chat/${jobAccepted.job_id}`);
       }
 
       // Update session with backend job id
       setSessions((prev) =>
         prev.map((s) =>
-          s.id === activeSessionId || s.jobId === activeSessionId
-            ? { ...s, id: jobAccepted.job_id, jobId: jobAccepted.job_id }
+          s.id === targetSessionId || s.jobId === targetSessionId
+            ? { ...s, id: resolvedSessionId, jobId: jobAccepted.job_id, status: "running" }
             : s
         )
       );
-      setActiveSessionId(jobAccepted.job_id);
+      setActiveSessionId(resolvedSessionId);
 
       // 2. Subscribe to real-time SSE progress events
       const unsub = subscribeJobEvents(jobAccepted.job_id, {
@@ -1649,7 +1737,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           if (isCancelledRef.current) return;
           setSessions((prev) =>
             prev.map((s) =>
-              s.id === jobAccepted.job_id || s.jobId === jobAccepted.job_id
+              s.id === resolvedSessionId || s.jobId === jobAccepted.job_id || s.messages.some((m) => m.jobId === jobAccepted.job_id)
                 ? { ...s, status: newStatus as any }
                 : s
             )
@@ -1689,16 +1777,23 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               provider_options: (result as any).provider_options || capsHook.selectionsMap,
               steps: latestSteps,
               error: result.error,
+              provider_conversations: result.provider_conversations || filteredConvUrls,
             });
 
             if (asstMsg) {
               setInspectedMessage(asstMsg);
               setSessions((prev) =>
                 prev.map((s) => {
-                  if (s.id !== jobAccepted.job_id && s.jobId !== jobAccepted.job_id) return s;
+                  if (s.id !== resolvedSessionId && s.jobId !== jobAccepted.job_id && !s.messages.some((m) => m.jobId === jobAccepted.job_id)) return s;
+                  const mergedConvUrls = {
+                    ...(s.provider_conversations || {}),
+                    ...(filteredConvUrls || {}),
+                    ...(result.provider_conversations || {}),
+                  };
                   return {
                     ...s,
                     status: (result.status as any) || "completed",
+                    provider_conversations: mergedConvUrls,
                     messages: upsertAssistantMessage(s.messages, asstMsg),
                   };
                 })
@@ -1726,10 +1821,15 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                   setInspectedMessage(asstMsg);
                   setSessions((prev) =>
                     prev.map((s) =>
-                      s.id === jobAccepted.job_id || s.jobId === jobAccepted.job_id
+                      s.id === resolvedSessionId || s.jobId === jobAccepted.job_id || s.messages.some((m) => m.jobId === jobAccepted.job_id)
                         ? {
                             ...s,
                             status: (finalResult.status as any) || "completed",
+                            provider_conversations: {
+                              ...(s.provider_conversations || {}),
+                              ...(filteredConvUrls || {}),
+                              ...(finalResult.provider_conversations || {}),
+                            },
                             messages: upsertAssistantMessage(s.messages, asstMsg),
                           }
                         : s
@@ -1761,10 +1861,15 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                   setInspectedMessage(asstMsg);
                   setSessions((prev) =>
                     prev.map((s) =>
-                      s.id === jobAccepted.job_id || s.jobId === jobAccepted.job_id
+                      s.id === resolvedSessionId || s.jobId === jobAccepted.job_id || s.messages.some((m) => m.jobId === jobAccepted.job_id)
                         ? {
                             ...s,
                             status: (finalResult.status as any) || "completed",
+                            provider_conversations: {
+                              ...(s.provider_conversations || {}),
+                              ...(filteredConvUrls || {}),
+                              ...(finalResult.provider_conversations || {}),
+                            },
                             messages: upsertAssistantMessage(s.messages, asstMsg),
                           }
                         : s

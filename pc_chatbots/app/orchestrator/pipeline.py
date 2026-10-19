@@ -146,9 +146,11 @@ async def _persist_subtask_result(
     known_source_urls: set[str],
     claims: list[dict[str, object]],
     results_lock: asyncio.Lock,
+    initial_conv_urls: dict[str, str] | None = None,
 ) -> None:
     """Consolidated helper to persist provider run results, sources, and progress updates."""
     run_id = f"{job_id}:{subtask.provider}:run"
+    resolved_conv_url = conversation_url or (initial_conv_urls or {}).get(subtask.provider)
     async with results_lock:
         run_statuses.append(status)
         if status not in PROVIDER_RESULT_FAILURE_STATUSES and answer_md.strip():
@@ -161,7 +163,7 @@ async def _persist_subtask_result(
             "answer_markdown": answer_md.strip() if answer_md else "",
             "error": error,
             "options": prov_opts,
-            "conversation_url": conversation_url,
+            "conversation_url": resolved_conv_url,
         })
         done_count = len(runs)
 
@@ -175,7 +177,7 @@ async def _persist_subtask_result(
                 subtask_id=subtask.id,
                 provider=subtask.provider,
                 answer_md=answer_md,
-                conversation_url=conversation_url,
+                conversation_url=resolved_conv_url,
                 started_at=started_at,
                 finished_at=finished_at,
                 status=status,
@@ -223,7 +225,8 @@ async def _persist_subtask_result(
             db_job.sources_json = json.dumps(sources)
             db_job.claims_json = json.dumps(claims)
             db_job.provider_runs_json = json.dumps(runs)
-            conv_map = {r["provider"]: r["conversation_url"] for r in runs if r.get("conversation_url")}
+            conv_map = dict(initial_conv_urls or {})
+            conv_map.update({r["provider"]: r["conversation_url"] for r in runs if r.get("conversation_url")})
             db_job.provider_conversations_json = json.dumps(conv_map)
             db_job.updated_at = utc_now()
             await session.commit()
@@ -232,11 +235,26 @@ async def _persist_subtask_result(
 
 async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
     try:
+        initial_conv_urls: dict[str, str] = {}
         async with SessionLocal() as session:
             job = await session.get(Job, job_id)
             if job is None or job.status == "cancelled":
                 return
             request = ResearchRequest.model_validate_json(job.config_json)
+            initial_conv_urls = dict(request.conversation_urls or {})
+            if not initial_conv_urls and getattr(job, "parent_job_id", None):
+                parent_job = await session.get(Job, job.parent_job_id)
+                if parent_job and parent_job.provider_conversations_json:
+                    try:
+                        initial_conv_urls = json.loads(parent_job.provider_conversations_json)
+                    except Exception:
+                        pass
+            if not initial_conv_urls and getattr(job, "provider_conversations_json", None):
+                try:
+                    initial_conv_urls = json.loads(job.provider_conversations_json)
+                except Exception:
+                    pass
+            job.provider_conversations_json = json.dumps(initial_conv_urls)
             job.status = "planning"
             job.updated_at = utc_now()
             session.add(JobEvent(
@@ -328,6 +346,9 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             ask_kwargs: dict[str, Any] = {"timeout_s": request.max_minutes * 60, "mode": selected_mode}
             if "on_step" in ask_params or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in ask_params.values()):
                 ask_kwargs["on_step"] = emitter
+            prov_conv_url = initial_conv_urls.get(subtask.provider)
+            if prov_conv_url and ("conversation_url" in ask_params or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in ask_params.values())):
+                ask_kwargs["conversation_url"] = prov_conv_url
 
             try:
                 result = await adapter.ask(subtask.prompt, **ask_kwargs)
@@ -359,6 +380,7 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                     known_source_urls=known_source_urls,
                     claims=claims,
                     results_lock=results_lock,
+                    initial_conv_urls=initial_conv_urls,
                 )
                 return
             except Exception as exc:
@@ -389,6 +411,7 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                     known_source_urls=known_source_urls,
                     claims=claims,
                     results_lock=results_lock,
+                    initial_conv_urls=initial_conv_urls,
                 )
                 return
 
@@ -466,6 +489,7 @@ async def run_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 known_source_urls=known_source_urls,
                 claims=claims,
                 results_lock=results_lock,
+                initial_conv_urls=initial_conv_urls,
             )
 
         async def _execute_subtask(subtask: Subtask, index: int) -> None:

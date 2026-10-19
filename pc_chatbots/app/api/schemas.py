@@ -62,6 +62,8 @@ class ResearchRequest(BaseModel):
     providers: list[ProviderName] = Field(default_factory=lambda: ["perplexity", "gemini"], min_length=1)
     max_minutes: int = Field(default=20, ge=1, le=180)
     provider_options: dict[str, dict[str, Any]] | None = Field(default=None)
+    conversation_urls: dict[str, str] | None = Field(default=None)
+    parent_job_id: str | None = Field(default=None)
 
     @field_validator("query")
     @classmethod
@@ -148,6 +150,8 @@ class ResearchResponse(BaseModel):
     orchestrator_conversation_url: str | None = None
     lead_conversation_url: str | None = None
     provider_conversations: dict[str, str] | None = None
+    parent_job_id: str | None = None
+    conversation_id: str | None = None
     created_at: datetime
     finished_at: datetime | None
 

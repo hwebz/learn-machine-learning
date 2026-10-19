@@ -37,6 +37,8 @@ class Job(SQLModel, table=True):
     orchestrator_conversation_url: str | None = None
     lead_conversation_url: str | None = None
     provider_conversations_json: str = "{}"
+    parent_job_id: str | None = Field(default=None, index=True)
+    conversation_id: str | None = Field(default=None, index=True)
 
 
 class JobEvent(SQLModel, table=True):

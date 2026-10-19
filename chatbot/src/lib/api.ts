@@ -8,6 +8,8 @@ export interface ResearchRequestPayload {
   providers: string[];
   max_sources_per_provider?: number;
   provider_options?: Record<string, any>;
+  conversation_urls?: Record<string, string>;
+  parent_job_id?: string;
 }
 
 export interface ResearchResponseData {
@@ -40,6 +42,8 @@ export interface ResearchResponseData {
   orchestrator_conversation_url?: string;
   lead_conversation_url?: string;
   provider_conversations?: Record<string, string>;
+  parent_job_id?: string;
+  conversation_id?: string;
 }
 
 export interface ResearchHistoryItem {
@@ -68,6 +72,8 @@ export interface ResearchHistoryItem {
   orchestrator_conversation_url?: string;
   lead_conversation_url?: string;
   provider_conversations?: Record<string, string>;
+  parent_job_id?: string;
+  conversation_id?: string;
   created_at?: string;
   finished_at?: string;
 }

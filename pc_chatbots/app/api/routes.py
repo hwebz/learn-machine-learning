@@ -139,6 +139,8 @@ def _job_response(
         orchestrator_conversation_url=getattr(job, "orchestrator_conversation_url", None),
         lead_conversation_url=getattr(job, "lead_conversation_url", None),
         provider_conversations=provider_conversations,
+        parent_job_id=getattr(job, "parent_job_id", None),
+        conversation_id=getattr(job, "conversation_id", None) or job.id,
         error=job.error,
         created_at=job.created_at,
         finished_at=job.finished_at,
@@ -243,14 +245,30 @@ async def health(request: Request) -> dict[str, object]:
 @router.post("/research", response_model=ResearchAccepted, status_code=status.HTTP_202_ACCEPTED, dependencies=protected)
 async def create_research(payload: ResearchRequest, request: Request) -> ResearchAccepted:
     job_id = str(uuid4())
-    job = Job(
-        id=job_id,
-        query=payload.query,
-        config_json=payload.model_dump_json(),
-        status="queued",
-        subtasks_total=len(payload.providers),
-    )
+    parent_job_id = payload.parent_job_id
+    conversation_id = job_id
+    initial_conv_json = "{}"
+    if payload.conversation_urls:
+        initial_conv_json = json.dumps(payload.conversation_urls)
+
     async with SessionLocal() as session:
+        if parent_job_id:
+            parent_job = await session.get(Job, parent_job_id)
+            if parent_job:
+                conversation_id = getattr(parent_job, "conversation_id", None) or parent_job.id
+                if not payload.conversation_urls and getattr(parent_job, "provider_conversations_json", None):
+                    initial_conv_json = parent_job.provider_conversations_json
+
+        job = Job(
+            id=job_id,
+            query=payload.query,
+            config_json=payload.model_dump_json(),
+            status="queued",
+            subtasks_total=len(payload.providers),
+            parent_job_id=parent_job_id,
+            conversation_id=conversation_id,
+            provider_conversations_json=initial_conv_json,
+        )
         session.add(job)
         session.add(JobEvent(
             job_id=job_id,
@@ -262,7 +280,7 @@ async def create_research(payload: ResearchRequest, request: Request) -> Researc
         ))
         await session.commit()
     await request.app.state.job_queue.put(job_id)
-    logger.info("research_job_queued", job_id=job_id, providers=payload.providers)
+    logger.info("research_job_queued", job_id=job_id, providers=payload.providers, parent_job_id=parent_job_id)
     return ResearchAccepted(job_id=job_id)
 
 
@@ -378,6 +396,8 @@ async def list_research(limit: int = 50) -> list[dict[str, Any]]:
                 "orchestrator_conversation_url": getattr(j, "orchestrator_conversation_url", None),
                 "lead_conversation_url": getattr(j, "lead_conversation_url", None),
                 "provider_conversations": provider_conversations,
+                "parent_job_id": getattr(j, "parent_job_id", None),
+                "conversation_id": getattr(j, "conversation_id", None) or j.id,
                 "created_at": j.created_at.isoformat() if j.created_at else None,
                 "finished_at": j.finished_at.isoformat() if j.finished_at else None,
             })

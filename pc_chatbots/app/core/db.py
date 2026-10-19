@@ -59,6 +59,8 @@ async def init_db() -> None:
                 "orchestrator_conversation_url": "VARCHAR",
                 "lead_conversation_url": "VARCHAR",
                 "provider_conversations_json": "TEXT DEFAULT '{}'",
+                "parent_job_id": "VARCHAR",
+                "conversation_id": "VARCHAR",
             }
             for col_name, col_type in new_cols.items():
                 if col_name not in cols:

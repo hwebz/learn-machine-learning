@@ -390,6 +390,9 @@ async def wait_for_completion(
     response_ready: Any | None = None,
     thinking_interval_s: float | None = None,
     response_interval_s: float | None = None,
+    baseline_text: str = "",
+    initial_answer_count: int = 0,
+    initial_done_count: int = 0,
     clock: Any = time.monotonic,
     sleep: Any = asyncio.sleep,
 ) -> CompletionResult:
@@ -476,13 +479,35 @@ async def wait_for_completion(
             raise
 
         try:
-            done_marker = await _indicator_visible(page, done_chain)
+            done_marker = False
+            if done_chain:
+                done_loc, _ = await resolve_locator(page, done_chain)
+                if done_loc is not None:
+                    count = await done_loc.count()
+                    if initial_done_count > 0:
+                        if count > initial_done_count:
+                            if hasattr(done_loc, "last"):
+                                done_marker = await done_loc.last.is_visible(timeout=500)
+                            else:
+                                done_marker = True
+                    else:
+                        if count > 0:
+                            if hasattr(done_loc, "nth"):
+                                for i in range(count):
+                                    if await done_loc.nth(i).is_visible(timeout=500):
+                                        done_marker = True
+                                        break
+                            else:
+                                done_marker = await done_loc.is_visible(timeout=500)
         except RuntimeError as exc:
             if is_target_closed_error(exc):
                 return CompletionResult(done=False, reason="page_closed", text=last_text, blocking_detail=str(exc))
             raise
 
-        text_stable = tracker.update(last_text)
+        if baseline_text and last_text == baseline_text:
+            text_stable = False
+        else:
+            text_stable = tracker.update(last_text)
 
         done, reason = evaluate_completion(
             input_editable=editable,
@@ -490,6 +515,10 @@ async def wait_for_completion(
             done_marker_visible=done_marker,
             generating=generating,
         )
+
+        if baseline_text and last_text == baseline_text:
+            done = False
+            reason = "in_progress"
 
         if ready is False:
             done, reason = False, "in_progress"

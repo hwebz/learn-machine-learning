@@ -30,7 +30,9 @@ class FakeAdapter:
         timeout_s: int,
         mode: str = "default",
         on_step: StepCallback | None = None,
+        conversation_url: str | None = None,
     ) -> ProviderResult:
+        self.last_conversation_url = conversation_url
         if on_step is not None:
             await on_step(
                 "generating",
@@ -92,7 +94,7 @@ class FakeAdapter:
             )
         else:
             answer = f"This is a placeholder response for the requested research. Provider: {self.name}."
-        conv_url = f"https://{self.name}.example.com/c/fake-{self.name}-123"
+        conv_url = conversation_url or f"https://{self.name}.example.com/c/fake-{self.name}-123"
         return ProviderResult(
             provider=self.name,
             prompt=prompt,

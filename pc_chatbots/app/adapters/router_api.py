@@ -77,6 +77,7 @@ class RouterAPIAdapter:
         timeout_s: int,
         mode: str = "default",
         on_step: StepCallback | None = None,
+        conversation_url: str | None = None,
         **kwargs: Any,
     ) -> ProviderResult:
         """Query 9Router with full support for all OpenAI-compatible response formats."""

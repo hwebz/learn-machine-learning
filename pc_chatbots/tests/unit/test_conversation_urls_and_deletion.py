@@ -17,9 +17,29 @@ API_HEADERS = {"X-API-Key": settings.api_key}
 
 class TrackingFakeAdapter(FakeAdapter):
     deleted_urls: list[str] = []
+    received_urls: list[str] = []
 
     def __init__(self, name: str) -> None:
         super().__init__(name)
+
+    async def ask(
+        self,
+        prompt: str,
+        *,
+        timeout_s: int,
+        mode: str = "default",
+        on_step: Any = None,
+        conversation_url: str | None = None,
+    ) -> Any:
+        if conversation_url:
+            self.received_urls.append(conversation_url)
+        return await super().ask(
+            prompt,
+            timeout_s=timeout_s,
+            mode=mode,
+            on_step=on_step,
+            conversation_url=conversation_url,
+        )
 
     async def delete_conversation(self, conversation_url: str) -> bool:
         self.deleted_urls.append(conversation_url)
@@ -217,3 +237,86 @@ async def test_gemini_ui_adapter_delete_conversation() -> None:
     mock_confirm_btn.click.assert_awaited()
     mock_page.close.assert_awaited()
     mock_session.close.assert_awaited()
+
+
+def test_normal_research_multi_round_conversation_urls(monkeypatch: MonkeyPatch) -> None:
+    TrackingFakeAdapter.deleted_urls.clear()
+    TrackingFakeAdapter.received_urls.clear()
+    monkeypatch.setattr(pipeline, "create_adapter", lambda provider: TrackingFakeAdapter(provider))
+    monkeypatch.setattr("app.api.routes.create_adapter", lambda provider: TrackingFakeAdapter(provider))
+
+    with TestClient(app) as client:
+        # Round 1
+        res1 = client.post(
+            "/research",
+            headers=API_HEADERS,
+            json={"query": "Round 1: What is machine learning?", "providers": ["perplexity", "gemini"]},
+        )
+        assert res1.status_code == 202
+        job1_id = res1.json()["job_id"]
+
+        # Wait for Round 1 completion
+        deadline = time.monotonic() + 10
+        job1 = None
+        while time.monotonic() < deadline:
+            resp = client.get(f"/research/{job1_id}", headers=API_HEADERS)
+            assert resp.status_code == 200
+            job1 = resp.json()
+            if job1["status"] in ("completed", "failed"):
+                break
+            time.sleep(0.05)
+
+        assert job1 is not None
+        assert job1["status"] == "completed"
+        conv_map = job1.get("provider_conversations", {})
+        assert len(conv_map) == 2
+        assert "perplexity" in conv_map
+        assert "gemini" in conv_map
+
+        # In round 1, no conversation_url was provided so received_urls was empty
+        assert len(TrackingFakeAdapter.received_urls) == 0
+
+        # Round 2: follow-up prompt with stored conversation URLs
+        res2 = client.post(
+            "/research",
+            headers=API_HEADERS,
+            json={
+                "query": "Round 2: Give me an example in Python.",
+                "providers": ["perplexity", "gemini"],
+                "conversation_urls": conv_map,
+                "parent_job_id": job1_id,
+            },
+        )
+        assert res2.status_code == 202
+        job2_id = res2.json()["job_id"]
+
+        # Wait for Round 2 completion
+        deadline = time.monotonic() + 10
+        job2 = None
+        while time.monotonic() < deadline:
+            resp = client.get(f"/research/{job2_id}", headers=API_HEADERS)
+            assert resp.status_code == 200
+            job2 = resp.json()
+            if job2["status"] in ("completed", "failed"):
+                break
+            time.sleep(0.05)
+
+        assert job2 is not None
+        assert job2["status"] == "completed"
+        assert job2["parent_job_id"] == job1_id
+        assert job2["conversation_id"] == (job1.get("conversation_id") or job1_id)
+        assert job2["provider_conversations"] == conv_map
+
+        # Verify adapter received the conversation URLs from Round 1
+        assert len(TrackingFakeAdapter.received_urls) == 2
+        for p, u in conv_map.items():
+            assert u in TrackingFakeAdapter.received_urls
+
+        # Verify /research history returns parent_job_id and conversation_id
+        hist_resp = client.get("/research?limit=10", headers=API_HEADERS)
+        assert hist_resp.status_code == 200
+        hist = hist_resp.json()
+        job2_hist = next((j for j in hist if j["job_id"] == job2_id), None)
+        assert job2_hist is not None
+        assert job2_hist["parent_job_id"] == job1_id
+        assert job2_hist["conversation_id"] == (job1.get("conversation_id") or job1_id)
