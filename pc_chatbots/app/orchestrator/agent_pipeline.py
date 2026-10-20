@@ -175,6 +175,8 @@ DO NOT assign any sub-task to any provider outside this list. Every single item 
 ## Rules:
 - Decompose the topic into 2 to 5 distinct, non-overlapping specialized sub-topics.
 - Assign each sub-topic to the provider best suited for that angle among the allowed providers, matching their active capabilities and strengths described above.
+- Assign each sub-task a "role_group" from: "researcher" (core investigation), "infra" (data/benchmark/cost), "fact_checker" (verification), "red_team" (critique/counterargument).
+- Most sub-tasks should be "researcher" or "infra". Only assign "fact_checker" or "red_team" if the topic specifically benefits from verification or critical analysis.
 - In each "agents_dispatch" item, provide a valid "config" object that matches the provider's active DOM setting and expected schema.
 - Each "question" must be a self-contained, detailed prompt for that provider to investigate.
 - The output MUST be strictly valid JSON matching the schema below. Do not wrap in markdown or add explanations.
@@ -187,6 +189,7 @@ DO NOT assign any sub-task to any provider outside this list. Every single item 
       "id": "<provider_id>",
       "name": "<provider_name>",
       "config": {{ ... }},
+      "role_group": "<researcher|infra|fact_checker|red_team>",
       "sub_topic": "<Brief specialized sub-topic title>",
       "question": "<Detailed research prompt tailored for this provider's capabilities>"
     }}
@@ -539,6 +542,7 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                     "id": p1,
                     "name": p1_info["name"],
                     "config": p1_info["default_config"],
+                    "role_group": "researcher",
                     "sub_topic": "Nền tảng lý thuyết & Giải thuật",
                     "question": f"Phân tích chuyên sâu về kiến trúc và thuật toán liên quan đến: {research_topic}",
                 },
@@ -546,15 +550,18 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                     "id": p2,
                     "name": p2_info["name"],
                     "config": p2_info["default_config"],
+                    "role_group": "infra",
                     "sub_topic": "Dữ liệu ứng dụng thực tế & Nguồn dẫn chứng",
                     "question": f"Tìm kiếm các số liệu, tài liệu học thuật và trường hợp ứng dụng thực tế mới nhất của: {research_topic}",
                 },
             ]
 
-        # Enforce that only allowed delegated providers are used
-        if delegated_providers:
-            sanitized_dispatch: list[dict[str, Any]] = []
-            for item in dispatch_items:
+        # Enforce that only allowed delegated providers are used and role_group is set
+        sanitized_dispatch: list[dict[str, Any]] = []
+        for item in dispatch_items:
+            if not item.get("role_group"):
+                item["role_group"] = "researcher"
+            if delegated_providers:
                 pid = str(item.get("id", "")).lower()
                 if pid not in delegated_providers:
                     fallback_id = delegated_providers[len(sanitized_dispatch) % len(delegated_providers)]
@@ -563,8 +570,8 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                     item["name"] = fallback_info["name"]
                     if not item.get("config"):
                         item["config"] = fallback_info["default_config"]
-                sanitized_dispatch.append(item)
-            dispatch_items = sanitized_dispatch
+            sanitized_dispatch.append(item)
+        dispatch_items = sanitized_dispatch
 
         new_orch_conv_url = str(orch_res.conversation_url) if getattr(orch_res, "conversation_url", None) else None
         orch_conv_url = new_orch_conv_url or orch_conv_url

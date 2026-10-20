@@ -266,5 +266,47 @@ def test_build_orchestrator_prompt_with_live_dom_configs() -> None:
     assert '"agents_dispatch"' in prompt
     assert '"sub_topic"' in prompt
     assert '"question"' in prompt
+    assert '"role_group"' in prompt
+
+
+def test_agent_dispatch_item_role_group_schema_and_backward_compat() -> None:
+    from app.api.schemas import AgentDispatchItem, OrchestratorOutput
+
+    # Default role_group is "researcher"
+    item = AgentDispatchItem(
+        id="deepseek",
+        name="DeepSeek",
+        sub_topic="Lý thuyết",
+        question="Giải thích chi tiết",
+    )
+    assert item.role_group == "researcher"
+
+    # Explicit role_group
+    item_infra = AgentDispatchItem(
+        id="copilot",
+        name="Copilot",
+        role_group="infra",
+        sub_topic="Benchmark",
+        question="Thu thập số liệu",
+    )
+    assert item_infra.role_group == "infra"
+
+    # Backward compatibility: legacy payload without role_group parses and defaults to "researcher"
+    legacy_json = {
+        "research_topic": "Test Topic",
+        "agents_dispatch": [
+            {
+                "id": "gemini",
+                "name": "Gemini",
+                "config": {},
+                "sub_topic": "Khảo sát",
+                "question": "Tìm kiếm tài liệu",
+            }
+        ],
+    }
+    validated = OrchestratorOutput.model_validate(legacy_json)
+    assert len(validated.agents_dispatch) == 1
+    assert validated.agents_dispatch[0].role_group == "researcher"
+
 
 

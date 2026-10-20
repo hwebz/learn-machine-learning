@@ -3410,6 +3410,67 @@ textarea {
   margin-left: 5px;
 }
 
+.agent-role-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  line-height: 14px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid transparent;
+  margin-left: 6px;
+  text-transform: capitalize;
+}
+
+.agent-role-badge.researcher {
+  background-color: rgba(59, 130, 246, 0.12);
+  color: #2563eb;
+  border-color: rgba(59, 130, 246, 0.25);
+}
+
+.agent-role-badge.infra {
+  background-color: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+  border-color: rgba(245, 158, 11, 0.25);
+}
+
+.agent-role-badge.fact_checker {
+  background-color: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.agent-role-badge.red_team {
+  background-color: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+[data-theme="dark"] .agent-role-badge.researcher,
+.dark .agent-role-badge.researcher {
+  color: #60a5fa;
+  background-color: rgba(59, 130, 246, 0.2);
+}
+
+[data-theme="dark"] .agent-role-badge.infra,
+.dark .agent-role-badge.infra {
+  color: #fbbf24;
+  background-color: rgba(245, 158, 11, 0.2);
+}
+
+[data-theme="dark"] .agent-role-badge.fact_checker,
+.dark .agent-role-badge.fact_checker {
+  color: #34d399;
+  background-color: rgba(16, 185, 129, 0.2);
+}
+
+[data-theme="dark"] .agent-role-badge.red_team,
+.dark .agent-role-badge.red_team {
+  color: #f87171;
+  background-color: rgba(239, 68, 68, 0.2);
+}
+
 .agent-subtask-header-right {
   display: flex;
   align-items: center;

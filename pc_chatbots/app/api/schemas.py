@@ -28,6 +28,7 @@ class AgentDispatchItem(BaseModel):
     config: dict[str, Any] = Field(default_factory=dict)
     sub_topic: str
     question: str
+    role_group: str = Field(default="researcher")
 
 
 class OrchestratorOutput(BaseModel):

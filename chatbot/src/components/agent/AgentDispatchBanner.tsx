@@ -35,7 +35,12 @@ function normalize(p?: string): string {
   return s;
 }
 
-
+export const ROLE_GROUP_CONFIG: Record<string, { label: string; className: string }> = {
+  researcher: { label: "Researcher", className: "researcher" },
+  infra: { label: "Infra/Data", className: "infra" },
+  fact_checker: { label: "Fact-Check", className: "fact_checker" },
+  red_team: { label: "Red Team", className: "red_team" },
+};
 
 export function AgentDispatchBanner({
   orchestratorProvider = "gemini",
@@ -480,6 +485,11 @@ export function AgentDispatchBanner({
                           <div>
                             <span className="agent-subtask-name">{item.name || item.id}</span>
                             <span className="agent-branch-idx">Nhánh #{subInfo.branchIdx}</span>
+                            {item.role_group && ROLE_GROUP_CONFIG[item.role_group] && (
+                              <span className={`agent-role-badge ${ROLE_GROUP_CONFIG[item.role_group].className}`}>
+                                {ROLE_GROUP_CONFIG[item.role_group].label}
+                              </span>
+                            )}
                           </div>
                         </div>
 

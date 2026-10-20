@@ -84,6 +84,7 @@ export interface AgentDispatchPlanItem {
   branch_index?: number;
   provider_role_key?: string;
   conversation_url?: string;
+  role_group?: string;
 }
 
 import { ProviderSelectionConfig } from "./capabilities";

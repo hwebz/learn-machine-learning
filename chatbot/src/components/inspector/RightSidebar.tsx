@@ -266,6 +266,7 @@ interface ProviderThinkingDetail {
   provider: string;
   displayName: string;
   role?: "orchestrator" | "subtask" | "lead" | "standard";
+  roleGroup?: string;
   subTopic?: string;
   timeTaken?: string;
   branchIdx?: number;
@@ -441,6 +442,7 @@ export function RightSidebar({
         provider: sp,
         displayName: `${(item.name || sp).toUpperCase()} (Nhánh #${branchIdx})`,
         role: "subtask",
+        roleGroup: item.role_group,
         subTopic: item.sub_topic,
         branchIdx,
         thinkingSteps: [],
@@ -1077,9 +1079,16 @@ export function RightSidebar({
                     </span>
                   )}
                   {prov.role === "subtask" && (
-                    <span className="hidden" style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: "rgba(59, 130, 246, 0.15)", color: "#2563eb", fontWeight: 700 }}>
-                      Nhánh #{prov.branchIdx || 1}
-                    </span>
+                    <>
+                      <span className="hidden" style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: "rgba(59, 130, 246, 0.15)", color: "#2563eb", fontWeight: 700 }}>
+                        Nhánh #{prov.branchIdx || 1}
+                      </span>
+                      {prov.roleGroup && (
+                        <span className={`agent-role-badge ${prov.roleGroup}`} style={{ marginLeft: 0 }}>
+                          {prov.roleGroup === "fact_checker" ? "Fact-Check" : prov.roleGroup === "red_team" ? "Red Team" : prov.roleGroup === "infra" ? "Infra" : "Researcher"}
+                        </span>
+                      )}
+                    </>
                   )}
                   <span
                     style={{
