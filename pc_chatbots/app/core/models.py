@@ -42,6 +42,10 @@ class Job(SQLModel, table=True):
     context_summary: str | None = None
     parent_job_id: str | None = Field(default=None, index=True)
     conversation_id: str | None = Field(default=None, index=True)
+    enable_fact_check: bool = False
+    fact_check_provider: str | None = None
+    fact_check_config_json: str | None = None
+    fact_check_results_json: str | None = None
 
 
 class JobEvent(SQLModel, table=True):

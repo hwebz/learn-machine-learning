@@ -17,7 +17,7 @@ Phase 1 → Phase 2 → Phase 5 → Phase 6 → Phase 3 → Phase 4
 | # | Phase | Doc | Effort | Risk | Status |
 |---|---|---|---|---|---|
 | 1 | [Role Groups & Structured Dispatch](./PHASE_1_ROLE_GROUPS.md) | Schema + prompt changes | ~1–2d | 🟢 Low | ✅ |
-| 2 | [Fact-Check Phase](./PHASE_2_FACT_CHECK.md) | New pipeline stage + claims verification | ~3–4d | 🟡 Med | ⬜ |
+| 2 | [Fact-Check Phase](./PHASE_2_FACT_CHECK.md) | New pipeline stage + claims verification | ~3–4d | 🟡 Med | ✅ |
 | 5 | [Matrix Reports](./PHASE_5_MATRIX_REPORTS.md) | Structured comparison output | ~2–3d | 🟢 Low | ⬜ |
 | 6 | [Dynamic Scaling](./PHASE_6_DYNAMIC_SCALING.md) | Complexity-based agent count | ~2d | 🟢 Low | ⬜ |
 | 3 | [Adversarial Debate](./PHASE_3_ADVERSARIAL_DEBATE.md) | Red Team vs Research multi-turn debate | ~4–5d | 🔴 High | ⬜ |

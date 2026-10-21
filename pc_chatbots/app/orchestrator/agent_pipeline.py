@@ -71,12 +71,14 @@ __all__ = [
     "AgentPipelineResult",
     "AgentStageStatus",
     "PROVIDER_CATALOG",
+    "build_fact_check_prompt",
     "build_orchestrator_prompt",
     "build_summarization_prompt",
     "build_synthesis_prompt",
     "parse_orchestrator_plan",
     "resolve_provider_live_prompt_info",
     "run_agent_pipeline",
+    "run_fact_check_phase",
 ]
 
 
@@ -205,6 +207,7 @@ def build_lead_prompt(
     findings: list[dict[str, Any]],
     tone: str,
     context_summary: str | None = None,
+    fact_check_claims: list[dict[str, Any]] | None = None,
 ) -> str:
     tone_directive = TONE_INSTRUCTIONS.get(tone.lower(), TONE_INSTRUCTIONS["professional"])
 
@@ -226,10 +229,30 @@ def build_lead_prompt(
 Ensure your synthesis integrates continuity from previous findings while focusing on the new findings.
 """
 
+    fact_check_section = ""
+    if fact_check_claims:
+        verified = [c for c in fact_check_claims if c.get("verdict") == "supported"]
+        disputed = [c for c in fact_check_claims if c.get("verdict") in ("unsupported", "conflict", "single_source", "disputed")]
+        disputed_items = "\n".join(
+            f'- ⚠️ "{c.get("claim") or c.get("text", "")}" — Verdict: {c.get("verdict", "")} — {c.get("reasoning", "")}'
+            for c in disputed[:10]
+        )
+        fact_check_section = f"""
+## Fact-Check Results:
+- {len(verified)} claims verified as supported
+- {len(disputed)} claims flagged as unsupported or conflicting
+
+### Disputed/Flagged Claims (MUST address in report):
+{disputed_items if disputed_items else "- No critical disputes identified."}
+
+IMPORTANT: Clearly mark any disputed claims in the report. Do not present unsupported claims as established facts.
+"""
+
     return f"""You are the Lead Research Synthesizer.
 You have been provided with comprehensive findings gathered by specialized AI agents investigating different aspects of the topic:
 "{research_topic}"
 {context_section}
+{fact_check_section}
 ## Findings from Autonomous AI Providers:
 {findings_text}
 
@@ -254,10 +277,190 @@ def _clean_json_str(raw: str) -> str:
         if lines and lines[-1].strip() == "```":
             lines = lines[:-1]
         text = "\n".join(lines).strip()
-    match = re.search(r"(\{.*\})", text, re.DOTALL)
-    if match:
-        return match.group(1).strip()
+    array_match = re.search(r"(\[.*\])", text, re.DOTALL)
+    obj_match = re.search(r"(\{.*\})", text, re.DOTALL)
+    if array_match and obj_match:
+        if array_match.start() <= obj_match.start() and array_match.end() >= obj_match.end():
+            return array_match.group(1).strip()
+        elif obj_match.start() <= array_match.start() and obj_match.end() >= array_match.end():
+            return obj_match.group(1).strip()
+        elif array_match.start() < obj_match.start():
+            return array_match.group(1).strip()
+        else:
+            return obj_match.group(1).strip()
+    if array_match:
+        return array_match.group(1).strip()
+    if obj_match:
+        return obj_match.group(1).strip()
     return text
+
+
+def build_fact_check_prompt(research_branch: str, answer_text: str) -> str:
+    """Build a prompt that asks the fact-checker to verify claims from a research result."""
+    return f"""You are a rigorous Fact-Checker. You are given a research finding on a specific sub-topic.
+Your job is to:
+1. Extract the top 5-10 most important factual claims from the text.
+2. For each claim, assess its verifiability and assign a verdict.
+
+## Research Sub-topic: {research_branch}
+
+## Research Text to Verify:
+{answer_text[:4000]}
+
+## Output Format (strict JSON array):
+[
+  {{
+    "claim": "<exact factual statement>",
+    "verdict": "supported" | "single_source" | "unsupported" | "conflict",
+    "confidence": <float 0.0-1.0>,
+    "reasoning": "<brief explanation of why this verdict>"
+  }}
+]
+
+Rules:
+- "supported": claim can be verified from multiple reliable sources
+- "single_source": claim appears true but only from one source
+- "unsupported": cannot find evidence to support this claim
+- "conflict": different sources give contradictory information
+- Output ONLY the JSON array. No markdown fences, no explanations."""
+
+
+async def run_fact_check_phase(
+    job_id: str,
+    runs: list[dict[str, Any]],
+    fact_check_provider: str,
+    fact_check_config: dict[str, Any],
+    cancel_event: asyncio.Event,
+    initial_conv_urls: dict[str, str],
+) -> list[dict[str, Any]]:
+    """Phase 2.5: Fact-check each research result's claims."""
+    all_claims: list[dict[str, Any]] = []
+    fc_start = time.monotonic()
+    fc_conv_url = initial_conv_urls.get("fact_checker") or initial_conv_urls.get(fact_check_provider)
+
+    await _set_agent_status(
+        job_id,
+        "fact_checking",
+        message=f"Fact-Check Provider ({fact_check_provider}) đang kiểm chứng các luận điểm...",
+        data={
+            "fact_check_provider": fact_check_provider,
+            "config": fact_check_config,
+            "role": "fact_checker",
+            "provider_role_key": "fact_checker",
+            "total_branches": len(runs),
+            "elapsed_s": 0.0,
+        },
+    )
+
+    for idx, run_item in enumerate(runs):
+        if cancel_event.is_set():
+            break
+
+        branch = run_item.get("branch", f"Branch {idx + 1}")
+        answer = run_item.get("answer_md", "") or run_item.get("answer_markdown", "")
+        if not answer or len(answer.strip()) < 50:
+            continue
+
+        fc_adapter = create_adapter(fact_check_provider)
+        fc_prompt = build_fact_check_prompt(branch, answer)
+
+        fc_kwargs: dict[str, Any] = {
+            "timeout_s": 180,
+            "mode": json.dumps(fact_check_config) if fact_check_config else "default",
+        }
+        if "on_step" in inspect.signature(fc_adapter.ask).parameters:
+            fc_kwargs["on_step"] = StepEmitter(
+                job_id=job_id,
+                provider=fact_check_provider,
+                status="fact_checking",
+                role="fact_checker",
+                cancel_event=cancel_event,
+                start_time=fc_start,
+                extra_payload={
+                    "branch": branch,
+                    "branch_index": idx + 1,
+                    "provider_role_key": "fact_checker",
+                },
+            )
+        if fc_conv_url and ("conversation_url" in inspect.signature(fc_adapter.ask).parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in inspect.signature(fc_adapter.ask).parameters.values())):
+            fc_kwargs["conversation_url"] = fc_conv_url
+
+        try:
+            fc_result = await fc_adapter.ask(fc_prompt, **fc_kwargs)
+            new_fc_url = str(fc_result.conversation_url) if getattr(fc_result, "conversation_url", None) else None
+            fc_conv_url = new_fc_url or fc_conv_url
+            cleaned = _clean_json_str(fc_result.answer_markdown)
+            parsed_claims = json.loads(cleaned)
+            if isinstance(parsed_claims, dict) and "claims" in parsed_claims:
+                parsed_claims = parsed_claims["claims"]
+            if isinstance(parsed_claims, list):
+                for claim in parsed_claims:
+                    if isinstance(claim, dict):
+                        claim["branch"] = branch
+                        claim["provider"] = run_item.get("provider", "")
+                        all_claims.append(claim)
+        except Exception as fc_exc:
+            logger.warning("fact_check_failed_for_branch", branch=branch, error=str(fc_exc))
+        finally:
+            await BrowserSessionManager.close_session(fact_check_provider)
+
+    fc_duration = round(time.monotonic() - fc_start, 1)
+    async with SessionLocal() as session:
+        db_j = await session.get(Job, job_id)
+        if db_j is not None:
+            normalized_claims = []
+            for ci, c in enumerate(all_claims):
+                c_id = f"{job_id}:FC{ci + 1}"
+                c_text = c.get("claim") or c.get("text", "")
+                c_verdict = c.get("verdict", "unsupported")
+                if c_verdict not in ("supported", "single_source", "unsupported", "conflict", "disputed", "verified"):
+                    c_verdict = "unsupported"
+                item_dict = {
+                    "id": c_id,
+                    "claim": c_text,
+                    "text": c_text,
+                    "branch": c.get("branch", ""),
+                    "provider": c.get("provider", ""),
+                    "verdict": c_verdict,
+                    "confidence": float(c.get("confidence", 1.0)) if c.get("confidence") is not None else 1.0,
+                    "reasoning": c.get("reasoning", ""),
+                    "source_ids": c.get("source_ids", []),
+                }
+                normalized_claims.append(item_dict)
+                session.add(Claim(
+                    id=c_id,
+                    job_id=job_id,
+                    text=c_text,
+                    branch=c.get("branch", ""),
+                    source_ids_json=json.dumps(c.get("source_ids", [])),
+                    verdict=c_verdict,
+                ))
+
+            db_j.fact_check_results_json = json.dumps(normalized_claims, ensure_ascii=False)
+            db_j.claims_json = json.dumps(normalized_claims, ensure_ascii=False)
+            db_j.updated_at = utc_now()
+
+            session.add(JobEvent(
+                job_id=job_id,
+                status="fact_checking",
+                event_type="fact_check_complete",
+                provider=fact_check_provider,
+                step="fact_check_complete",
+                message=f"Đã kiểm chứng {len(normalized_claims)} luận điểm từ {len(runs)} nhánh nghiên cứu ({fc_duration}s).",
+                data_json=json.dumps({
+                    "claims_count": len(normalized_claims),
+                    "claims": normalized_claims,
+                    "elapsed_s": fc_duration,
+                    "role": "fact_checker",
+                    "provider_role_key": "fact_checker",
+                    "conversation_url": fc_conv_url,
+                }, ensure_ascii=False),
+            ))
+            await session.commit()
+            all_claims = normalized_claims
+        notify_job_event(job_id)
+
+    return all_claims
 
 
 async def _set_agent_status(
@@ -275,6 +478,7 @@ async def _set_agent_status(
         "summarizing": "Summarization Provider đang cô đọng ngữ cảnh từ các vòng trước...",
         "orchestrating": "Orchestrator đang phân rã nhiệm vụ và lập kế hoạch...",
         "researching": "Các chatbot chuyên biệt đang đồng loạt nghiên cứu...",
+        "fact_checking": "Fact-Checker Provider đang kiểm chứng tính xác thực của các luận điểm...",
         "leading": "Lead Provider đang tổng hợp và tinh chỉnh báo cáo hoàn chỉnh...",
         "completed": "Nghiên cứu đa tác nhân hoàn tất thành công.",
         "partial": "Nghiên cứu hoàn tất một phần.",
@@ -807,6 +1011,38 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             return
 
         # ---------------------------------------------------------
+        # PHASE 2.5: FACT-CHECK (Optional, post-research verification)
+        # ---------------------------------------------------------
+        fact_check_claims: list[dict[str, Any]] = []
+        enable_fc = False
+        fc_provider = "perplexity"
+        fc_config: dict[str, Any] = {}
+
+        async with SessionLocal() as session:
+            db_j = await session.get(Job, job_id)
+            if db_j is not None:
+                enable_fc = getattr(db_j, "enable_fact_check", False)
+                fc_provider = getattr(db_j, "fact_check_provider", None) or "perplexity"
+                try:
+                    fc_config = json.loads(db_j.fact_check_config_json) if db_j.fact_check_config_json else {}
+                except Exception:
+                    fc_config = {}
+
+        if enable_fc and runs:
+            fact_check_claims = await run_fact_check_phase(
+                job_id=job_id,
+                runs=runs,
+                fact_check_provider=fc_provider,
+                fact_check_config=fc_config,
+                cancel_event=cancel_event,
+                initial_conv_urls=initial_conv_urls,
+            )
+
+        if cancel_event.is_set():
+            await _set_agent_status(job_id, "cancelled")
+            return
+
+        # ---------------------------------------------------------
         # PHASE 3: LEADING (Lead Provider Synthesis)
         # ---------------------------------------------------------
         lead_start = time.monotonic()
@@ -821,7 +1057,7 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
 
         lead_conv_url = initial_conv_urls.get("lead") or initial_conv_urls.get(lead_prov)
         lead_adapter = create_adapter(lead_prov)
-        lead_prompt = build_lead_prompt(research_topic, runs, tone, context_summary=context_summary)
+        lead_prompt = build_lead_prompt(research_topic, runs, tone, context_summary=context_summary, fact_check_claims=fact_check_claims)
 
         lead_kwargs: dict[str, Any] = {
             "timeout_s": 600,

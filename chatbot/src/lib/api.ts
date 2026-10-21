@@ -45,6 +45,10 @@ export interface ResearchResponseData {
   summarization_provider?: string;
   summarization_config?: Record<string, any>;
   context_summary?: string;
+  enable_fact_check?: boolean;
+  fact_check_provider?: string;
+  fact_check_config?: Record<string, any>;
+  fact_check_results?: any[];
   parent_job_id?: string;
   conversation_id?: string;
 }
@@ -52,7 +56,7 @@ export interface ResearchResponseData {
 export interface ResearchHistoryItem {
   job_id: string;
   query: string;
-  status: "queued" | "running" | "completed" | "partial" | "failed" | "cancelled" | "orchestrating" | "leading";
+  status: "queued" | "summarizing" | "running" | "completed" | "partial" | "failed" | "cancelled" | "orchestrating" | "researching" | "fact_checking" | "leading";
   subtasks_total: number;
   subtasks_done: number;
   report_markdown: string;
@@ -78,6 +82,10 @@ export interface ResearchHistoryItem {
   summarization_provider?: string;
   summarization_config?: Record<string, any>;
   context_summary?: string;
+  enable_fact_check?: boolean;
+  fact_check_provider?: string;
+  fact_check_config?: Record<string, any>;
+  fact_check_results?: any[];
   parent_job_id?: string;
   conversation_id?: string;
   created_at?: string;
@@ -111,6 +119,9 @@ export interface AgentResearchRequestPayload {
   provider_capabilities?: Record<string, any>;
   summarization_provider?: string;
   summarization_config?: Record<string, any>;
+  enable_fact_check?: boolean;
+  fact_check_provider?: string;
+  fact_check_config?: Record<string, any>;
   conversation_urls?: Record<string, string>;
   parent_job_id?: string;
 }

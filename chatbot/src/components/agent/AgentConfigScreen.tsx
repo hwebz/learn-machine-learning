@@ -34,6 +34,9 @@ export interface AgentConfigScreenProps {
     delegated_providers?: string[];
     provider_configs?: Record<string, any>;
     provider_capabilities?: Record<string, any>;
+    enable_fact_check?: boolean;
+    fact_check_provider?: string;
+    fact_check_config?: Record<string, any>;
   }) => void;
   onCancel: () => void;
   providers?: ProviderInfo[];
@@ -52,6 +55,9 @@ export interface AgentConfigScreenProps {
   initialSummarizationConfig?: Record<string, any>;
   initialDelegatedProviders?: string[];
   initialTone?: string;
+  initialEnableFactCheck?: boolean;
+  initialFactCheckProvider?: string;
+  initialFactCheckConfig?: Record<string, any>;
 }
 
 const DEFAULT_DELEGATED = ["copilot", "gemini", "chatgpt", "deepseek", "qwen", "perplexity", "claude"];
@@ -75,6 +81,9 @@ export function AgentConfigScreen({
   initialSummarizationConfig,
   initialDelegatedProviders,
   initialTone,
+  initialEnableFactCheck,
+  initialFactCheckProvider,
+  initialFactCheckConfig,
 }: AgentConfigScreenProps) {
   const availableProviders = providers && providers.length > 0 ? providers : PROVIDERS_LIST;
 
@@ -137,7 +146,13 @@ export function AgentConfigScreen({
   const [isSyncingSum, setIsSyncingSum] = useState(false);
   const [sumSyncMessage, setSumSyncMessage] = useState<string | null>(null);
 
-  // 6. Tone & Submit State
+  // 6. Fact-Check State
+  const [enableFactCheck, setEnableFactCheck] = useState<boolean>(initialEnableFactCheck || false);
+  const [selectedFactChecker, setSelectedFactChecker] = useState<string>(
+    initialFactCheckProvider || "perplexity"
+  );
+
+  // 7. Tone & Submit State
   const [selectedTone, setSelectedTone] = useState<string>(
     initialTone || "professional"
   );
@@ -153,7 +168,18 @@ export function AgentConfigScreen({
     }
     if (initialTone) setSelectedTone(initialTone);
     if (initialQuery !== undefined) setQuery(initialQuery);
-  }, [initialOrchestratorProvider, initialLeadProvider, initialSummarizationProvider, initialDelegatedProviders, initialTone, initialQuery]);
+    if (initialEnableFactCheck !== undefined) setEnableFactCheck(initialEnableFactCheck);
+    if (initialFactCheckProvider) setSelectedFactChecker(initialFactCheckProvider);
+  }, [
+    initialOrchestratorProvider,
+    initialLeadProvider,
+    initialSummarizationProvider,
+    initialDelegatedProviders,
+    initialTone,
+    initialQuery,
+    initialEnableFactCheck,
+    initialFactCheckProvider,
+  ]);
 
   // Load capabilities if missing
   useEffect(() => {
@@ -173,6 +199,12 @@ export function AgentConfigScreen({
       onLoadCapabilities(selectedSummarizer);
     }
   }, [selectedSummarizer, capabilitiesMap, onLoadCapabilities]);
+
+  useEffect(() => {
+    if (onLoadCapabilities && selectedFactChecker && !capabilitiesMap[selectedFactChecker]) {
+      onLoadCapabilities(selectedFactChecker);
+    }
+  }, [selectedFactChecker, capabilitiesMap, onLoadCapabilities]);
 
   // Merged selections for active providers
   const orchSel = useMemo(() => {
@@ -547,6 +579,10 @@ export function AgentConfigScreen({
       }
     });
 
+    const fcResolved = enableFactCheck
+      ? resolveSubProviderLiveConfig(selectedFactChecker, selectionsMap, capabilitiesMap)
+      : null;
+
     onStartAgentResearch({
       query: query.trim(),
       orchestrator_provider: selectedOrchestrator,
@@ -574,6 +610,9 @@ export function AgentConfigScreen({
       tone: selectedTone,
       provider_configs: subProviderConfigs,
       provider_capabilities: subProviderCaps,
+      enable_fact_check: enableFactCheck,
+      fact_check_provider: enableFactCheck ? selectedFactChecker : undefined,
+      fact_check_config: enableFactCheck ? fcResolved?.configObj : undefined,
     });
   };
 
@@ -802,6 +841,73 @@ export function AgentConfigScreen({
             setSelectedTone={setSelectedTone}
             step={6}
           />
+
+          {/* Section 7: Fact-Check Phase (Post-Research Verification) */}
+          <div
+            className="agent-section"
+            style={{
+              border: enableFactCheck ? "1px solid rgba(16, 185, 129, 0.4)" : undefined,
+              transition: "border 0.2s ease",
+            }}
+          >
+            <div className="agent-section-header-row">
+              <label className="agent-section-label" style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                <span className="agent-section-step" style={{ background: enableFactCheck ? "#10b981" : undefined }}>
+                  7
+                </span>
+                <span>Kiểm chứng sự thật (Fact-Check Phase)</span>
+              </label>
+              <span
+                className="agent-role-pill"
+                style={{
+                  background: enableFactCheck ? "rgba(16, 185, 129, 0.15)" : "rgba(148, 163, 184, 0.15)",
+                  color: enableFactCheck ? "#10b981" : "#94a3b8",
+                  borderColor: enableFactCheck ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.3)",
+                }}
+              >
+                {enableFactCheck ? "✅ Đang kích hoạt" : "Tùy chọn"}
+              </span>
+            </div>
+            <div
+              style={{
+                marginTop: 8,
+                padding: "12px 16px",
+                borderRadius: 8,
+                background: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+              }}
+            >
+              <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none" }}>
+                <input
+                  type="checkbox"
+                  checked={enableFactCheck}
+                  onChange={(e) => setEnableFactCheck(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: "#10b981", cursor: "pointer" }}
+                />
+                <span style={{ fontWeight: 600, fontSize: 13, color: "var(--text-primary, #fff)" }}>
+                  🔍 Kích hoạt kiểm chứng chéo luận điểm sau nghiên cứu
+                </span>
+              </label>
+              <p style={{ fontSize: 12, color: "var(--text-secondary, #94a3b8)", marginTop: 6, marginLeft: 26, lineHeight: 1.5 }}>
+                Sau khi các tác nhân hoàn thành nghiên cứu, Fact-Checker sẽ trích xuất 5-10 luận điểm thực tế then chốt, gán nhãn kiểm chứng (supported / single_source / unsupported / conflict) và chuyển trực tiếp vào chỉ thị cho Lead Provider trước khi tổng hợp báo cáo.
+              </p>
+              {enableFactCheck && (
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid rgba(255, 255, 255, 0.08)" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: "var(--text-primary, #fff)" }}>
+                    Chọn Tác nhân Kiểm chứng (Fact-Checker Provider):
+                  </div>
+                  <ProviderGridPicker
+                    providers={availableProviders}
+                    selectedProviderId={selectedFactChecker}
+                    onSelectProvider={setSelectedFactChecker}
+                    capabilitiesMap={capabilitiesMap}
+                    nameRadioGroup="fact_checker_radio"
+                    selectedCardClass="selected"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Footer Submit */}
           <div className="agent-config-footer">

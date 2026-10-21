@@ -8,9 +8,14 @@ export interface SourceLink {
 }
 
 export interface ClaimItem {
-  claim: string;
-  verdict?: "verified" | "supported" | "disputed";
+  id?: string;
+  claim?: string;
+  text?: string;
+  verdict?: "verified" | "supported" | "single_source" | "unsupported" | "conflict" | "disputed";
   confidence?: number;
+  reasoning?: string;
+  branch?: string;
+  provider?: string;
 }
 
 export interface DisagreementItem {
@@ -31,7 +36,7 @@ export interface StepLog {
   provider?: string;
   step?: string;
   message: string;
-  status: "pending" | "running" | "completed" | "error" | "orchestrating" | "researching" | "leading";
+  status: "pending" | "running" | "completed" | "error" | "orchestrating" | "researching" | "fact_checking" | "leading";
   data?: any;
   thinkingText?: string;
   thinkingSteps?: ThinkingStep[];
@@ -59,6 +64,10 @@ export interface Message {
   provider_runs?: Record<string, any> | any[];
   provider_options?: Record<string, any>;
   factCheckStatus?: "verified" | "reviewing" | "unverified";
+  enable_fact_check?: boolean;
+  fact_check_provider?: string;
+  fact_check_config?: Record<string, any>;
+  fact_check_results?: ClaimItem[] | any[];
   steps?: StepLog[];
   job_type?: "research" | "agent";
   orchestrator_provider?: string;
@@ -101,7 +110,7 @@ export interface ChatSession {
   selectedProvider?: string;
   depth?: DepthMode;
   jobId?: string;
-  status?: "queued" | "summarizing" | "running" | "completed" | "partial" | "failed" | "cancelled" | "orchestrating" | "researching" | "leading";
+  status?: "queued" | "summarizing" | "running" | "completed" | "partial" | "failed" | "cancelled" | "orchestrating" | "researching" | "fact_checking" | "leading";
   providerConfigurations?: Record<string, ProviderSelectionConfig>;
   job_type?: "research" | "agent";
   orchestrator_provider?: string;
@@ -115,6 +124,10 @@ export interface ChatSession {
   summarization_provider?: string;
   summarization_config?: Record<string, any>;
   context_summary?: string;
+  enable_fact_check?: boolean;
+  fact_check_provider?: string;
+  fact_check_config?: Record<string, any>;
+  fact_check_results?: ClaimItem[] | any[];
 }
 
 export interface ProviderInfo {

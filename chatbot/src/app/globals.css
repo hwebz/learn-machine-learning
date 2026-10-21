@@ -4006,3 +4006,224 @@ textarea {
 .dark .DocxViewer h4 {
   color: #f8fafc;
 }
+
+/* ======================================================== */
+/* FACT-CHECK & VERDICT BADGE STYLES                        */
+/* ======================================================== */
+.agent-meta-badge.fact-check {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+[data-theme="dark"] .agent-meta-badge.fact-check,
+.dark .agent-meta-badge.fact-check {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.agent-provider-summary-card.fact-check {
+  border-left: 3.5px solid #10b981;
+}
+
+.agent-provider-summary-card.fact-check:hover {
+  border-color: #10b981;
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.12);
+}
+
+.agent-card-role-tag.fact_checker {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+[data-theme="dark"] .agent-card-role-tag.fact_checker,
+.dark .agent-card-role-tag.fact_checker {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.agent-card-thinking-box.fact-check {
+  background: #f0fdf4;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+[data-theme="dark"] .agent-card-thinking-box.fact-check,
+.dark .agent-card-thinking-box.fact-check {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+/* Verdict Badges */
+.verdict-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4.5px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  line-height: 1.2;
+}
+
+.verdict-badge .verdict-icon {
+  font-size: 10.5px;
+  line-height: 1;
+}
+
+.verdict-badge .verdict-confidence {
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 0 4px;
+  border-radius: 3px;
+  margin-left: 2px;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.verdict-badge.supported {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.verdict-badge.single-source {
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.verdict-badge.unsupported {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.verdict-badge.conflict {
+  background: #fdf2f8;
+  color: #9d174d;
+  border: 1px solid #fbcfe8;
+}
+
+[data-theme="dark"] .verdict-badge.supported,
+.dark .verdict-badge.supported {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+[data-theme="dark"] .verdict-badge.single-source,
+.dark .verdict-badge.single-source {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+[data-theme="dark"] .verdict-badge.unsupported,
+.dark .verdict-badge.unsupported {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+[data-theme="dark"] .verdict-badge.conflict,
+.dark .verdict-badge.conflict {
+  background: rgba(236, 72, 153, 0.15);
+  color: #f472b6;
+  border-color: rgba(236, 72, 153, 0.35);
+}
+
+/* Fact-Check Claims Preview List */
+.agent-claims-preview-container {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme="dark"] .agent-claims-preview-container,
+.dark .agent-claims-preview-container {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+.agent-claims-preview-header {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  margin-bottom: 6px;
+}
+
+[data-theme="dark"] .agent-claims-preview-header,
+.dark .agent-claims-preview-header {
+  color: #94a3b8;
+}
+
+.agent-claims-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.agent-claim-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 8px;
+  background: #ffffff;
+  border-radius: 6px;
+  border: 1px solid #edf2f7;
+}
+
+[data-theme="dark"] .agent-claim-row,
+.dark .agent-claim-row {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+.agent-claim-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.agent-claim-text {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.35;
+}
+
+[data-theme="dark"] .agent-claim-text,
+.dark .agent-claim-text {
+  color: #e2e8f0;
+}
+
+.agent-claim-reasoning {
+  font-size: 10.5px;
+  color: #64748b;
+  line-height: 1.35;
+  padding-left: 2px;
+}
+
+[data-theme="dark"] .agent-claim-reasoning,
+.dark .agent-claim-reasoning {
+  color: #94a3b8;
+}
+
+.agent-claims-more {
+  font-size: 10.5px;
+  color: var(--brand-blue, #2563eb);
+  font-weight: 600;
+  margin-top: 3px;
+  padding-left: 2px;
+}

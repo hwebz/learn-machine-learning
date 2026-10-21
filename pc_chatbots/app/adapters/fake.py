@@ -92,6 +92,22 @@ class FakeAdapter:
                 "## 3. Kết luận & Đề xuất hành động\n"
                 "Hệ thống đa tác nhân đã hoàn thành việc khảo sát và đúc kết tri thức toàn diện."
             )
+        elif "Fact-Checker" in prompt or "fact-checker" in prompt or "verify claims" in prompt.lower():
+            import json
+            answer = json.dumps([
+                {
+                    "claim": "Deep learning models achieve high accuracy on clinical benchmark datasets.",
+                    "verdict": "supported",
+                    "confidence": 0.95,
+                    "reasoning": "Verified across multiple clinical studies and peer-reviewed literature."
+                },
+                {
+                    "claim": "Proprietary AI completely replaces radiologists in all tier-1 hospitals today.",
+                    "verdict": "unsupported",
+                    "confidence": 0.88,
+                    "reasoning": "AI acts as assistive tool; regulatory approvals require physician oversight."
+                }
+            ], ensure_ascii=False)
         else:
             answer = f"This is a placeholder response for the requested research. Provider: {self.name}."
         conv_url = conversation_url or f"https://{self.name}.example.com/c/fake-{self.name}-123"

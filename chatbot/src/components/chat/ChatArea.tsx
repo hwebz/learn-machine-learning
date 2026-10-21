@@ -269,6 +269,7 @@ export function ChatArea({
       const jobStatus = (st.data as any)?.job_status;
       if (jobStatus && jobStatus !== "running") return jobStatus;
       if (st.data?.role === "lead" || st.message?.includes("Lead Provider")) return "leading";
+      if (st.step === "fact_checking" || st.data?.role === "fact_checker" || (st.status as string) === "fact_checking") return "fact_checking";
       if (st.data?.role === "subtask" || st.step === "orchestrator_result" || st.data?.dispatch) return "researching";
       if (st.data?.role === "orchestrator") return "orchestrating";
     }
@@ -670,6 +671,9 @@ export function ChatArea({
                     }
                     message={msg}
                     onSelectThinking={onSelectThinking}
+                    enableFactCheck={msg.enable_fact_check ?? session.enable_fact_check}
+                    factCheckProvider={msg.fact_check_provider || session.fact_check_provider}
+                    factCheckResults={msg.fact_check_results || session.fact_check_results}
                   />
                 )}
 
@@ -899,6 +903,9 @@ export function ChatArea({
                   steps={activeSteps}
                   topic={session.title || session.messages[0]?.content}
                   onSelectThinking={onSelectThinking}
+                  enableFactCheck={session.enable_fact_check}
+                  factCheckProvider={session.fact_check_provider}
+                  factCheckResults={session.fact_check_results}
                 />
               )}
 

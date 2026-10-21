@@ -98,6 +98,10 @@ export function buildAssistantMessage(
     summarization_provider?: string | null;
     summarization_config?: Record<string, any>;
     context_summary?: string | null;
+    enable_fact_check?: boolean;
+    fact_check_provider?: string | null;
+    fact_check_config?: Record<string, any>;
+    fact_check_results?: any[];
     error?: string | null;
     orchestrator_conversation_url?: string | null;
     lead_conversation_url?: string | null;
@@ -145,6 +149,10 @@ export function buildAssistantMessage(
     provider_runs: jobData.provider_runs || {},
     provider_options: jobData.provider_options || {},
     factCheckStatus: jobData.status === "completed" ? "verified" : "unverified",
+    enable_fact_check: jobData.enable_fact_check,
+    fact_check_provider: jobData.fact_check_provider || undefined,
+    fact_check_config: jobData.fact_check_config,
+    fact_check_results: jobData.fact_check_results,
     steps: jobData.steps || [],
     job_type: isAgent ? "agent" : "research",
     orchestrator_provider: jobData.orchestrator_provider,
@@ -340,6 +348,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               let nextStatus = s.status;
               if (rawJobStatus && rawJobStatus !== "running") {
                 nextStatus = rawJobStatus as any;
+              } else if (stepLog.step === "fact_checking" || (stepLog.data as any)?.phase === "fact_checking") {
+                nextStatus = "fact_checking" as any;
+              } else if (stepLog.step === "summarizing") {
+                nextStatus = "summarizing" as any;
               } else if (dispatch && nextStatus === "orchestrating") {
                 nextStatus = "researching" as any;
               }
@@ -385,13 +397,20 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               providers: jobProviders,
               sources: consolidatedSources,
               claims: result.claims || [],
+              disagreements: (result as any).disagreements || [],
               provider_runs: result.provider_runs || {},
               provider_options:
                 (result as any).provider_options || jobMeta?.providerConfigurations || {},
+              enable_fact_check: (result as any).enable_fact_check ?? jobMeta?.enable_fact_check,
+              fact_check_provider: (result as any).fact_check_provider || jobMeta?.fact_check_provider,
+              fact_check_config: (result as any).fact_check_config || jobMeta?.fact_check_config,
+              fact_check_results: (result as any).fact_check_results || jobMeta?.fact_check_results,
               steps: latestSteps,
               job_type: isAgent ? "agent" : "research",
               orchestrator_provider: orchProv,
               lead_provider: leadProv,
+              summarization_provider: (result as any).summarization_provider || jobMeta?.summarization_provider,
+              summarization_config: (result as any).summarization_config || jobMeta?.summarization_config,
               tone: jobMeta?.tone,
               orchestrator_dispatch:
                 (result as any).orchestrator_dispatch || jobMeta?.orchestrator_dispatch,
@@ -420,6 +439,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                       ...(s.provider_conversations || {}),
                       ...(result.provider_conversations || {}),
                     },
+                    enable_fact_check: (result as any).enable_fact_check ?? s.enable_fact_check,
+                    fact_check_provider: (result as any).fact_check_provider || s.fact_check_provider,
+                    fact_check_config: (result as any).fact_check_config || s.fact_check_config,
+                    fact_check_results: (result as any).fact_check_results || s.fact_check_results,
                   };
                 })
               );
@@ -590,10 +613,15 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             tone: (latestJob as any).tone,
             orchestrator_dispatch: (latestJob as any).orchestrator_dispatch,
             delegated_providers: (latestJob as any).delegated_providers,
+            enable_fact_check: latestJob.enable_fact_check ?? (rootJob as any).enable_fact_check,
+            fact_check_provider: latestJob.fact_check_provider || (rootJob as any).fact_check_provider,
+            fact_check_config: latestJob.fact_check_config || (rootJob as any).fact_check_config,
+            fact_check_results: latestJob.fact_check_results || (rootJob as any).fact_check_results,
             providerConfigurations: (latestJob as any).providerConfigurations || (latestJob as any).provider_options || {
               ...(((latestJob as any).orchestrator_config && (latestJob as any).orchestrator_provider) ? { [(latestJob as any).orchestrator_provider]: (latestJob as any).orchestrator_config } : {}),
               ...(((latestJob as any).lead_config && (latestJob as any).lead_provider) ? { [(latestJob as any).lead_provider]: (latestJob as any).lead_config } : {}),
               ...(((latestJob as any).summarization_config && (latestJob as any).summarization_provider) ? { [(latestJob as any).summarization_provider]: (latestJob as any).summarization_config } : {}),
+              ...(((latestJob as any).fact_check_config && (latestJob as any).fact_check_provider) ? { [(latestJob as any).fact_check_provider]: (latestJob as any).fact_check_config } : {}),
             },
             orchestrator_conversation_url: (latestJob as any).orchestrator_conversation_url || undefined,
             lead_conversation_url: (latestJob as any).lead_conversation_url || undefined,
@@ -646,10 +674,15 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               tone: (directJob as any).tone,
               orchestrator_dispatch: (directJob as any).orchestrator_dispatch,
               delegated_providers: (directJob as any).delegated_providers,
+              enable_fact_check: directJob.enable_fact_check,
+              fact_check_provider: directJob.fact_check_provider || undefined,
+              fact_check_config: directJob.fact_check_config,
+              fact_check_results: directJob.fact_check_results,
               providerConfigurations: (directJob as any).providerConfigurations || (directJob as any).provider_options || {
                 ...(((directJob as any).orchestrator_config && (directJob as any).orchestrator_provider) ? { [(directJob as any).orchestrator_provider]: (directJob as any).orchestrator_config } : {}),
                 ...(((directJob as any).lead_config && (directJob as any).lead_provider) ? { [(directJob as any).lead_provider]: (directJob as any).lead_config } : {}),
                 ...(((directJob as any).summarization_config && (directJob as any).summarization_provider) ? { [(directJob as any).summarization_provider]: (directJob as any).summarization_config } : {}),
+                ...(((directJob as any).fact_check_config && (directJob as any).fact_check_provider) ? { [(directJob as any).fact_check_provider]: (directJob as any).fact_check_config } : {}),
               },
               orchestrator_conversation_url: (directJob as any).orchestrator_conversation_url || undefined,
               lead_conversation_url: (directJob as any).lead_conversation_url || undefined,
@@ -857,6 +890,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         initialQuery: "",
         initialOrchestratorConfig: undefined as Record<string, any> | undefined,
         initialLeadConfig: undefined as Record<string, any> | undefined,
+        initialEnableFactCheck: false,
+        initialFactCheckProvider: "perplexity",
+        initialFactCheckConfig: undefined as Record<string, any> | undefined,
       };
     }
 
@@ -950,6 +986,20 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         ? { model_id: "Daily" }
         : (capsHook.selectionsMap?.[resolvedSum] || { model_id: "Daily" }));
 
+    // 10. Fact-Check defaults:
+    const resolvedEnableFactCheck =
+      activeSession.enable_fact_check ??
+      activeSession.messages.find((m) => m.enable_fact_check !== undefined)?.enable_fact_check ??
+      false;
+    const resolvedFactCheckProvider =
+      activeSession.fact_check_provider ||
+      activeSession.messages.find((m) => m.fact_check_provider)?.fact_check_provider ||
+      "perplexity";
+    const resolvedFactCheckConfig =
+      activeSession.fact_check_config ||
+      activeSession.providerConfigurations?.[resolvedFactCheckProvider] ||
+      activeSession.messages.find((m) => m.fact_check_config)?.fact_check_config;
+
     return {
       initialOrchestratorProvider: resolvedOrch,
       initialLeadProvider: resolvedLead,
@@ -960,6 +1010,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       initialQuery: resolvedQuery,
       initialOrchestratorConfig: orchConfig,
       initialLeadConfig: leadConfig,
+      initialEnableFactCheck: resolvedEnableFactCheck,
+      initialFactCheckProvider: resolvedFactCheckProvider,
+      initialFactCheckConfig: resolvedFactCheckConfig,
     };
   }, [activeSession, capsHook.selectionsMap]);
 
@@ -1166,6 +1219,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     delegated_providers?: string[];
     provider_configs?: Record<string, any>;
     provider_capabilities?: Record<string, any>;
+    enable_fact_check?: boolean;
+    fact_check_provider?: string;
+    fact_check_config?: Record<string, any>;
   }) => {
     setIsAgentConfigOpen(false);
 
@@ -1189,11 +1245,17 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       summarization_config: config.summarization_config,
       tone: config.tone,
       delegated_providers: config.delegated_providers,
+      enable_fact_check: config.enable_fact_check,
+      fact_check_provider: config.fact_check_provider,
+      fact_check_config: config.fact_check_config,
       provider_options: {
         ...(config.provider_configs || {}),
         [config.orchestrator_provider]: config.orchestrator_config,
         [config.lead_provider]: config.lead_config,
         [config.summarization_provider]: config.summarization_config,
+        ...(config.fact_check_provider && config.fact_check_config
+          ? { [config.fact_check_provider]: config.fact_check_config }
+          : {}),
       },
     };
 
@@ -1215,11 +1277,17 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       summarization_config: config.summarization_config,
       tone: config.tone,
       delegated_providers: config.delegated_providers,
+      enable_fact_check: config.enable_fact_check,
+      fact_check_provider: config.fact_check_provider,
+      fact_check_config: config.fact_check_config,
       providerConfigurations: {
         ...(config.provider_configs || {}),
         [config.orchestrator_provider]: config.orchestrator_config,
         [config.lead_provider]: config.lead_config,
         [config.summarization_provider]: config.summarization_config,
+        ...(config.fact_check_provider && config.fact_check_config
+          ? { [config.fact_check_provider]: config.fact_check_config }
+          : {}),
       },
     };
 
@@ -1245,6 +1313,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         delegated_providers: config.delegated_providers,
         provider_configs: config.provider_configs,
         provider_capabilities: config.provider_capabilities,
+        enable_fact_check: config.enable_fact_check,
+        fact_check_provider: config.fact_check_provider,
+        fact_check_config: config.fact_check_config,
       });
 
       if (isCancelledRef.current) {
@@ -1296,6 +1367,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               let nextStatus = s.status;
               if (rawJobStatus && rawJobStatus !== "running") {
                 nextStatus = rawJobStatus as any;
+              } else if (stepLog.step === "fact_checking" || (stepLog.data as any)?.phase === "fact_checking") {
+                nextStatus = "fact_checking" as any;
               } else if (stepLog.step === "summarizing") {
                 nextStatus = "summarizing" as any;
               } else if (dispatch && nextStatus === "orchestrating") {
@@ -1330,8 +1403,13 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               providers: [config.orchestrator_provider, config.lead_provider],
               sources: result.sources || [],
               claims: result.claims || [],
+              disagreements: (result as any).disagreements || [],
               provider_runs: result.provider_runs || [],
               factCheckStatus: "verified",
+              enable_fact_check: config.enable_fact_check,
+              fact_check_provider: config.fact_check_provider,
+              fact_check_config: config.fact_check_config,
+              fact_check_results: (result as any).fact_check_results,
               steps: activeSteps,
               job_type: "agent",
               orchestrator_provider: config.orchestrator_provider,
@@ -1346,6 +1424,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                 [config.orchestrator_provider]: config.orchestrator_config,
                 [config.lead_provider]: config.lead_config,
                 [config.summarization_provider]: config.summarization_config,
+                ...(config.fact_check_provider && config.fact_check_config
+                  ? { [config.fact_check_provider]: config.fact_check_config }
+                  : {}),
               },
               orchestrator_conversation_url: result.orchestrator_conversation_url,
               lead_conversation_url: result.lead_conversation_url,
@@ -1370,10 +1451,17 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                       ...(s.provider_conversations || {}),
                       ...(result.provider_conversations || {}),
                     },
+                    enable_fact_check: config.enable_fact_check ?? s.enable_fact_check,
+                    fact_check_provider: config.fact_check_provider || s.fact_check_provider,
+                    fact_check_config: config.fact_check_config || s.fact_check_config,
+                    fact_check_results: (result as any).fact_check_results || s.fact_check_results,
                     providerConfigurations: s.providerConfigurations || {
                       [config.orchestrator_provider]: config.orchestrator_config,
                       [config.lead_provider]: config.lead_config,
                       [config.summarization_provider]: config.summarization_config,
+                      ...(config.fact_check_provider && config.fact_check_config
+                        ? { [config.fact_check_provider]: config.fact_check_config }
+                        : {}),
                     },
                   }
                   : s
@@ -1403,8 +1491,13 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                 providers: [config.orchestrator_provider, config.lead_provider],
                 sources: finalResult.sources || [],
                 claims: finalResult.claims || [],
+                disagreements: finalResult.disagreements || [],
                 provider_runs: finalResult.provider_runs || [],
                 factCheckStatus: "verified",
+                enable_fact_check: finalResult.enable_fact_check ?? config.enable_fact_check,
+                fact_check_provider: finalResult.fact_check_provider || config.fact_check_provider,
+                fact_check_config: finalResult.fact_check_config || config.fact_check_config,
+                fact_check_results: finalResult.fact_check_results,
                 steps: activeSteps,
                 job_type: "agent",
                 orchestrator_provider: config.orchestrator_provider,
@@ -1419,6 +1512,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                   [config.orchestrator_provider]: config.orchestrator_config,
                   [config.lead_provider]: config.lead_config,
                   [config.summarization_provider]: config.summarization_config,
+                  ...(config.fact_check_provider && config.fact_check_config
+                    ? { [config.fact_check_provider]: config.fact_check_config }
+                    : {}),
                 },
                 orchestrator_conversation_url: finalResult.orchestrator_conversation_url,
                 lead_conversation_url: finalResult.lead_conversation_url,
@@ -1443,10 +1539,17 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                         ...(s.provider_conversations || {}),
                         ...(finalResult.provider_conversations || {}),
                       },
+                      enable_fact_check: finalResult.enable_fact_check ?? config.enable_fact_check ?? s.enable_fact_check,
+                      fact_check_provider: finalResult.fact_check_provider || config.fact_check_provider || s.fact_check_provider,
+                      fact_check_config: finalResult.fact_check_config || config.fact_check_config || s.fact_check_config,
+                      fact_check_results: finalResult.fact_check_results || s.fact_check_results,
                       providerConfigurations: s.providerConfigurations || {
                         [config.orchestrator_provider]: config.orchestrator_config,
                         [config.lead_provider]: config.lead_config,
                         [config.summarization_provider]: config.summarization_config,
+                        ...(config.fact_check_provider && config.fact_check_config
+                          ? { [config.fact_check_provider]: config.fact_check_config }
+                          : {}),
                       },
                     }
                     : s
@@ -2484,6 +2587,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           initialSummarizationConfig={activeSessionAgentDefaults.initialSummarizationConfig}
           initialDelegatedProviders={activeSessionAgentDefaults.initialDelegatedProviders}
           initialTone={activeSessionAgentDefaults.initialTone}
+          initialEnableFactCheck={activeSessionAgentDefaults.initialEnableFactCheck}
+          initialFactCheckProvider={activeSessionAgentDefaults.initialFactCheckProvider}
+          initialFactCheckConfig={activeSessionAgentDefaults.initialFactCheckConfig}
         />
       )}
     </div>

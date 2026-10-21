@@ -57,11 +57,11 @@ async def generated_media(filename: str) -> FileResponse:
 def _safe_json_loads(raw: str | None, fallback: Any = None) -> Any:
     """Safely parse a JSON string with a fallback value on None or decode error."""
     if not raw:
-        return fallback if fallback is not None else []
+        return fallback
     try:
         return json.loads(raw)
     except Exception:
-        return fallback if fallback is not None else []
+        return fallback
 
 
 def _event_to_step_dict(ev: JobEvent) -> dict[str, Any]:
@@ -139,6 +139,10 @@ def _job_response(
         summarization_provider=getattr(job, "summarization_provider", None) or config.get("summarization_provider"),
         summarization_config=_safe_json_loads(getattr(job, "summarization_config_json", None), None) or config.get("summarization_config"),
         context_summary=getattr(job, "context_summary", None),
+        enable_fact_check=getattr(job, "enable_fact_check", False),
+        fact_check_provider=getattr(job, "fact_check_provider", None),
+        fact_check_config=_safe_json_loads(getattr(job, "fact_check_config_json", None), None),
+        fact_check_results=_safe_json_loads(getattr(job, "fact_check_results_json", None), None),
         orchestrator_conversation_url=getattr(job, "orchestrator_conversation_url", None),
         lead_conversation_url=getattr(job, "lead_conversation_url", None),
         provider_conversations=provider_conversations,
@@ -329,6 +333,9 @@ async def create_agent_research(payload: AgentResearchRequest, request: Request)
             tone=payload.tone,
             summarization_provider=payload.summarization_provider or "9router",
             summarization_config_json=json.dumps(payload.summarization_config or {"model_id": "Daily"}),
+            enable_fact_check=payload.enable_fact_check,
+            fact_check_provider=payload.fact_check_provider,
+            fact_check_config_json=json.dumps(payload.fact_check_config or {}) if payload.fact_check_config else None,
             subtasks_total=1,
             parent_job_id=parent_job_id,
             conversation_id=conversation_id,
@@ -431,6 +438,10 @@ async def list_research(limit: int = 50) -> list[dict[str, Any]]:
                 "summarization_provider": getattr(j, "summarization_provider", None) or config.get("summarization_provider"),
                 "summarization_config": _safe_json_loads(getattr(j, "summarization_config_json", None), None) or config.get("summarization_config"),
                 "context_summary": getattr(j, "context_summary", None),
+                "enable_fact_check": getattr(j, "enable_fact_check", False),
+                "fact_check_provider": getattr(j, "fact_check_provider", None),
+                "fact_check_config": _safe_json_loads(getattr(j, "fact_check_config_json", None), None),
+                "fact_check_results": _safe_json_loads(getattr(j, "fact_check_results_json", None), None),
                 "orchestrator_conversation_url": getattr(j, "orchestrator_conversation_url", None),
                 "lead_conversation_url": getattr(j, "lead_conversation_url", None),
                 "provider_conversations": provider_conversations,

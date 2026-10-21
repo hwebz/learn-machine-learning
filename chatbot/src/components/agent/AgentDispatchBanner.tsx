@@ -6,6 +6,68 @@ import { ModelBadgeLogo, BrainIcon, ChevronRightIcon, ExternalLinkIcon } from ".
 import { DurationBadge } from "../common/DurationBadge";
 import { formatDuration, getStepElapsedDuration } from "../../lib/timeUtils";
 
+export type ClaimVerdict =
+  | "supported"
+  | "single_source"
+  | "unsupported"
+  | "conflict"
+  | "verified"
+  | "disputed"
+  | string;
+
+export interface VerdictBadgeProps {
+  verdict?: ClaimVerdict;
+  confidence?: number;
+  showConfidence?: boolean;
+  className?: string;
+}
+
+export function VerdictBadge({
+  verdict = "supported",
+  confidence,
+  showConfidence = true,
+  className = "",
+}: VerdictBadgeProps) {
+  const v = (verdict || "").toLowerCase();
+
+  let label = "Được chứng minh";
+  let icon = "✓";
+  let colorClass = "supported";
+
+  if (v === "single_source") {
+    label = "Nguồn đơn";
+    icon = "⚠️";
+    colorClass = "single-source";
+  } else if (v === "unsupported") {
+    label = "Chưa chứng minh";
+    icon = "✕";
+    colorClass = "unsupported";
+  } else if (v === "conflict" || v === "disputed") {
+    label = "Mâu thuẫn";
+    icon = "⚡";
+    colorClass = "conflict";
+  } else {
+    label = "Được chứng minh";
+    icon = "✓";
+    colorClass = "supported";
+  }
+
+  const confPercent =
+    confidence !== undefined && confidence !== null
+      ? Math.round(confidence <= 1 ? confidence * 100 : confidence)
+      : null;
+
+  return (
+    <span className={`verdict-badge ${colorClass} ${className}`}>
+      <span className="verdict-icon">{icon}</span>
+      <span className="verdict-label">{label}</span>
+      {showConfidence && confPercent !== null && (
+        <span className="verdict-confidence">{confPercent}%</span>
+      )}
+    </span>
+  );
+}
+
 export interface AgentDispatchBannerProps {
   orchestratorProvider?: string;
   leadProvider?: string;
@@ -17,6 +79,9 @@ export interface AgentDispatchBannerProps {
   topic?: string;
   message?: Message;
   onSelectThinking?: (provider: string, message?: Message) => void;
+  enableFactCheck?: boolean;
+  factCheckProvider?: string;
+  factCheckResults?: any[];
 }
 
 function normalize(p?: string): string {
@@ -53,9 +118,29 @@ export function AgentDispatchBanner({
   topic,
   message,
   onSelectThinking,
+  enableFactCheck,
+  factCheckProvider,
+  factCheckResults,
 }: AgentDispatchBannerProps) {
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
   const [liveSeconds, setLiveSeconds] = useState<number>(0);
+
+  const isFactCheckEnabled = Boolean(
+    enableFactCheck ?? message?.enable_fact_check ?? false
+  );
+  const resolvedFactCheckProvider =
+    factCheckProvider || message?.fact_check_provider || "perplexity";
+
+  const factCheckResultsList = useMemo(() => {
+    if (Array.isArray(factCheckResults) && factCheckResults.length > 0) return factCheckResults;
+    if (Array.isArray(message?.fact_check_results) && message.fact_check_results.length > 0) return message.fact_check_results;
+    for (const st of steps) {
+      if (st.step === "fact_checking" && Array.isArray(st.data?.claims)) {
+        return st.data.claims;
+      }
+    }
+    return [];
+  }, [factCheckResults, message?.fact_check_results, steps]);
 
   // Live timer tick for active stages
   useEffect(() => {
@@ -63,6 +148,7 @@ export function AgentDispatchBanner({
       status === "queued" ||
       status === "orchestrating" ||
       status === "researching" ||
+      status === "fact_checking" ||
       status === "leading" ||
       status === "running";
 
@@ -84,6 +170,7 @@ export function AgentDispatchBanner({
   // Extract steps per provider / role
   const orchNorm = normalize(orchestratorProvider);
   const leadNorm = normalize(leadProvider);
+  const fcNorm = normalize(resolvedFactCheckProvider);
 
   // --- 1. ORCHESTRATOR STATUS & THINKING ---
   const orchSteps = useMemo(() => {
@@ -96,7 +183,7 @@ export function AgentDispatchBanner({
   }, [steps, orchNorm]);
 
   const orchState = useMemo<"live" | "completed" | "waiting" | "error">(() => {
-    if (status === "completed" || status === "researching" || status === "leading") return "completed";
+    if (status === "completed" || status === "fact_checking" || status === "researching" || status === "leading") return "completed";
     if (orchSteps.some((s) => s.step === "orchestrator_result" || s.data?.dispatch)) return "completed";
     if (dispatchPlan && dispatchPlan.length > 0) return "completed";
     if (status === "failed") return "error";
@@ -192,6 +279,63 @@ export function AgentDispatchBanner({
     }
     return "--";
   }, [leadSteps, leadState, liveSeconds]);
+
+  // --- 2.5 FACT-CHECK STATUS & THINKING ---
+  const factCheckSteps = useMemo(() => {
+    return steps.filter((st) => {
+      const p = normalize(st.provider || st.data?.provider);
+      const isRole = st.data?.role === "fact_checker";
+      const isStatus = (st.status as string) === "fact_checking" || st.step === "fact_checking";
+      return isRole || isStatus || (p === fcNorm && isStatus);
+    });
+  }, [steps, fcNorm]);
+
+  const factCheckState = useMemo<"live" | "completed" | "waiting" | "error">(() => {
+    if (status === "completed" || status === "leading") return "completed";
+    if (factCheckResultsList.length > 0) return "completed";
+    if (factCheckSteps.some((s) => s.step === "completed" || s.data?.claims)) return "completed";
+    if (status === "fact_checking") return "live";
+    if (status === "failed") return "error";
+    return "waiting";
+  }, [status, factCheckResultsList, factCheckSteps]);
+
+  const factCheckThinkingText = useMemo(() => {
+    if (factCheckSteps.length > 0) {
+      const last = factCheckSteps[factCheckSteps.length - 1];
+      if (last.thinkingSteps && last.thinkingSteps.length > 0) {
+        return last.thinkingSteps[last.thinkingSteps.length - 1].title;
+      }
+      if (last.data?.thinking_steps && last.data.thinking_steps.length > 0) {
+        const rawSteps = last.data.thinking_steps;
+        return rawSteps[rawSteps.length - 1].title || rawSteps[rawSteps.length - 1];
+      }
+      if (last.message) return last.message;
+    }
+    if (factCheckState === "live") {
+      return `Đang trích xuất và đối soát các khẳng định dữ liệu qua ${resolvedFactCheckProvider.toUpperCase()}...`;
+    }
+    if (factCheckState === "completed") {
+      const count = factCheckResultsList.length;
+      const supportedCount = factCheckResultsList.filter((c: any) => c.verdict === "supported").length;
+      const conflictCount = factCheckResultsList.filter((c: any) => c.verdict === "conflict").length;
+      return `Đã đối soát xong ${count} khẳng định dữ liệu (${supportedCount} xác thực, ${conflictCount} mâu thuẫn).`;
+    }
+    if (factCheckState === "error") {
+      return "Quá trình đối soát sự thật gặp sự cố.";
+    }
+    return "Đang chờ các tác nhân nghiên cứu nhánh hoàn tất để bắt đầu đối soát...";
+  }, [factCheckSteps, factCheckState, resolvedFactCheckProvider, factCheckResultsList]);
+
+  const factCheckTimeTaken = useMemo(() => {
+    const recordedElapsed = getStepElapsedDuration(factCheckSteps);
+    if (recordedElapsed !== null) {
+      return formatDuration(recordedElapsed);
+    }
+    if (factCheckState === "live") {
+      return formatDuration(liveSeconds);
+    }
+    return "--";
+  }, [factCheckSteps, factCheckState, liveSeconds]);
 
   // Subtask helper
   const getSubtaskDetails = (item: AgentDispatchPlanItem, idx: number) => {
@@ -330,6 +474,21 @@ export function AgentDispatchBanner({
             <span className="agent-meta-val">{leadProvider.toUpperCase()}</span>
           </div>
 
+          {isFactCheckEnabled && (
+            <div
+              className="agent-meta-badge fact-check clickable"
+              title="Nhấn để xem chi tiết đối soát của Fact-Checker ở thanh bên phải"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectThinking?.("fact_checker", message);
+              }}
+            >
+              <span className="agent-meta-label">Fact-Checker:</span>
+              <ModelBadgeLogo providerId={resolvedFactCheckProvider} size={14} />
+              <span className="agent-meta-val">{resolvedFactCheckProvider.toUpperCase()}</span>
+            </div>
+          )}
+
           {tone && (
             <div className="agent-meta-badge tone">
               <span className="agent-meta-label">Tone:</span>
@@ -344,12 +503,20 @@ export function AgentDispatchBanner({
               1. Phân rã
             </span>
             <span className="stage-sep">➔</span>
-            <span className={`stage-step-dot ${status === "researching" ? "active" : (status === "leading" || status === "completed") ? "done" : ""}`}>
+            <span className={`stage-step-dot ${status === "researching" ? "active" : (status === "fact_checking" || status === "leading" || status === "completed") ? "done" : ""}`}>
               2. Nghiên cứu ({completedSubtasksCount}/{dispatchPlan?.length || 0})
             </span>
+            {isFactCheckEnabled && (
+              <>
+                <span className="stage-sep">➔</span>
+                <span className={`stage-step-dot ${factCheckState === "live" ? "active" : factCheckState === "completed" ? "done" : ""}`}>
+                  3. Fact-Check{factCheckResultsList.length > 0 ? ` (${factCheckResultsList.length})` : ""}
+                </span>
+              </>
+            )}
             <span className="stage-sep">➔</span>
             <span className={`stage-step-dot ${leadState === "live" ? "active" : leadState === "completed" ? "done" : ""}`}>
-              3. Tổng hợp
+              {isFactCheckEnabled ? "4. Tổng hợp" : "3. Tổng hợp"}
             </span>
           </div>
 
@@ -576,12 +743,135 @@ export function AgentDispatchBanner({
           </div>
 
           {/* ======================================================== */}
+          {/* TIER 2.5: FACT-CHECK PROVIDER SUMMARY CARD */}
+          {/* ======================================================== */}
+          {isFactCheckEnabled && (
+            <div className="agent-tier-section">
+              <div className="agent-tier-title-row">
+                <div className="agent-tier-heading">
+                  <span className="agent-tier-num">3</span>
+                  <span>Tác nhân Đối soát Sự thật (Fact-Checker)</span>
+                  {factCheckResultsList.length > 0 && (
+                    <span className="agent-branch-count-pill">
+                      {factCheckResultsList.length} khẳng định đã thẩm định
+                    </span>
+                  )}
+                </div>
+                <span className="agent-tier-hint">
+                  Trích xuất luận điểm mấu chốt, đối chiếu nguồn tin độc lập và đánh giá độ tin cậy
+                </span>
+              </div>
+
+              <div
+                className={`agent-provider-summary-card fact-check ${factCheckState}`}
+                onClick={() => onSelectThinking?.("fact_checker", message)}
+                title="Nhấn để xem chi tiết tiến trình đối soát sự thật ở Sidebar phải"
+              >
+                <div className="agent-card-top-row">
+                  <div className="agent-card-provider-info">
+                    <ModelBadgeLogo providerId={resolvedFactCheckProvider} size={18} />
+                    <div>
+                      <span className="agent-card-provider-name">{resolvedFactCheckProvider.toUpperCase()}</span>
+                      <span className="agent-card-role-tag fact_checker">Fact-Checker</span>
+                    </div>
+                  </div>
+
+                  <div className="agent-card-meta-right">
+                    {/* Status Indicator: LIVE vs Completed */}
+                    <div className={`agent-live-badge ${factCheckState}`}>
+                      {factCheckState === "live" && (
+                        <>
+                          <span className="pulse-dot live" />
+                          <span className="badge-text">LIVE</span>
+                        </>
+                      )}
+                      {factCheckState === "completed" && (
+                        <>
+                          <span className="badge-icon">✓</span>
+                          <span className="badge-text">Completed</span>
+                        </>
+                      )}
+                      {factCheckState === "waiting" && (
+                        <>
+                          <span className="badge-icon">⏳</span>
+                          <span className="badge-text">Chờ nhánh</span>
+                        </>
+                      )}
+                      {factCheckState === "error" && (
+                        <>
+                          <span className="badge-icon">⚠️</span>
+                          <span className="badge-text">Lỗi</span>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Time Taken */}
+                    <DurationBadge
+                      duration={factCheckTimeTaken}
+                      title="Thời gian thực thi của Fact-Checker"
+                    />
+                  </div>
+                </div>
+
+                {/* Active Thinking Step */}
+                <div className="agent-card-thinking-box fact-check">
+                  <div className="agent-card-thinking-header" style={{ color: "#059669" }}>
+                    <BrainIcon size={13} color="#059669" />
+                    <span className="thinking-title-label">
+                      {factCheckState === "live"
+                        ? "Tiến trình thẩm định & đối soát (Active Step):"
+                        : "Trạng thái đối soát dữ liệu:"}
+                    </span>
+                  </div>
+                  <div className="agent-card-thinking-content">{factCheckThinkingText}</div>
+                </div>
+
+                {/* Fact Check Claims List with VerdictBadges */}
+                {factCheckResultsList.length > 0 && (
+                  <div className="agent-claims-preview-container" onClick={(e) => e.stopPropagation()}>
+                    <div className="agent-claims-preview-header">
+                      <span>Danh sách Luận điểm & Kết quả Thẩm định:</span>
+                    </div>
+                    <div className="agent-claims-list">
+                      {factCheckResultsList.slice(0, 6).map((c: any, cIdx: number) => (
+                        <div key={c.id || cIdx} className="agent-claim-row">
+                          <div className="agent-claim-left">
+                            <VerdictBadge verdict={c.verdict} confidence={c.confidence} />
+                            <span className="agent-claim-text">{c.claim || c.text}</span>
+                          </div>
+                          {c.reasoning && (
+                            <span className="agent-claim-reasoning" title={c.reasoning}>
+                              {c.reasoning}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                      {factCheckResultsList.length > 6 && (
+                        <div className="agent-claims-more">
+                          +{factCheckResultsList.length - 6} khẳng định khác (xem chi tiết ở Sidebar phải)
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Card Footer with Click Prompt */}
+                <div className="agent-card-footer">
+                  <span className="agent-click-prompt">
+                    Xem chi tiết từng khẳng định & đối chiếu chéo ở Sidebar phải <ExternalLinkIcon size={12} />
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
           {/* TIER 3: LEAD PROVIDER SYNTHESIZER SUMMARY CARD */}
           {/* ======================================================== */}
           <div className="agent-tier-section">
             <div className="agent-tier-title-row">
               <div className="agent-tier-heading">
-                <span className="agent-tier-num">3</span>
+                <span className="agent-tier-num">{isFactCheckEnabled ? 4 : 3}</span>
                 <span>Tác nhân Tổng hợp Trưởng (Lead Provider)</span>
               </div>
               <span className="agent-tier-hint">Hợp nhất luận cứ, đối soát sự thật và định hình báo cáo hoàn chỉnh</span>

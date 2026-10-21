@@ -12,7 +12,7 @@ ProviderName = Literal[
     "9router", "router",
 ]
 JobStatus = Literal[
-    "queued", "summarizing", "orchestrating", "planning", "researching", "extracting", "verifying", "synthesizing", "leading",
+    "queued", "summarizing", "orchestrating", "planning", "researching", "fact_checking", "extracting", "verifying", "synthesizing", "leading",
     "completed", "partial", "failed", "needs_user_action", "cancelled",
 ]
 
@@ -49,6 +49,9 @@ class AgentResearchRequest(BaseModel):
     provider_capabilities: dict[str, Any] | None = Field(default_factory=dict)
     summarization_provider: ProviderName | None = Field(default="9router")
     summarization_config: dict[str, Any] | None = Field(default_factory=lambda: {"model_id": "Daily"})
+    enable_fact_check: bool = Field(default=False)
+    fact_check_provider: ProviderName | None = Field(default="perplexity")
+    fact_check_config: dict[str, Any] | None = Field(default_factory=dict)
     conversation_urls: dict[str, str] | None = Field(default=None)
     parent_job_id: str | None = Field(default=None)
 
@@ -102,10 +105,14 @@ class SourceResponse(BaseModel):
 
 
 class ClaimResponse(BaseModel):
-    id: str
-    text: str
-    source_ids: list[str]
-    verdict: Literal["supported", "single_source", "unsupported", "conflict"]
+    id: str = ""
+    text: str = ""
+    source_ids: list[str] = Field(default_factory=list)
+    verdict: Literal["supported", "single_source", "unsupported", "conflict", "disputed", "verified"] = "unsupported"
+    confidence: float | None = None
+    reasoning: str | None = None
+    branch: str | None = None
+    claim: str | None = None
 
 
 class DisagreementResponse(BaseModel):
@@ -158,6 +165,10 @@ class ResearchResponse(BaseModel):
     summarization_provider: str | None = None
     summarization_config: dict[str, Any] | None = None
     context_summary: str | None = None
+    enable_fact_check: bool = False
+    fact_check_provider: str | None = None
+    fact_check_config: dict[str, Any] | None = None
+    fact_check_results: list[dict[str, Any]] | None = None
     parent_job_id: str | None = None
     conversation_id: str | None = None
     created_at: datetime
