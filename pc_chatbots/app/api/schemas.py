@@ -12,7 +12,7 @@ ProviderName = Literal[
     "9router", "router",
 ]
 JobStatus = Literal[
-    "queued", "summarizing", "orchestrating", "planning", "researching", "fact_checking", "extracting", "verifying", "synthesizing", "leading",
+    "queued", "summarizing", "orchestrating", "planning", "researching", "fact_checking", "debating", "extracting", "verifying", "synthesizing", "leading",
     "completed", "partial", "failed", "needs_user_action", "cancelled",
 ]
 
@@ -57,6 +57,11 @@ class AgentResearchRequest(BaseModel):
     enable_fact_check: bool = Field(default=False)
     fact_check_provider: ProviderName | None = Field(default="perplexity")
     fact_check_config: dict[str, Any] | None = Field(default_factory=dict)
+    enable_debate: bool = Field(default=False)
+    debate_provider: ProviderName | None = Field(default=None)
+    debate_defender_provider: ProviderName | None = Field(default=None)
+    debate_config: dict[str, Any] | None = Field(default_factory=dict)
+    max_debate_rounds: int = Field(default=2, ge=1, le=5)
     conversation_urls: dict[str, str] | None = Field(default=None)
     parent_job_id: str | None = Field(default=None)
 
@@ -182,6 +187,12 @@ class ResearchResponse(BaseModel):
     fact_check_provider: str | None = None
     fact_check_config: dict[str, Any] | None = None
     fact_check_results: list[dict[str, Any]] | None = None
+    enable_debate: bool = False
+    debate_provider: str | None = None
+    debate_defender_provider: str | None = None
+    debate_config: dict[str, Any] | None = None
+    max_debate_rounds: int = 2
+    debate_transcript: list[dict[str, Any]] | None = None
     parent_job_id: str | None = None
     conversation_id: str | None = None
     created_at: datetime

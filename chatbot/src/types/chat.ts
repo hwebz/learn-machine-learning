@@ -61,7 +61,7 @@ export interface StepLog {
   provider?: string;
   step?: string;
   message: string;
-  status: "pending" | "running" | "completed" | "error" | "orchestrating" | "researching" | "fact_checking" | "leading";
+  status: "pending" | "running" | "completed" | "error" | "orchestrating" | "researching" | "fact_checking" | "debating" | "leading";
   data?: any;
   thinkingText?: string;
   thinkingSteps?: ThinkingStep[];
@@ -69,6 +69,15 @@ export interface StepLog {
   isThinking?: boolean;
   streamingText?: string;
   conversationUrl?: string;
+}
+
+export interface DebateEntry {
+  round: number;
+  side: "red_team" | "defender";
+  provider: string;
+  content?: string;
+  error?: string;
+  elapsed_s?: number;
 }
 
 export interface Message {
@@ -112,6 +121,12 @@ export interface Message {
   min_agents?: number;
   max_agents?: number;
   complexity?: ComplexityAssessment;
+  enable_debate?: boolean;
+  debate_provider?: string;
+  debate_defender_provider?: string;
+  debate_config?: Record<string, any>;
+  max_debate_rounds?: number;
+  debate_transcript?: DebateEntry[];
   jobId?: string;
 }
 
@@ -148,7 +163,7 @@ export interface ChatSession {
   selectedProvider?: string;
   depth?: DepthMode;
   jobId?: string;
-  status?: "queued" | "summarizing" | "running" | "completed" | "partial" | "failed" | "cancelled" | "orchestrating" | "researching" | "fact_checking" | "leading";
+  status?: "queued" | "summarizing" | "running" | "completed" | "partial" | "failed" | "cancelled" | "orchestrating" | "researching" | "fact_checking" | "debating" | "leading";
   providerConfigurations?: Record<string, ProviderSelectionConfig>;
   job_type?: "research" | "agent";
   orchestrator_provider?: string;
@@ -166,6 +181,12 @@ export interface ChatSession {
   fact_check_provider?: string;
   fact_check_config?: Record<string, any>;
   fact_check_results?: ClaimItem[] | any[];
+  enable_debate?: boolean;
+  debate_provider?: string;
+  debate_defender_provider?: string;
+  debate_config?: Record<string, any>;
+  max_debate_rounds?: number;
+  debate_transcript?: DebateEntry[];
   report_format?: string;
   report_matrix?: MatrixReport;
   auto_scale_agents?: boolean;

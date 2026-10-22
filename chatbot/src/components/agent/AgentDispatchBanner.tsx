@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { AgentDispatchPlanItem, Message, StepLog } from "../../types/chat";
+import { AgentDispatchPlanItem, DebateEntry, Message, StepLog } from "../../types/chat";
 import { ModelBadgeLogo, BrainIcon, ChevronRightIcon, ExternalLinkIcon } from "../icons/Icons";
 import { DurationBadge } from "../common/DurationBadge";
 import { formatDuration, getStepElapsedDuration } from "../../lib/timeUtils";
+import { DebateTranscript } from "./DebateTranscript";
 
 export type ClaimVerdict =
   | "supported"
@@ -82,6 +83,11 @@ export interface AgentDispatchBannerProps {
   enableFactCheck?: boolean;
   factCheckProvider?: string;
   factCheckResults?: any[];
+  enableDebate?: boolean;
+  debateProvider?: string;
+  debateDefenderProvider?: string;
+  maxDebateRounds?: number;
+  debateTranscript?: DebateEntry[];
 }
 
 function normalize(p?: string): string {
@@ -121,6 +127,11 @@ export function AgentDispatchBanner({
   enableFactCheck,
   factCheckProvider,
   factCheckResults,
+  enableDebate,
+  debateProvider,
+  debateDefenderProvider,
+  maxDebateRounds,
+  debateTranscript,
 }: AgentDispatchBannerProps) {
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
   const [liveSeconds, setLiveSeconds] = useState<number>(0);
@@ -141,6 +152,27 @@ export function AgentDispatchBanner({
     }
     return [];
   }, [factCheckResults, message?.fact_check_results, steps]);
+
+  const isDebateEnabled = Boolean(
+    enableDebate ?? message?.enable_debate ?? false
+  );
+  const resolvedDebateProvider =
+    debateProvider || message?.debate_provider || "deepseek";
+  const resolvedDebateDefenderProvider =
+    debateDefenderProvider || message?.debate_defender_provider || leadProvider || "chatgpt";
+  const resolvedMaxDebateRounds =
+    maxDebateRounds ?? message?.max_debate_rounds ?? 2;
+
+  const debateTranscriptList = useMemo(() => {
+    if (Array.isArray(debateTranscript) && debateTranscript.length > 0) return debateTranscript;
+    if (Array.isArray(message?.debate_transcript) && message.debate_transcript.length > 0) return message.debate_transcript;
+    for (const st of steps) {
+      if (st.step === "debate_complete" && Array.isArray(st.data?.transcript)) {
+        return st.data.transcript;
+      }
+    }
+    return [];
+  }, [debateTranscript, message?.debate_transcript, steps]);
 
   const complexityInfo = useMemo(() => {
     if (message?.complexity) return message.complexity;
@@ -168,6 +200,7 @@ export function AgentDispatchBanner({
       status === "orchestrating" ||
       status === "researching" ||
       status === "fact_checking" ||
+      status === "debating" ||
       status === "leading" ||
       status === "running";
 
@@ -356,6 +389,68 @@ export function AgentDispatchBanner({
     return "--";
   }, [factCheckSteps, factCheckState, liveSeconds]);
 
+  // --- 2.7 ADVERSARIAL DEBATE STATUS & THINKING ---
+  const debateSteps = useMemo(() => {
+    return steps.filter((st) => {
+      const isRole = st.data?.role === "red_team" || st.data?.role === "defender" || st.data?.stage === "debate";
+      const isStatus = (st.status as string) === "debating" || st.step === "debating" || st.step === "debate_round" || st.step === "debate_complete";
+      return isRole || isStatus;
+    });
+  }, [steps]);
+
+  const debateState = useMemo<"live" | "completed" | "waiting" | "error">(() => {
+    if (status === "completed" || status === "leading") return "completed";
+    if (debateTranscriptList.length > 0) return "completed";
+    if (debateSteps.some((s) => s.step === "debate_complete")) return "completed";
+    if (status === "debating") return "live";
+    if (status === "failed") return "error";
+    return "waiting";
+  }, [status, debateTranscriptList, debateSteps]);
+
+  const debateThinkingText = useMemo(() => {
+    if (debateSteps.length > 0) {
+      const last = debateSteps[debateSteps.length - 1];
+      if (last.thinkingSteps && last.thinkingSteps.length > 0) {
+        return last.thinkingSteps[last.thinkingSteps.length - 1].title;
+      }
+      if (last.data?.thinking_steps && last.data.thinking_steps.length > 0) {
+        const rawSteps = last.data.thinking_steps;
+        return rawSteps[rawSteps.length - 1].title || rawSteps[rawSteps.length - 1];
+      }
+      if (last.message) return last.message;
+    }
+    if (debateState === "live") {
+      return `Red Team (${resolvedDebateProvider.toUpperCase()}) và Defender (${resolvedDebateDefenderProvider.toUpperCase()}) đang tranh luận phản biện...`;
+    }
+    if (debateState === "completed") {
+      const turns = debateTranscriptList.length;
+      return `Đã hoàn tất tranh luận phản biện (${turns} lượt tranh biện qua ${resolvedMaxDebateRounds} vòng).`;
+    }
+    if (debateState === "error") {
+      return "Quá trình tranh luận phản biện gặp sự cố.";
+    }
+    return "Đang chờ hoàn thành các giai đoạn trước để bắt đầu tranh luận phản biện...";
+  }, [debateSteps, debateState, resolvedDebateProvider, resolvedDebateDefenderProvider, debateTranscriptList, resolvedMaxDebateRounds]);
+
+  const debateTimeTaken = useMemo(() => {
+    const recordedElapsed = getStepElapsedDuration(debateSteps);
+    if (recordedElapsed !== null) {
+      return formatDuration(recordedElapsed);
+    }
+    if (debateState === "live") {
+      return formatDuration(liveSeconds);
+    }
+    return "--";
+  }, [debateSteps, debateState, liveSeconds]);
+
+  // Dynamic step numbering for stepper and tier cards
+  let currentStepIdx = 1;
+  const orchStepNum = currentStepIdx++;
+  const researchStepNum = currentStepIdx++;
+  const factCheckStepNum = isFactCheckEnabled ? currentStepIdx++ : 0;
+  const debateStepNum = isDebateEnabled ? currentStepIdx++ : 0;
+  const leadStepNum = currentStepIdx++;
+
   // Subtask helper
   const getSubtaskDetails = (item: AgentDispatchPlanItem, idx: number) => {
     const itemNorm = normalize(item.id);
@@ -508,6 +603,26 @@ export function AgentDispatchBanner({
             </div>
           )}
 
+          {isDebateEnabled && (
+            <div
+              className="agent-meta-badge debate"
+              style={{
+                background: "rgba(244, 63, 94, 0.12)",
+                borderColor: "rgba(244, 63, 94, 0.3)",
+                color: "#f43f5e",
+              }}
+              title={`Tranh biện phản biện (${resolvedMaxDebateRounds} vòng): Red Team [${resolvedDebateProvider.toUpperCase()}] vs Defender [${resolvedDebateDefenderProvider.toUpperCase()}]`}
+            >
+              <span>⚔️</span>
+              <span className="agent-meta-label" style={{ color: "#f43f5e", fontWeight: 700 }}>
+                Debate ({resolvedMaxDebateRounds}R):
+              </span>
+              <ModelBadgeLogo providerId={resolvedDebateProvider} size={14} />
+              <span style={{ fontSize: 11, opacity: 0.8 }}>vs</span>
+              <ModelBadgeLogo providerId={resolvedDebateDefenderProvider} size={14} />
+            </div>
+          )}
+
           {tone && (
             <div className="agent-meta-badge tone">
               <span className="agent-meta-label">Tone:</span>
@@ -560,23 +675,31 @@ export function AgentDispatchBanner({
         <div className="agent-dispatch-header-right">
           <div className="agent-stage-stepper">
             <span className={`stage-step-dot ${orchState === "live" ? "active" : orchState === "completed" ? "done" : ""}`}>
-              1. Phân rã
+              {orchStepNum}. Phân rã
             </span>
             <span className="stage-sep">➔</span>
-            <span className={`stage-step-dot ${status === "researching" ? "active" : (status === "fact_checking" || status === "leading" || status === "completed") ? "done" : ""}`}>
-              2. Nghiên cứu ({completedSubtasksCount}/{dispatchPlan?.length || 0})
+            <span className={`stage-step-dot ${status === "researching" ? "active" : (status === "fact_checking" || status === "debating" || status === "leading" || status === "completed") ? "done" : ""}`}>
+              {researchStepNum}. Nghiên cứu ({completedSubtasksCount}/{dispatchPlan?.length || 0})
             </span>
             {isFactCheckEnabled && (
               <>
                 <span className="stage-sep">➔</span>
                 <span className={`stage-step-dot ${factCheckState === "live" ? "active" : factCheckState === "completed" ? "done" : ""}`}>
-                  3. Fact-Check{factCheckResultsList.length > 0 ? ` (${factCheckResultsList.length})` : ""}
+                  {factCheckStepNum}. Fact-Check{factCheckResultsList.length > 0 ? ` (${factCheckResultsList.length})` : ""}
+                </span>
+              </>
+            )}
+            {isDebateEnabled && (
+              <>
+                <span className="stage-sep">➔</span>
+                <span className={`stage-step-dot ${debateState === "live" ? "active" : debateState === "completed" ? "done" : ""}`}>
+                  {debateStepNum}. Tranh biện{debateTranscriptList.length > 0 ? ` (${debateTranscriptList.length} lượt)` : ""}
                 </span>
               </>
             )}
             <span className="stage-sep">➔</span>
             <span className={`stage-step-dot ${leadState === "live" ? "active" : leadState === "completed" ? "done" : ""}`}>
-              {isFactCheckEnabled ? "4. Tổng hợp" : "3. Tổng hợp"}
+              {leadStepNum}. Tổng hợp
             </span>
           </div>
 
@@ -926,12 +1049,123 @@ export function AgentDispatchBanner({
           )}
 
           {/* ======================================================== */}
+          {/* TIER 2.7: ADVERSARIAL DEBATE (RED TEAM VS DEFENDER) */}
+          {/* ======================================================== */}
+          {isDebateEnabled && (
+            <div className="agent-tier-section">
+              <div className="agent-tier-title-row">
+                <div className="agent-tier-heading">
+                  <span className="agent-tier-num">{debateStepNum}</span>
+                  <span>Tranh biện Phản biện (Adversarial Red Team vs Defender)</span>
+                  {debateTranscriptList.length > 0 && (
+                    <span className="agent-branch-count-pill" style={{ background: "rgba(244, 63, 94, 0.15)", color: "#f43f5e" }}>
+                      {debateTranscriptList.length} lượt phản biện ({resolvedMaxDebateRounds} vòng)
+                    </span>
+                  )}
+                </div>
+                <span className="agent-tier-hint">
+                  Red Team đào sâu lỗ hổng và rủi ro; Defender phản hồi và củng cố dữ kiện đối chứng
+                </span>
+              </div>
+
+              <div
+                className={`agent-provider-summary-card debate ${debateState}`}
+                style={{
+                  borderLeft: "3px solid #f43f5e",
+                }}
+              >
+                <div className="agent-card-top-row">
+                  <div className="agent-card-provider-info" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 13 }}>⚔️</span>
+                      <ModelBadgeLogo providerId={resolvedDebateProvider} size={18} />
+                      <span className="agent-card-provider-name" style={{ color: "#f43f5e" }}>
+                        {resolvedDebateProvider.toUpperCase()}
+                      </span>
+                      <span className="agent-card-role-tag red_team" style={{ background: "rgba(244, 63, 94, 0.15)", color: "#f43f5e" }}>
+                        Red Team
+                      </span>
+                    </div>
+
+                    <span style={{ color: "var(--text-muted)", fontSize: 12, fontWeight: 700 }}>vs</span>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 13 }}>🛡️</span>
+                      <ModelBadgeLogo providerId={resolvedDebateDefenderProvider} size={18} />
+                      <span className="agent-card-provider-name" style={{ color: "#6366f1" }}>
+                        {resolvedDebateDefenderProvider.toUpperCase()}
+                      </span>
+                      <span className="agent-card-role-tag defender" style={{ background: "rgba(99, 102, 241, 0.15)", color: "#818cf8" }}>
+                        Defender
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="agent-card-meta-right">
+                    <div className={`agent-live-badge ${debateState}`}>
+                      {debateState === "live" && (
+                        <>
+                          <span className="pulse-dot live" />
+                          <span className="badge-text">LIVE</span>
+                        </>
+                      )}
+                      {debateState === "completed" && (
+                        <>
+                          <span className="badge-icon">✓</span>
+                          <span className="badge-text">Completed</span>
+                        </>
+                      )}
+                      {debateState === "waiting" && (
+                        <>
+                          <span className="badge-icon">⏳</span>
+                          <span className="badge-text">Chờ</span>
+                        </>
+                      )}
+                      {debateState === "error" && (
+                        <>
+                          <span className="badge-icon">⚠️</span>
+                          <span className="badge-text">Lỗi</span>
+                        </>
+                      )}
+                    </div>
+
+                    <DurationBadge
+                      duration={debateTimeTaken}
+                      title="Thời gian tranh luận phản biện"
+                    />
+                  </div>
+                </div>
+
+                {/* Active Thinking Step */}
+                <div className="agent-card-thinking-box debate" style={{ borderLeft: "2px solid #f43f5e" }}>
+                  <div className="agent-card-thinking-header" style={{ color: "#f43f5e" }}>
+                    <BrainIcon size={13} color="#f43f5e" />
+                    <span className="thinking-title-label">
+                      {debateState === "live"
+                        ? "Tiến trình tranh biện trực tiếp (Active Debate Turn):"
+                        : "Trạng thái tranh biện phản biện:"}
+                    </span>
+                  </div>
+                  <div className="agent-card-thinking-content">{debateThinkingText}</div>
+                </div>
+
+                {/* Debate Transcript Preview */}
+                {debateTranscriptList.length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <DebateTranscript transcript={debateTranscriptList} defaultExpanded={false} />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
           {/* TIER 3: LEAD PROVIDER SYNTHESIZER SUMMARY CARD */}
           {/* ======================================================== */}
           <div className="agent-tier-section">
             <div className="agent-tier-title-row">
               <div className="agent-tier-heading">
-                <span className="agent-tier-num">{isFactCheckEnabled ? 4 : 3}</span>
+                <span className="agent-tier-num">{leadStepNum}</span>
                 <span>Tác nhân Tổng hợp Trưởng (Lead Provider)</span>
               </div>
               <span className="agent-tier-hint">Hợp nhất luận cứ, đối soát sự thật và định hình báo cáo hoàn chỉnh</span>

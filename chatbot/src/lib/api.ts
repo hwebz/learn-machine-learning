@@ -1,4 +1,4 @@
-import { DepthMode, SourceLink, StepLog, ProviderLiveCapabilities, MatrixReport, ReportFormat } from "../types/chat";
+import { DepthMode, SourceLink, StepLog, ProviderLiveCapabilities, MatrixReport, ReportFormat, DebateEntry } from "../types/chat";
 
 export const DEFAULT_API_KEY = "changeme";
 
@@ -49,6 +49,12 @@ export interface ResearchResponseData {
   fact_check_provider?: string;
   fact_check_config?: Record<string, any>;
   fact_check_results?: any[];
+  enable_debate?: boolean;
+  debate_provider?: string;
+  debate_defender_provider?: string;
+  debate_config?: Record<string, any>;
+  max_debate_rounds?: number;
+  debate_transcript?: DebateEntry[];
   report_format?: string;
   report_matrix?: MatrixReport;
   parent_job_id?: string;
@@ -88,6 +94,12 @@ export interface ResearchHistoryItem {
   fact_check_provider?: string;
   fact_check_config?: Record<string, any>;
   fact_check_results?: any[];
+  enable_debate?: boolean;
+  debate_provider?: string;
+  debate_defender_provider?: string;
+  debate_config?: Record<string, any>;
+  max_debate_rounds?: number;
+  debate_transcript?: DebateEntry[];
   report_format?: string;
   report_matrix?: MatrixReport;
   parent_job_id?: string;
@@ -130,6 +142,11 @@ export interface AgentResearchRequestPayload {
   enable_fact_check?: boolean;
   fact_check_provider?: string;
   fact_check_config?: Record<string, any>;
+  enable_debate?: boolean;
+  debate_provider?: string;
+  debate_defender_provider?: string;
+  debate_config?: Record<string, any>;
+  max_debate_rounds?: number;
   conversation_urls?: Record<string, string>;
   parent_job_id?: string;
 }

@@ -11,6 +11,7 @@ import { ScrollNavButtons } from "./ScrollNavButtons";
 import { ProviderActionBanner } from "./ProviderActionBanner";
 import { ScrollableTabsRow } from "./ScrollableTabsRow";
 import { AgentDispatchBanner } from "../agent/AgentDispatchBanner";
+import { DebateTranscript } from "../agent/DebateTranscript";
 import { detectAllProvidersNeedingAction } from "../../lib/providerAction";
 import { useVoiceRecording } from "../../lib/useVoiceRecording";
 import {
@@ -271,6 +272,7 @@ export function ChatArea({
       const jobStatus = (st.data as any)?.job_status;
       if (jobStatus && jobStatus !== "running") return jobStatus;
       if (st.data?.role === "lead" || st.message?.includes("Lead Provider")) return "leading";
+      if (st.status === "debating" || st.step === "debating" || st.step === "debate_round" || st.data?.stage === "debate") return "debating";
       if (st.step === "fact_checking" || st.data?.role === "fact_checker" || (st.status as string) === "fact_checking") return "fact_checking";
       if (st.data?.role === "subtask" || st.step === "orchestrator_result" || st.data?.dispatch) return "researching";
       if (st.data?.role === "orchestrator") return "orchestrating";
@@ -676,6 +678,11 @@ export function ChatArea({
                     enableFactCheck={msg.enable_fact_check ?? session.enable_fact_check}
                     factCheckProvider={msg.fact_check_provider || session.fact_check_provider}
                     factCheckResults={msg.fact_check_results || session.fact_check_results}
+                    enableDebate={msg.enable_debate ?? session.enable_debate}
+                    debateProvider={msg.debate_provider || session.debate_provider}
+                    debateDefenderProvider={msg.debate_defender_provider || session.debate_defender_provider}
+                    maxDebateRounds={msg.max_debate_rounds ?? session.max_debate_rounds}
+                    debateTranscript={msg.debate_transcript || session.debate_transcript}
                   />
                 )}
 
@@ -827,6 +834,14 @@ export function ChatArea({
                   /* Main Content Body with Full Markdown & Syntax Highlighter */
                   <div className="message-content-body">
                     <MarkdownContent content={msg.content} />
+                  </div>
+                )}
+
+                {/* Adversarial Debate Transcript (Red Team vs Defender) */}
+                {((msg.debate_transcript && msg.debate_transcript.length > 0) ||
+                  (msg.id === session.messages[session.messages.length - 1]?.id && session.debate_transcript && session.debate_transcript.length > 0)) && (
+                  <div style={{ margin: "14px 0" }}>
+                    <DebateTranscript transcript={msg.debate_transcript || session.debate_transcript} defaultExpanded={false} />
                   </div>
                 )}
 
@@ -1025,6 +1040,11 @@ export function ChatArea({
                   enableFactCheck={session.enable_fact_check}
                   factCheckProvider={session.fact_check_provider}
                   factCheckResults={session.fact_check_results}
+                  enableDebate={session.enable_debate}
+                  debateProvider={session.debate_provider}
+                  debateDefenderProvider={session.debate_defender_provider}
+                  maxDebateRounds={session.max_debate_rounds}
+                  debateTranscript={session.debate_transcript}
                 />
               )}
 

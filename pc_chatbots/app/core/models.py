@@ -48,6 +48,12 @@ class Job(SQLModel, table=True):
     fact_check_results_json: str | None = None
     report_format: str = "narrative"
     report_matrix_json: str | None = None
+    enable_debate: bool = False
+    debate_provider: str | None = None
+    debate_defender_provider: str | None = None
+    debate_config_json: str | None = None
+    max_debate_rounds: int = 2
+    debate_transcript_json: str | None = None
 
 
 class JobEvent(SQLModel, table=True):

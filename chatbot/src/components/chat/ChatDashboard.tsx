@@ -108,6 +108,12 @@ export function buildAssistantMessage(
     provider_conversations?: Record<string, string>;
     report_format?: string | null;
     report_matrix?: any | null;
+    enable_debate?: boolean;
+    debate_provider?: string | null;
+    debate_defender_provider?: string | null;
+    debate_config?: Record<string, any>;
+    max_debate_rounds?: number;
+    debate_transcript?: any[];
   }
 ): Message | null {
   const content = resolveAssistantContent(jobData.status, jobData.report_markdown, jobData.error);
@@ -170,6 +176,12 @@ export function buildAssistantMessage(
     provider_conversations: Object.keys(resolvedConvUrls).length > 0 ? resolvedConvUrls : undefined,
     report_format: (jobData.report_format as any) || undefined,
     report_matrix: jobData.report_matrix || undefined,
+    enable_debate: jobData.enable_debate,
+    debate_provider: jobData.debate_provider || undefined,
+    debate_defender_provider: jobData.debate_defender_provider || undefined,
+    debate_config: jobData.debate_config || undefined,
+    max_debate_rounds: jobData.max_debate_rounds,
+    debate_transcript: (jobData as any).debate_transcript || undefined,
   };
 }
 
@@ -621,6 +633,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             fact_check_provider: latestJob.fact_check_provider || (rootJob as any).fact_check_provider,
             fact_check_config: latestJob.fact_check_config || (rootJob as any).fact_check_config,
             fact_check_results: latestJob.fact_check_results || (rootJob as any).fact_check_results,
+            enable_debate: latestJob.enable_debate ?? (rootJob as any).enable_debate,
+            debate_provider: latestJob.debate_provider || (rootJob as any).debate_provider,
+            debate_defender_provider: latestJob.debate_defender_provider || (rootJob as any).debate_defender_provider,
+            max_debate_rounds: latestJob.max_debate_rounds || (rootJob as any).max_debate_rounds,
+            debate_transcript: latestJob.debate_transcript || (rootJob as any).debate_transcript,
             providerConfigurations: (latestJob as any).providerConfigurations || (latestJob as any).provider_options || {
               ...(((latestJob as any).orchestrator_config && (latestJob as any).orchestrator_provider) ? { [(latestJob as any).orchestrator_provider]: (latestJob as any).orchestrator_config } : {}),
               ...(((latestJob as any).lead_config && (latestJob as any).lead_provider) ? { [(latestJob as any).lead_provider]: (latestJob as any).lead_config } : {}),
@@ -684,6 +701,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               fact_check_provider: directJob.fact_check_provider || undefined,
               fact_check_config: directJob.fact_check_config,
               fact_check_results: directJob.fact_check_results,
+              enable_debate: directJob.enable_debate,
+              debate_provider: directJob.debate_provider || undefined,
+              debate_defender_provider: directJob.debate_defender_provider || undefined,
+              max_debate_rounds: directJob.max_debate_rounds,
+              debate_transcript: directJob.debate_transcript,
               providerConfigurations: (directJob as any).providerConfigurations || (directJob as any).provider_options || {
                 ...(((directJob as any).orchestrator_config && (directJob as any).orchestrator_provider) ? { [(directJob as any).orchestrator_provider]: (directJob as any).orchestrator_config } : {}),
                 ...(((directJob as any).lead_config && (directJob as any).lead_provider) ? { [(directJob as any).lead_provider]: (directJob as any).lead_config } : {}),
@@ -1028,6 +1050,25 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       activeSession.messages.find((m) => m.max_agents !== undefined)?.max_agents ??
       5;
 
+    // 13. Adversarial debate defaults:
+    const resolvedEnableDebate =
+      activeSession.enable_debate ??
+      activeSession.messages.find((m) => m.enable_debate !== undefined)?.enable_debate ??
+      false;
+    const resolvedDebateProvider =
+      activeSession.debate_provider ||
+      activeSession.messages.find((m) => m.debate_provider)?.debate_provider ||
+      "claude";
+    const resolvedDebateDefenderProvider =
+      activeSession.debate_defender_provider ||
+      activeSession.messages.find((m) => m.debate_defender_provider)?.debate_defender_provider ||
+      resolvedLead ||
+      "chatgpt";
+    const resolvedMaxDebateRounds =
+      activeSession.max_debate_rounds ??
+      activeSession.messages.find((m) => m.max_debate_rounds !== undefined)?.max_debate_rounds ??
+      2;
+
     return {
       initialOrchestratorProvider: resolvedOrch,
       initialLeadProvider: resolvedLead,
@@ -1041,6 +1082,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       initialEnableFactCheck: resolvedEnableFactCheck,
       initialFactCheckProvider: resolvedFactCheckProvider,
       initialFactCheckConfig: resolvedFactCheckConfig,
+      initialEnableDebate: resolvedEnableDebate,
+      initialDebateProvider: resolvedDebateProvider,
+      initialDebateDefenderProvider: resolvedDebateDefenderProvider,
+      initialMaxDebateRounds: resolvedMaxDebateRounds,
       initialReportFormat: resolvedReportFormat,
       initialAutoScaleAgents: resolvedAutoScaleAgents,
       initialMinAgents: resolvedMinAgents,
@@ -1262,6 +1307,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     enable_fact_check?: boolean;
     fact_check_provider?: string;
     fact_check_config?: Record<string, any>;
+    enable_debate?: boolean;
+    debate_provider?: string;
+    debate_defender_provider?: string;
+    max_debate_rounds?: number;
   }) => {
     setIsAgentConfigOpen(false);
 
@@ -1328,6 +1377,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       enable_fact_check: config.enable_fact_check,
       fact_check_provider: config.fact_check_provider,
       fact_check_config: config.fact_check_config,
+      enable_debate: config.enable_debate,
+      debate_provider: config.debate_provider,
+      debate_defender_provider: config.debate_defender_provider,
+      max_debate_rounds: config.max_debate_rounds,
       providerConfigurations: {
         ...(config.provider_configs || {}),
         [config.orchestrator_provider]: config.orchestrator_config,
@@ -1368,6 +1421,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         enable_fact_check: config.enable_fact_check,
         fact_check_provider: config.fact_check_provider,
         fact_check_config: config.fact_check_config,
+        enable_debate: config.enable_debate,
+        debate_provider: config.debate_provider,
+        debate_defender_provider: config.debate_defender_provider,
+        max_debate_rounds: config.max_debate_rounds,
       });
 
       if (isCancelledRef.current) {
@@ -1421,6 +1478,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                 nextStatus = rawJobStatus as any;
               } else if (stepLog.step === "fact_checking" || (stepLog.data as any)?.phase === "fact_checking") {
                 nextStatus = "fact_checking" as any;
+              } else if (stepLog.step === "debating" || (stepLog.data as any)?.phase === "debating" || stepLog.status === "debating") {
+                nextStatus = "debating" as any;
               } else if (stepLog.step === "summarizing") {
                 nextStatus = "summarizing" as any;
               } else if (dispatch && nextStatus === "orchestrating") {
@@ -1462,6 +1521,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               fact_check_provider: config.fact_check_provider,
               fact_check_config: config.fact_check_config,
               fact_check_results: (result as any).fact_check_results,
+              enable_debate: config.enable_debate,
+              debate_provider: config.debate_provider,
+              debate_defender_provider: config.debate_defender_provider,
+              max_debate_rounds: config.max_debate_rounds,
+              debate_transcript: (result as any).debate_transcript,
               steps: activeSteps,
               job_type: "agent",
               orchestrator_provider: config.orchestrator_provider,
@@ -1511,6 +1575,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                     fact_check_provider: config.fact_check_provider || s.fact_check_provider,
                     fact_check_config: config.fact_check_config || s.fact_check_config,
                     fact_check_results: (result as any).fact_check_results || s.fact_check_results,
+                    enable_debate: config.enable_debate ?? s.enable_debate,
+                    debate_provider: config.debate_provider || s.debate_provider,
+                    debate_defender_provider: config.debate_defender_provider || s.debate_defender_provider,
+                    max_debate_rounds: config.max_debate_rounds || s.max_debate_rounds,
+                    debate_transcript: (result as any).debate_transcript || s.debate_transcript,
                     providerConfigurations: s.providerConfigurations || {
                       [config.orchestrator_provider]: config.orchestrator_config,
                       [config.lead_provider]: config.lead_config,
@@ -1554,6 +1623,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                 fact_check_provider: finalResult.fact_check_provider || config.fact_check_provider,
                 fact_check_config: finalResult.fact_check_config || config.fact_check_config,
                 fact_check_results: finalResult.fact_check_results,
+                enable_debate: finalResult.enable_debate ?? config.enable_debate,
+                debate_provider: finalResult.debate_provider || config.debate_provider,
+                debate_defender_provider: finalResult.debate_defender_provider || config.debate_defender_provider,
+                max_debate_rounds: finalResult.max_debate_rounds || config.max_debate_rounds,
+                debate_transcript: (finalResult as any).debate_transcript,
                 steps: activeSteps,
                 job_type: "agent",
                 orchestrator_provider: config.orchestrator_provider,
@@ -1599,6 +1673,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                       fact_check_provider: finalResult.fact_check_provider || config.fact_check_provider || s.fact_check_provider,
                       fact_check_config: finalResult.fact_check_config || config.fact_check_config || s.fact_check_config,
                       fact_check_results: finalResult.fact_check_results || s.fact_check_results,
+                      enable_debate: finalResult.enable_debate ?? config.enable_debate ?? s.enable_debate,
+                      debate_provider: finalResult.debate_provider || config.debate_provider || s.debate_provider,
+                      debate_defender_provider: finalResult.debate_defender_provider || config.debate_defender_provider || s.debate_defender_provider,
+                      max_debate_rounds: finalResult.max_debate_rounds || config.max_debate_rounds || s.max_debate_rounds,
+                      debate_transcript: (finalResult as any).debate_transcript || s.debate_transcript,
                       providerConfigurations: s.providerConfigurations || {
                         [config.orchestrator_provider]: config.orchestrator_config,
                         [config.lead_provider]: config.lead_config,
@@ -2656,6 +2735,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           initialEnableFactCheck={activeSessionAgentDefaults.initialEnableFactCheck}
           initialFactCheckProvider={activeSessionAgentDefaults.initialFactCheckProvider}
           initialFactCheckConfig={activeSessionAgentDefaults.initialFactCheckConfig}
+          initialEnableDebate={activeSessionAgentDefaults.initialEnableDebate}
+          initialDebateProvider={activeSessionAgentDefaults.initialDebateProvider}
+          initialDebateDefenderProvider={activeSessionAgentDefaults.initialDebateDefenderProvider}
+          initialMaxDebateRounds={activeSessionAgentDefaults.initialMaxDebateRounds}
         />
       )}
     </div>

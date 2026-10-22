@@ -77,11 +77,14 @@ __all__ = [
     "build_lead_prompt",
     "build_matrix_report_prompt",
     "build_orchestrator_prompt",
+    "build_rebuttal_prompt",
+    "build_red_team_prompt",
     "build_summarization_prompt",
     "build_synthesis_prompt",
     "parse_orchestrator_plan",
     "render_matrix_to_markdown",
     "resolve_provider_live_prompt_info",
+    "run_adversarial_debate",
     "run_agent_pipeline",
     "run_fact_check_phase",
 ]
@@ -225,6 +228,7 @@ def build_lead_prompt(
     tone: str,
     context_summary: str | None = None,
     fact_check_claims: list[dict[str, Any]] | None = None,
+    debate_transcript: list[dict[str, Any]] | None = None,
 ) -> str:
     tone_directive = TONE_INSTRUCTIONS.get(tone.lower(), TONE_INSTRUCTIONS["professional"])
 
@@ -265,11 +269,37 @@ Ensure your synthesis integrates continuity from previous findings while focusin
 IMPORTANT: Clearly mark any disputed claims in the report. Do not present unsupported claims as established facts.
 """
 
+    debate_section = ""
+    if debate_transcript:
+        critiques = [t for t in debate_transcript if t.get("side") == "red_team" and t.get("content")]
+        defenses = [t for t in debate_transcript if t.get("side") == "defender" and t.get("content")]
+        critiques_text = "\n".join(
+            f"- **Round {c.get('round', '?')} ({c.get('provider', 'Red Team')})**: {c.get('content', '')[:1000]}"
+            for c in critiques[:3]
+        )
+        defenses_text = "\n".join(
+            f"- **Round {d.get('round', '?')} ({d.get('provider', 'Defender')})**: {d.get('content', '')[:1000]}"
+            for d in defenses[:3]
+        )
+        debate_section = f"""
+## Adversarial Debate Results:
+{len(critiques)} critique(s) and {len(defenses)} defense(s) were exchanged.
+
+### Key Red Team Critiques:
+{critiques_text if critiques_text else "- No critiques recorded."}
+
+### Defender Responses:
+{defenses_text if defenses_text else "- No defenses recorded."}
+
+IMPORTANT: Your synthesis MUST address the critiques raised. Acknowledge valid weaknesses. Do NOT ignore Red Team concerns.
+"""
+
     return f"""You are the Lead Research Synthesizer.
 You have been provided with comprehensive findings gathered by specialized AI agents investigating different aspects of the topic:
 "{research_topic}"
 {context_section}
 {fact_check_section}
+{debate_section}
 ## Findings from Autonomous AI Providers:
 {findings_text}
 
@@ -317,6 +347,26 @@ def build_matrix_report_prompt(
                 f"- ⚠️ \"{c.get('claim') or c.get('text', '')}\" [{c.get('verdict', '')}]" for c in disputed[:10]
             ) + "\n"
 
+    debate_section = ""
+    if debate_transcript:
+        critiques = [t for t in debate_transcript if t.get("side") == "red_team" and t.get("content")]
+        defenses = [t for t in debate_transcript if t.get("side") == "defender" and t.get("content")]
+        critiques_text = "\n".join(
+            f"- **Round {c.get('round', '?')} ({c.get('provider', 'Red Team')})**: {c.get('content', '')[:600]}"
+            for c in critiques[:3]
+        )
+        defenses_text = "\n".join(
+            f"- **Round {d.get('round', '?')} ({d.get('provider', 'Defender')})**: {d.get('content', '')[:600]}"
+            for d in defenses[:3]
+        )
+        debate_section = f"""
+## Adversarial Debate Results:
+{critiques_text if critiques_text else "- No critiques recorded."}
+
+### Defense Points:
+{defenses_text if defenses_text else "- No defenses recorded."}
+"""
+
     consensus_section = ""
     if consensus_result and consensus_result.get("final_scores"):
         scores_lines = []
@@ -332,6 +382,7 @@ def build_matrix_report_prompt(
 ## Research Findings:
 {findings_text}
 {fc_section}
+{debate_section}
 {consensus_section}
 ## Your Task:
 Produce a structured report in the following JSON format:
@@ -734,6 +785,274 @@ async def run_fact_check_phase(
     return all_claims
 
 
+def build_red_team_prompt(
+    research_topic: str,
+    findings_summary: str,
+    fact_check_summary: str | None = None,
+) -> str:
+    """Prompt for the Red Team agent to critique the research findings."""
+    fc_section = ""
+    if fact_check_summary:
+        fc_section = f"""
+## Fact-Check Results Already Available:
+{fact_check_summary}
+"""
+
+    return f"""You are a Red Team Critical Analyst. Your role is adversarial — your job is to find weaknesses, gaps, biases, and logical flaws in the following research findings.
+
+## Research Topic: {research_topic}
+
+## Research Findings to Critique:
+{findings_summary[:6000]}
+{fc_section}
+## Your Task:
+1. Identify the TOP 5 most critical weaknesses, biases, or logical flaws in these findings.
+2. For each, explain WHY it's a problem and what the IMPACT would be if left unaddressed.
+3. Suggest what evidence or perspective is MISSING.
+4. Challenge any claims that seem over-confident or under-supported.
+
+## Rules:
+- Be specific and constructive. Don't just say "this is wrong" — explain what's missing.
+- Focus on factual accuracy, logical consistency, completeness, and potential biases.
+- If findings are strong, acknowledge that but still push for deeper analysis.
+
+Produce your critique now:"""
+
+
+def build_rebuttal_prompt(
+    research_topic: str,
+    original_findings: str,
+    critique: str,
+    round_number: int,
+) -> str:
+    """Prompt for the defender agent to rebut the Red Team critique."""
+    return f"""You are the Research Defense Analyst (Round {round_number}). The Red Team has critiqued the research findings. Your role is to:
+
+1. Address each critique point directly.
+2. Provide additional evidence or reasoning to support or refine the original findings.
+3. Concede points where the critique is valid — acknowledge gaps honestly.
+4. Strengthen the overall analysis based on the critique.
+
+## Research Topic: {research_topic}
+
+## Original Research Findings:
+{original_findings[:4000]}
+
+## Red Team Critique:
+{critique[:4000]}
+
+## Your Task:
+For each critique point:
+- If valid: CONCEDE and note what should be changed in the final report
+- If partially valid: REFINE with additional context
+- If invalid: REBUT with specific evidence
+
+Produce your defense now:"""
+
+
+async def run_adversarial_debate(
+    job_id: str,
+    research_topic: str,
+    runs: list[dict[str, Any]],
+    fact_check_claims: list[dict[str, Any]],
+    debate_provider: str,
+    debate_defender_provider: str | None,
+    debate_config: dict[str, Any],
+    max_rounds: int,
+    cancel_event: asyncio.Event,
+    initial_conv_urls: dict[str, str],
+) -> list[dict[str, Any]]:
+    """Phase 3: Adversarial Debate — Red Team vs. Research Defenders."""
+    transcript: list[dict[str, Any]] = []
+    debate_start = time.monotonic()
+
+    # Build findings summary for the Red Team
+    valid_runs = [r for r in runs if r.get("status") == "ok"] or runs
+    findings_summary = "\n\n---\n\n".join(
+        f"### {r.get('branch', 'Branch')} (by {r.get('provider', 'AI')})\n{r.get('answer_md', '')[:2000]}"
+        for r in valid_runs
+    )
+
+    # Build fact-check summary if available
+    fc_summary = None
+    if fact_check_claims:
+        disputed = [c for c in fact_check_claims if c.get("verdict") in ("unsupported", "conflict", "single_source", "disputed")]
+        if disputed:
+            fc_summary = "\n".join(
+                f"- ⚠️ {c.get('claim') or c.get('text', '')} [{c.get('verdict', '')}]" for c in disputed[:10]
+            )
+
+    defender_prov = debate_defender_provider or debate_provider
+
+    await _set_agent_status(
+        job_id,
+        "debating",
+        message=f"Red Team ({debate_provider}) đang phản biện các kết quả nghiên cứu...",
+        data={
+            "debate_provider": debate_provider,
+            "defender_provider": defender_prov,
+            "max_rounds": max_rounds,
+            "role": "red_team",
+            "provider_role_key": "red_team",
+            "elapsed_s": 0.0,
+        },
+    )
+
+    last_critique = ""
+    last_defense = ""
+
+    for round_num in range(1, max_rounds + 1):
+        if cancel_event.is_set():
+            break
+
+        # --- RED TEAM CRITIQUE ---
+        rt_adapter = create_adapter(debate_provider)
+        if round_num == 1:
+            rt_prompt = build_red_team_prompt(research_topic, findings_summary, fc_summary)
+        else:
+            rt_prompt = f"""You are the Red Team (Round {round_num}). The defender responded to your previous critique.
+Review their defense and identify any remaining weaknesses or new concerns.
+
+## Previous Critique:
+{last_critique[:3000]}
+
+## Defender's Response:
+{last_defense[:3000]}
+
+Continue your adversarial analysis. Focus on points NOT adequately addressed:"""
+
+        rt_kwargs: dict[str, Any] = {
+            "timeout_s": 300,
+        }
+        if debate_config:
+            rt_kwargs["mode"] = json.dumps(debate_config)
+        try:
+            sig = inspect.signature(rt_adapter.ask)
+            if "on_step" in sig.parameters:
+                rt_kwargs["on_step"] = StepEmitter(
+                    job_id=job_id,
+                    provider=debate_provider,
+                    status="debating",
+                    role="red_team",
+                    cancel_event=cancel_event,
+                    start_time=debate_start,
+                    extra_payload={
+                        "round": round_num,
+                        "side": "red_team",
+                        "provider_role_key": f"red_team_round_{round_num}",
+                    },
+                )
+        except (TypeError, ValueError):
+            pass
+
+        try:
+            rt_result = await rt_adapter.ask(rt_prompt, **rt_kwargs)
+            last_critique = rt_result.answer_markdown
+            transcript.append({
+                "round": round_num,
+                "side": "red_team",
+                "provider": debate_provider,
+                "content": last_critique,
+                "elapsed_s": round(time.monotonic() - debate_start, 1),
+            })
+        except Exception as rt_exc:
+            logger.warning("red_team_round_failed", round=round_num, error=str(rt_exc))
+            transcript.append({
+                "round": round_num,
+                "side": "red_team",
+                "provider": debate_provider,
+                "error": str(rt_exc),
+            })
+            break
+        finally:
+            try:
+                await BrowserSessionManager.close_session(debate_provider)
+            except Exception:
+                pass
+
+        if cancel_event.is_set():
+            break
+
+        # --- DEFENDER REBUTTAL ---
+        def_adapter = create_adapter(defender_prov)
+        def_prompt = build_rebuttal_prompt(research_topic, findings_summary, last_critique, round_num)
+
+        def_kwargs: dict[str, Any] = {
+            "timeout_s": 300,
+        }
+        if debate_config:
+            def_kwargs["mode"] = json.dumps(debate_config)
+        try:
+            sig = inspect.signature(def_adapter.ask)
+            if "on_step" in sig.parameters:
+                def_kwargs["on_step"] = StepEmitter(
+                    job_id=job_id,
+                    provider=defender_prov,
+                    status="debating",
+                    role="defender",
+                    cancel_event=cancel_event,
+                    start_time=debate_start,
+                    extra_payload={
+                        "round": round_num,
+                        "side": "defender",
+                        "provider_role_key": f"defender_round_{round_num}",
+                    },
+                )
+        except (TypeError, ValueError):
+            pass
+
+        try:
+            def_result = await def_adapter.ask(def_prompt, **def_kwargs)
+            last_defense = def_result.answer_markdown
+            transcript.append({
+                "round": round_num,
+                "side": "defender",
+                "provider": defender_prov,
+                "content": last_defense,
+                "elapsed_s": round(time.monotonic() - debate_start, 1),
+            })
+        except Exception as def_exc:
+            logger.warning("defender_round_failed", round=round_num, error=str(def_exc))
+            transcript.append({
+                "round": round_num,
+                "side": "defender",
+                "provider": defender_prov,
+                "error": str(def_exc),
+            })
+            break
+        finally:
+            try:
+                await BrowserSessionManager.close_session(defender_prov)
+            except Exception:
+                pass
+
+    debate_duration = round(time.monotonic() - debate_start, 1)
+    async with SessionLocal() as session:
+        db_j = await session.get(Job, job_id)
+        if db_j is not None:
+            db_j.debate_transcript_json = json.dumps(transcript, ensure_ascii=False)
+            db_j.updated_at = utc_now()
+            session.add(JobEvent(
+                job_id=job_id,
+                status="debating",
+                event_type="debate_complete",
+                provider=debate_provider,
+                step="debate_complete",
+                message=f"Vòng tranh luận hoàn tất ({len(transcript)} lượt, {debate_duration}s).",
+                data_json=json.dumps({
+                    "rounds_completed": max((t.get("round", 0) for t in transcript if isinstance(t, dict)), default=0),
+                    "total_exchanges": len(transcript),
+                    "elapsed_s": debate_duration,
+                    "role": "red_team",
+                    "provider_role_key": "red_team",
+                }, ensure_ascii=False),
+            ))
+            await session.commit()
+        notify_job_event(job_id)
+
+    return transcript
+
+
 async def _set_agent_status(
     job_id: str,
     status: str,
@@ -750,6 +1069,7 @@ async def _set_agent_status(
         "orchestrating": "Orchestrator đang phân rã nhiệm vụ và lập kế hoạch...",
         "researching": "Các chatbot chuyên biệt đang đồng loạt nghiên cứu...",
         "fact_checking": "Fact-Checker Provider đang kiểm chứng tính xác thực của các luận điểm...",
+        "debating": "Red Team và Defender đang tranh luận phản biện các kết quả...",
         "leading": "Lead Provider đang tổng hợp và tinh chỉnh báo cáo hoàn chỉnh...",
         "completed": "Nghiên cứu đa tác nhân hoàn tất thành công.",
         "partial": "Nghiên cứu hoàn tất một phần.",
@@ -1365,7 +1685,47 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             return
 
         # ---------------------------------------------------------
-        # PHASE 3: LEADING (Lead Provider Synthesis)
+        # PHASE 3: ADVERSARIAL DEBATE (Optional, Red Team vs Defender)
+        # ---------------------------------------------------------
+        debate_transcript: list[dict[str, Any]] = []
+        enable_debate = False
+        debate_prov = ""
+        debate_defender_prov: str | None = None
+        debate_cfg: dict[str, Any] = {}
+        max_debate_rnds = 2
+
+        async with SessionLocal() as session:
+            db_j = await session.get(Job, job_id)
+            if db_j is not None:
+                enable_debate = getattr(db_j, "enable_debate", False)
+                debate_prov = getattr(db_j, "debate_provider", None) or orchestrator_prov
+                debate_defender_prov = getattr(db_j, "debate_defender_provider", None)
+                max_debate_rnds = getattr(db_j, "max_debate_rounds", 2)
+                try:
+                    debate_cfg = json.loads(db_j.debate_config_json) if db_j.debate_config_json else {}
+                except Exception:
+                    debate_cfg = {}
+
+        if enable_debate and runs:
+            debate_transcript = await run_adversarial_debate(
+                job_id=job_id,
+                research_topic=research_topic,
+                runs=runs,
+                fact_check_claims=fact_check_claims,
+                debate_provider=debate_prov,
+                debate_defender_provider=debate_defender_prov,
+                debate_config=debate_cfg,
+                max_rounds=max_debate_rnds,
+                cancel_event=cancel_event,
+                initial_conv_urls=initial_conv_urls,
+            )
+
+        if cancel_event.is_set():
+            await _set_agent_status(job_id, "cancelled")
+            return
+
+        # ---------------------------------------------------------
+        # PHASE 4: LEADING (Lead Provider Synthesis)
         # ---------------------------------------------------------
         report_format = "narrative"
         async with SessionLocal() as session:
@@ -1401,6 +1761,7 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 tone,
                 context_summary=context_summary,
                 fact_check_claims=fact_check_claims,
+                debate_transcript=debate_transcript,
             )
         else:
             lead_prompt = build_lead_prompt(
@@ -1409,6 +1770,7 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 tone,
                 context_summary=context_summary,
                 fact_check_claims=fact_check_claims,
+                debate_transcript=debate_transcript,
             )
 
         lead_kwargs: dict[str, Any] = {

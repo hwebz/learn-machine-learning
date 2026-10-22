@@ -41,6 +41,10 @@ export interface AgentConfigScreenProps {
     enable_fact_check?: boolean;
     fact_check_provider?: string;
     fact_check_config?: Record<string, any>;
+    enable_debate?: boolean;
+    debate_provider?: string;
+    debate_defender_provider?: string;
+    max_debate_rounds?: number;
   }) => void;
   onCancel: () => void;
   providers?: ProviderInfo[];
@@ -66,6 +70,10 @@ export interface AgentConfigScreenProps {
   initialEnableFactCheck?: boolean;
   initialFactCheckProvider?: string;
   initialFactCheckConfig?: Record<string, any>;
+  initialEnableDebate?: boolean;
+  initialDebateProvider?: string;
+  initialDebateDefenderProvider?: string;
+  initialMaxDebateRounds?: number;
 }
 
 const DEFAULT_DELEGATED = ["copilot", "gemini", "chatgpt", "deepseek", "qwen", "perplexity", "claude"];
@@ -96,6 +104,10 @@ export function AgentConfigScreen({
   initialEnableFactCheck,
   initialFactCheckProvider,
   initialFactCheckConfig,
+  initialEnableDebate,
+  initialDebateProvider,
+  initialDebateDefenderProvider,
+  initialMaxDebateRounds,
 }: AgentConfigScreenProps) {
   const availableProviders = providers && providers.length > 0 ? providers : PROVIDERS_LIST;
 
@@ -164,6 +176,18 @@ export function AgentConfigScreen({
     initialFactCheckProvider || "perplexity"
   );
 
+  // 6.5. Adversarial Debate State
+  const [enableDebate, setEnableDebate] = useState<boolean>(initialEnableDebate || false);
+  const [selectedDebateProvider, setSelectedDebateProvider] = useState<string>(
+    initialDebateProvider || "claude"
+  );
+  const [selectedDebateDefenderProvider, setSelectedDebateDefenderProvider] = useState<string>(
+    initialDebateDefenderProvider || initialLeadProvider || "chatgpt"
+  );
+  const [maxDebateRounds, setMaxDebateRounds] = useState<number>(
+    initialMaxDebateRounds || 2
+  );
+
   // 7. Tone & Report Format State
   const [selectedTone, setSelectedTone] = useState<string>(
     initialTone || "professional"
@@ -199,6 +223,10 @@ export function AgentConfigScreen({
     if (initialQuery !== undefined) setQuery(initialQuery);
     if (initialEnableFactCheck !== undefined) setEnableFactCheck(initialEnableFactCheck);
     if (initialFactCheckProvider) setSelectedFactChecker(initialFactCheckProvider);
+    if (initialEnableDebate !== undefined) setEnableDebate(initialEnableDebate);
+    if (initialDebateProvider) setSelectedDebateProvider(initialDebateProvider);
+    if (initialDebateDefenderProvider) setSelectedDebateDefenderProvider(initialDebateDefenderProvider);
+    if (initialMaxDebateRounds !== undefined) setMaxDebateRounds(initialMaxDebateRounds);
   }, [
     initialOrchestratorProvider,
     initialLeadProvider,
@@ -212,6 +240,10 @@ export function AgentConfigScreen({
     initialQuery,
     initialEnableFactCheck,
     initialFactCheckProvider,
+    initialEnableDebate,
+    initialDebateProvider,
+    initialDebateDefenderProvider,
+    initialMaxDebateRounds,
   ]);
 
   // Load capabilities if missing
@@ -238,6 +270,18 @@ export function AgentConfigScreen({
       onLoadCapabilities(selectedFactChecker);
     }
   }, [selectedFactChecker, capabilitiesMap, onLoadCapabilities]);
+
+  useEffect(() => {
+    if (onLoadCapabilities && selectedDebateProvider && !capabilitiesMap[selectedDebateProvider]) {
+      onLoadCapabilities(selectedDebateProvider);
+    }
+  }, [selectedDebateProvider, capabilitiesMap, onLoadCapabilities]);
+
+  useEffect(() => {
+    if (onLoadCapabilities && selectedDebateDefenderProvider && !capabilitiesMap[selectedDebateDefenderProvider]) {
+      onLoadCapabilities(selectedDebateDefenderProvider);
+    }
+  }, [selectedDebateDefenderProvider, capabilitiesMap, onLoadCapabilities]);
 
   // Merged selections for active providers
   const orchSel = useMemo(() => {
@@ -650,6 +694,10 @@ export function AgentConfigScreen({
       enable_fact_check: enableFactCheck,
       fact_check_provider: enableFactCheck ? selectedFactChecker : undefined,
       fact_check_config: enableFactCheck ? fcResolved?.configObj : undefined,
+      enable_debate: enableDebate,
+      debate_provider: enableDebate ? selectedDebateProvider : undefined,
+      debate_defender_provider: enableDebate ? selectedDebateDefenderProvider : undefined,
+      max_debate_rounds: enableDebate ? maxDebateRounds : undefined,
     });
   };
 
@@ -1055,6 +1103,115 @@ export function AgentConfigScreen({
                     nameRadioGroup="fact_checker_radio"
                     selectedCardClass="selected"
                   />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Section 7.5: Adversarial Debate Phase */}
+          <div
+            className="agent-section"
+            style={{
+              border: enableDebate ? "1px solid rgba(244, 63, 94, 0.4)" : undefined,
+              boxShadow: enableDebate ? "0 0 16px rgba(244, 63, 94, 0.08)" : undefined,
+              transition: "border 0.2s ease",
+            }}
+          >
+            <div className="agent-section-header-row">
+              <label className="agent-section-label" style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                <span className="agent-section-step" style={{ background: enableDebate ? "#f43f5e" : undefined }}>
+                  7.5
+                </span>
+                <span>Tranh luận phản biện (Adversarial Debate - Red Team)</span>
+              </label>
+              <span
+                className="agent-role-pill"
+                style={{
+                  background: enableDebate ? "rgba(244, 63, 94, 0.15)" : "rgba(148, 163, 184, 0.15)",
+                  color: enableDebate ? "#f43f5e" : "#94a3b8",
+                  borderColor: enableDebate ? "rgba(244, 63, 94, 0.3)" : "rgba(148, 163, 184, 0.3)",
+                }}
+              >
+                {enableDebate ? "⚔️ Đang kích hoạt" : "Tùy chọn"}
+              </span>
+            </div>
+            <div
+              style={{
+                marginTop: 8,
+                padding: "12px 16px",
+                borderRadius: 8,
+                background: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+              }}
+            >
+              <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none" }}>
+                <input
+                  type="checkbox"
+                  checked={enableDebate}
+                  onChange={(e) => setEnableDebate(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: "#f43f5e", cursor: "pointer" }}
+                />
+                <span style={{ fontWeight: 600, fontSize: 13, color: "var(--text-primary, #fff)" }}>
+                  ⚔️ Kích hoạt vòng tranh luận đối kháng Red Team vs Defender
+                </span>
+              </label>
+              <p style={{ fontSize: 12, color: "var(--text-secondary, #94a3b8)", marginTop: 6, marginLeft: 26, lineHeight: 1.5 }}>
+                Tác nhân Red Team đóng vai trò phê phán đối kháng để tìm lỗ hổng logic, điểm thiên vị và thiếu sót dữ liệu. Tác nhân Bảo vệ sẽ phản hồi và củng cố luận điểm trước khi Lead Provider chốt báo cáo. Thêm khoảng ~2-5 phút xử lý.
+              </p>
+              {enableDebate && (
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid rgba(255, 255, 255, 0.08)", display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary, #fff)", display: "flex", alignItems: "center", gap: 8 }}>
+                      <span>Số vòng tranh luận (Rounds):</span>
+                      <select
+                        value={maxDebateRounds}
+                        onChange={(e) => setMaxDebateRounds(Number(e.target.value))}
+                        style={{
+                          background: "rgba(30, 41, 59, 0.8)",
+                          color: "#fff",
+                          border: "1px solid rgba(255, 255, 255, 0.15)",
+                          borderRadius: 6,
+                          padding: "4px 10px",
+                          fontSize: 12,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <option value={1}>1 vòng (1 critique + 1 defense)</option>
+                        <option value={2}>2 vòng (2 critiques + 2 defenses - Khuyến nghị)</option>
+                        <option value={3}>3 vòng (3 critiques + 3 defenses - Chuyên sâu)</option>
+                        <option value={4}>4 vòng (Đối kháng mở rộng)</option>
+                        <option value={5}>5 vòng (Tối đa)</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: "var(--text-primary, #fff)" }}>
+                      Chọn Tác nhân Red Team (Phản biện gay gắt):
+                    </div>
+                    <ProviderGridPicker
+                      providers={availableProviders}
+                      selectedProviderId={selectedDebateProvider}
+                      onSelectProvider={setSelectedDebateProvider}
+                      capabilitiesMap={capabilitiesMap}
+                      nameRadioGroup="debate_rt_radio"
+                      selectedCardClass="selected"
+                    />
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: "var(--text-primary, #fff)" }}>
+                      Chọn Tác nhân Defender (Bảo vệ luận điểm):
+                    </div>
+                    <ProviderGridPicker
+                      providers={availableProviders}
+                      selectedProviderId={selectedDebateDefenderProvider}
+                      onSelectProvider={setSelectedDebateDefenderProvider}
+                      capabilitiesMap={capabilitiesMap}
+                      nameRadioGroup="debate_def_radio"
+                      selectedCardClass="selected"
+                    />
+                  </div>
                 </div>
               )}
             </div>

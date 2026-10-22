@@ -78,6 +78,12 @@ async def init_db() -> None:
                 "fact_check_results_json": "TEXT",
                 "report_format": "VARCHAR DEFAULT 'narrative'",
                 "report_matrix_json": "TEXT",
+                "enable_debate": "BOOLEAN DEFAULT 0",
+                "debate_provider": "VARCHAR",
+                "debate_defender_provider": "VARCHAR",
+                "debate_config_json": "TEXT",
+                "max_debate_rounds": "INTEGER DEFAULT 2",
+                "debate_transcript_json": "TEXT",
             }
             for col_name, col_type in new_cols.items():
                 if col_name not in cols:
