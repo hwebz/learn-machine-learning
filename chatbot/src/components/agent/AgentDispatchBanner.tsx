@@ -142,6 +142,25 @@ export function AgentDispatchBanner({
     return [];
   }, [factCheckResults, message?.fact_check_results, steps]);
 
+  const complexityInfo = useMemo(() => {
+    if (message?.complexity) return message.complexity;
+    const cStep = steps.find(
+      (s) => s.step === "complexity_analyzed" || s.data?.complexity_level || s.data?.complexity
+    );
+    if (cStep) {
+      if (cStep.data?.complexity) return cStep.data.complexity;
+      if (cStep.data?.complexity_level) return cStep.data;
+      if (typeof cStep.data === "string") {
+        try {
+          return JSON.parse(cStep.data);
+        } catch { }
+      }
+    }
+    return undefined;
+  }, [message?.complexity, steps]);
+
+  const complexityLevel = (complexityInfo?.complexity_level?.toLowerCase() || "") as "low" | "medium" | "high" | "";
+
   // Live timer tick for active stages
   useEffect(() => {
     const isJobActive =
@@ -493,6 +512,47 @@ export function AgentDispatchBanner({
             <div className="agent-meta-badge tone">
               <span className="agent-meta-label">Tone:</span>
               <span className="agent-meta-val">{tone}</span>
+            </div>
+          )}
+
+          {complexityLevel && (
+            <div
+              className={`agent-meta-badge complexity ${complexityLevel}`}
+              style={{
+                background:
+                  complexityLevel === "high"
+                    ? "rgba(239, 68, 68, 0.12)"
+                    : complexityLevel === "medium"
+                      ? "rgba(245, 158, 11, 0.12)"
+                      : "rgba(16, 185, 129, 0.12)",
+                borderColor:
+                  complexityLevel === "high"
+                    ? "rgba(239, 68, 68, 0.3)"
+                    : complexityLevel === "medium"
+                      ? "rgba(245, 158, 11, 0.3)"
+                      : "rgba(16, 185, 129, 0.3)",
+                color:
+                  complexityLevel === "high"
+                    ? "#ef4444"
+                    : complexityLevel === "medium"
+                      ? "#f59e0b"
+                      : "#10b981",
+              }}
+              title={
+                complexityInfo?.reasoning
+                  ? `Độ phức tạp: ${complexityLevel.toUpperCase()} (${complexityInfo.recommended_agent_count} tác nhân)\nLý do: ${complexityInfo.reasoning}`
+                  : `Độ phức tạp: ${complexityLevel.toUpperCase()}`
+              }
+            >
+              <span>{complexityLevel === "high" ? "🔴" : complexityLevel === "medium" ? "🟡" : "🟢"}</span>
+              <span className="agent-meta-label" style={{ color: "inherit", fontWeight: 700 }}>
+                {complexityLevel.toUpperCase()}
+              </span>
+              {complexityInfo?.recommended_agent_count && (
+                <span style={{ fontSize: 11, opacity: 0.9 }}>
+                  ({complexityInfo.recommended_agent_count} tác nhân)
+                </span>
+              )}
             </div>
           )}
         </div>

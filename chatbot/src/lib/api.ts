@@ -118,6 +118,9 @@ export interface AgentResearchRequestPayload {
   lead_config?: Record<string, any>;
   tone: string;
   report_format?: ReportFormat;
+  auto_scale_agents?: boolean;
+  min_agents?: number;
+  max_agents?: number;
   max_minutes?: number;
   delegated_providers?: string[];
   provider_configs?: Record<string, any>;

@@ -1014,6 +1014,20 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       (activeSession.messages.find((m) => m.report_format)?.report_format as ReportFormat) ||
       "narrative";
 
+    // 12. Auto-scale agents defaults:
+    const resolvedAutoScaleAgents =
+      activeSession.auto_scale_agents ??
+      activeSession.messages.find((m) => m.auto_scale_agents !== undefined)?.auto_scale_agents ??
+      true;
+    const resolvedMinAgents =
+      activeSession.min_agents ??
+      activeSession.messages.find((m) => m.min_agents !== undefined)?.min_agents ??
+      2;
+    const resolvedMaxAgents =
+      activeSession.max_agents ??
+      activeSession.messages.find((m) => m.max_agents !== undefined)?.max_agents ??
+      5;
+
     return {
       initialOrchestratorProvider: resolvedOrch,
       initialLeadProvider: resolvedLead,
@@ -1028,6 +1042,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       initialFactCheckProvider: resolvedFactCheckProvider,
       initialFactCheckConfig: resolvedFactCheckConfig,
       initialReportFormat: resolvedReportFormat,
+      initialAutoScaleAgents: resolvedAutoScaleAgents,
+      initialMinAgents: resolvedMinAgents,
+      initialMaxAgents: resolvedMaxAgents,
     };
   }, [activeSession, capsHook.selectionsMap]);
 
@@ -1236,6 +1253,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     summarization_config: Record<string, any>;
     tone: string;
     report_format?: ReportFormat;
+    auto_scale_agents?: boolean;
+    min_agents?: number;
+    max_agents?: number;
     delegated_providers?: string[];
     provider_configs?: Record<string, any>;
     provider_capabilities?: Record<string, any>;
@@ -1265,6 +1285,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       summarization_config: config.summarization_config,
       tone: config.tone,
       report_format: config.report_format || "narrative",
+      auto_scale_agents: config.auto_scale_agents,
+      min_agents: config.min_agents,
+      max_agents: config.max_agents,
       delegated_providers: config.delegated_providers,
       enable_fact_check: config.enable_fact_check,
       fact_check_provider: config.fact_check_provider,
@@ -1298,6 +1321,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       summarization_config: config.summarization_config,
       tone: config.tone,
       report_format: config.report_format || "narrative",
+      auto_scale_agents: config.auto_scale_agents,
+      min_agents: config.min_agents,
+      max_agents: config.max_agents,
       delegated_providers: config.delegated_providers,
       enable_fact_check: config.enable_fact_check,
       fact_check_provider: config.fact_check_provider,
@@ -1333,6 +1359,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         summarization_config: config.summarization_config,
         tone: config.tone,
         report_format: config.report_format,
+        auto_scale_agents: config.auto_scale_agents,
+        min_agents: config.min_agents,
+        max_agents: config.max_agents,
         delegated_providers: config.delegated_providers,
         provider_configs: config.provider_configs,
         provider_capabilities: config.provider_capabilities,
@@ -1941,6 +1970,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           summarization_config: sumConf,
           tone: toneVal,
           report_format: activeSession.report_format as any,
+          auto_scale_agents: activeSession.auto_scale_agents,
+          min_agents: activeSession.min_agents,
+          max_agents: activeSession.max_agents,
           delegated_providers: delegatedProvs,
           provider_configs: activeSession.providerConfigurations,
           conversation_urls: Object.keys(existingConvUrls).length > 0 ? existingConvUrls : undefined,
@@ -2618,6 +2650,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           initialDelegatedProviders={activeSessionAgentDefaults.initialDelegatedProviders}
           initialTone={activeSessionAgentDefaults.initialTone}
           initialReportFormat={activeSessionAgentDefaults.initialReportFormat}
+          initialAutoScaleAgents={activeSessionAgentDefaults.initialAutoScaleAgents}
+          initialMinAgents={activeSessionAgentDefaults.initialMinAgents}
+          initialMaxAgents={activeSessionAgentDefaults.initialMaxAgents}
           initialEnableFactCheck={activeSessionAgentDefaults.initialEnableFactCheck}
           initialFactCheckProvider={activeSessionAgentDefaults.initialFactCheckProvider}
           initialFactCheckConfig={activeSessionAgentDefaults.initialFactCheckConfig}

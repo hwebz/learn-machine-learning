@@ -71,6 +71,8 @@ __all__ = [
     "AgentPipelineResult",
     "AgentStageStatus",
     "PROVIDER_CATALOG",
+    "analyze_complexity",
+    "build_complexity_analysis_prompt",
     "build_fact_check_prompt",
     "build_lead_prompt",
     "build_matrix_report_prompt",
@@ -134,6 +136,7 @@ def build_orchestrator_prompt(
     provider_configs: dict[str, Any] | None = None,
     provider_capabilities: dict[str, Any] | None = None,
     context_summary: str | None = None,
+    complexity_info: dict[str, Any] | None = None,
 ) -> str:
     valid_allowed = [p.lower() for p in (allowed_providers or []) if p.lower() in PROVIDER_CATALOG]
     if not valid_allowed:
@@ -166,8 +169,19 @@ Use the established context above to avoid repeating already-researched angles.
 Decompose the follow-up topic into next-level, deeper investigations or complementary sub-topics.
 """
 
+    if complexity_info:
+        rec_count = complexity_info.get("recommended_agent_count", 3)
+        rec_groups = complexity_info.get("recommended_groups", ["researcher"])
+        count_instruction = f"Decompose the topic into exactly {rec_count} distinct, non-overlapping specialized sub-topics."
+        group_instruction = f"Prioritize assigning agents to these role groups: {', '.join(rec_groups)}."
+        goal_count_str = f"exactly {rec_count}"
+    else:
+        count_instruction = "Decompose the topic into 2 to 5 distinct, non-overlapping specialized sub-topics."
+        group_instruction = "Most sub-tasks should be 'researcher' or 'infra'. Only assign 'fact_checker' or 'red_team' if the topic specifically benefits from verification or critical analysis."
+        goal_count_str = "2 to 5"
+
     return f"""You are a Master Research Orchestrator.
-Your goal is to analyze the research topic provided by the user and intelligently decompose it into 2 to 5 specialized sub-tasks.
+Your goal is to analyze the research topic provided by the user and intelligently decompose it into {goal_count_str} specialized sub-tasks.
 Each sub-task must be assigned to the most appropriate AI provider from the ALLOWED providers list below.
 {context_section}
 ## Available Allowed Providers and Configurations (Live DOM Synced):
@@ -178,10 +192,10 @@ You are STRICTLY RESTRICTED to assigning sub-tasks ONLY to providers in this all
 DO NOT assign any sub-task to any provider outside this list. Every single item in "agents_dispatch" MUST have "id" strictly matching one of [{allowed_ids_str}].
 
 ## Rules:
-- Decompose the topic into 2 to 5 distinct, non-overlapping specialized sub-topics.
+- {count_instruction}
 - Assign each sub-topic to the provider best suited for that angle among the allowed providers, matching their active capabilities and strengths described above.
 - Assign each sub-task a "role_group" from: "researcher" (core investigation), "infra" (data/benchmark/cost), "fact_checker" (verification), "red_team" (critique/counterargument).
-- Most sub-tasks should be "researcher" or "infra". Only assign "fact_checker" or "red_team" if the topic specifically benefits from verification or critical analysis.
+- {group_instruction}
 - In each "agents_dispatch" item, provide a valid "config" object that matches the provider's active DOM setting and expected schema.
 - Each "question" must be a self-contained, detailed prompt for that provider to investigate.
 - The output MUST be strictly valid JSON matching the schema below. Do not wrap in markdown or add explanations.
@@ -432,6 +446,124 @@ def _clean_json_str(raw: str) -> str:
     if obj_match:
         return obj_match.group(1).strip()
     return text
+
+
+def build_complexity_analysis_prompt(
+    research_topic: str,
+    available_providers: list[str],
+    min_agents: int = 2,
+    max_agents: int = 5,
+) -> str:
+    """Quick LLM call to assess topic complexity and recommend agent count."""
+    return f"""You are a Research Planning Analyst. Assess the complexity of the following research topic and recommend how many specialized AI agents should investigate it.
+
+## Research Topic:
+"{research_topic}"
+
+## Available Provider Count: {len(available_providers)}
+## Allowed Range: {min_agents} to {max_agents} agents
+
+## Assessment Criteria:
+1. **Breadth**: How many distinct domains/angles does this topic span?
+2. **Depth**: Does it require deep technical expertise or is it surface-level?
+3. **Data Sensitivity**: Does it involve numbers, statistics, or claims that need verification?
+4. **Controversy**: Are there competing viewpoints that should be explored?
+
+## Output Format (strict JSON):
+{{
+  "complexity_level": "low" | "medium" | "high",
+  "recommended_agent_count": <{min_agents}-{max_agents}>,
+  "recommended_groups": ["researcher", "infra", "fact_checker", "red_team"],
+  "reasoning": "<1-2 sentence justification>"
+}}
+
+Rules:
+- "low" complexity -> {min_agents} agents, just "researcher"
+- "medium" complexity -> {min(min_agents + 1, max_agents)}-{max(min_agents, max_agents - 1)} agents, "researcher" + "infra"
+- "high" complexity -> {max_agents} agents, all groups
+- Output ONLY the JSON. No markdown fences."""
+
+
+async def analyze_complexity(
+    job_id: str,
+    research_topic: str,
+    orchestrator_prov: str,
+    orch_config: dict[str, Any],
+    available_providers: list[str],
+    min_agents: int = 2,
+    max_agents: int = 5,
+    cancel_event: asyncio.Event | None = None,
+) -> dict[str, Any]:
+    """Quick complexity assessment before orchestration."""
+    min_agents = max(1, min(min_agents, 10))
+    max_agents = max(min_agents, min(max_agents, 10))
+    default_rec = min(max(3, min_agents), max_agents)
+    default_result: dict[str, Any] = {
+        "complexity_level": "medium",
+        "recommended_agent_count": default_rec,
+        "recommended_groups": ["researcher", "infra"],
+        "reasoning": "Default assessment (complexity analysis skipped or failed).",
+    }
+
+    if cancel_event and cancel_event.is_set():
+        return default_result
+
+    try:
+        adapter = create_adapter(orchestrator_prov)
+        prompt = build_complexity_analysis_prompt(
+            research_topic, available_providers, min_agents, max_agents
+        )
+
+        timeout_s = 60
+        ask_kwargs: dict[str, Any] = {}
+        try:
+            sig = inspect.signature(adapter.ask)
+            if "timeout_s" in sig.parameters:
+                ask_kwargs["timeout_s"] = timeout_s
+            if "mode" in sig.parameters and orch_config:
+                ask_kwargs["mode"] = json.dumps(orch_config)
+        except (TypeError, ValueError):
+            ask_kwargs["timeout_s"] = timeout_s
+            if orch_config:
+                ask_kwargs["mode"] = json.dumps(orch_config)
+
+        result = await adapter.ask(prompt, **ask_kwargs)
+        cleaned = _clean_json_str(result.answer_markdown)
+        parsed = json.loads(cleaned)
+
+        if not isinstance(parsed, dict):
+            return default_result
+
+        rec_count = parsed.get("recommended_agent_count", default_rec)
+        try:
+            rec_count = int(rec_count)
+        except (ValueError, TypeError):
+            rec_count = default_rec
+        rec_count = min(max(min_agents, rec_count), max_agents)
+        parsed["recommended_agent_count"] = rec_count
+
+        raw_level = str(parsed.get("complexity_level", "medium")).lower()
+        if raw_level not in ("low", "medium", "high"):
+            raw_level = "medium"
+        parsed["complexity_level"] = raw_level
+
+        rec_groups = parsed.get("recommended_groups", ["researcher"])
+        if isinstance(rec_groups, list):
+            valid_groups = {"researcher", "infra", "fact_checker", "red_team"}
+            parsed["recommended_groups"] = [g for g in rec_groups if g in valid_groups] or ["researcher"]
+        else:
+            parsed["recommended_groups"] = ["researcher"]
+
+        return parsed
+
+    except Exception as exc:
+        logger.warning("complexity_analysis_failed", job_id=job_id, error=str(exc))
+        return default_result
+    finally:
+        try:
+            await BrowserSessionManager.close_session(orchestrator_prov)
+        except Exception:
+            pass
 
 
 def build_fact_check_prompt(research_branch: str, answer_text: str) -> str:
@@ -818,6 +950,55 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             return
 
         # ---------------------------------------------------------
+        # PRE-PHASE: COMPLEXITY ANALYSIS (Optional auto-scaling)
+        # ---------------------------------------------------------
+        auto_scale = True
+        min_ag = 2
+        max_ag = 5
+        complexity_info: dict[str, Any] | None = None
+
+        async with SessionLocal() as session:
+            db_j = await session.get(Job, job_id)
+            if db_j is not None and db_j.config_json:
+                try:
+                    cfg_obj = json.loads(db_j.config_json)
+                    auto_scale = cfg_obj.get("auto_scale_agents", True)
+                    min_ag = cfg_obj.get("min_agents", 2)
+                    max_ag = cfg_obj.get("max_agents", 5)
+                except Exception:
+                    pass
+
+        if auto_scale:
+            complexity_info = await analyze_complexity(
+                job_id=job_id,
+                research_topic=research_topic,
+                orchestrator_prov=orchestrator_prov,
+                orch_config=orch_config,
+                available_providers=delegated_providers or list(PROVIDER_CATALOG.keys()),
+                min_agents=min_ag,
+                max_agents=max_ag,
+                cancel_event=cancel_event,
+            )
+
+            # Emit complexity event
+            async with SessionLocal() as session:
+                session.add(JobEvent(
+                    job_id=job_id,
+                    status="orchestrating",
+                    event_type="complexity_analyzed",
+                    step="complexity_analyzed",
+                    message=f"Đánh giá độ phức tạp: {complexity_info.get('complexity_level', '?')} — "
+                            f"Khuyến nghị {complexity_info.get('recommended_agent_count', '?')} tác nhân.",
+                    data_json=json.dumps(complexity_info, ensure_ascii=False),
+                ))
+                await session.commit()
+            notify_job_event(job_id)
+
+        if cancel_event.is_set():
+            await _set_agent_status(job_id, "cancelled")
+            return
+
+        # ---------------------------------------------------------
         # PHASE 1: ORCHESTRATING (Task decomposition)
         # ---------------------------------------------------------
         orch_start = time.monotonic()
@@ -825,7 +1006,7 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             job_id,
             "orchestrating",
             message=f"Orchestrator ({orchestrator_prov}) đang phân tích chủ đề và lập kế hoạch phân rã...",
-            data={"orchestrator": orchestrator_prov, "config": orch_config, "role": "orchestrator", "elapsed_s": 0.0},
+            data={"orchestrator": orchestrator_prov, "config": orch_config, "role": "orchestrator", "complexity": complexity_info, "elapsed_s": 0.0},
         )
 
         orch_adapter = create_adapter(orchestrator_prov)
@@ -835,6 +1016,7 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             provider_configs=provider_configs,
             provider_capabilities=provider_capabilities,
             context_summary=context_summary,
+            complexity_info=complexity_info,
         )
 
         orch_conv_url = initial_conv_urls.get("orchestrator") or initial_conv_urls.get(orchestrator_prov)
@@ -951,6 +1133,7 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                     subtasks_done=0,
                     data_json=json.dumps({
                         "dispatch": dispatch_items,
+                        "complexity": complexity_info,
                         "role": "orchestrator",
                         "provider_role_key": "orchestrator",
                         "elapsed_s": orch_duration,

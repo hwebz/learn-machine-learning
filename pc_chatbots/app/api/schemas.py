@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 ProviderName = Literal[
     "perplexity", "gemini", "chatgpt", "claude", "copilot",
@@ -45,6 +45,9 @@ class AgentResearchRequest(BaseModel):
     lead_config: dict[str, Any] | None = Field(default_factory=dict)
     tone: str = Field(default="professional")
     report_format: ReportFormat = Field(default="narrative")
+    auto_scale_agents: bool = Field(default=True)
+    min_agents: int = Field(default=2, ge=1, le=10)
+    max_agents: int = Field(default=5, ge=2, le=10)
     max_minutes: int = Field(default=30, ge=1, le=180)
     delegated_providers: list[ProviderName] | None = Field(default=None)
     provider_configs: dict[str, Any] | None = Field(default_factory=dict)
@@ -56,6 +59,12 @@ class AgentResearchRequest(BaseModel):
     fact_check_config: dict[str, Any] | None = Field(default_factory=dict)
     conversation_urls: dict[str, str] | None = Field(default=None)
     parent_job_id: str | None = Field(default=None)
+
+    @model_validator(mode="after")
+    def validate_agent_bounds(self) -> "AgentResearchRequest":
+        if self.min_agents > self.max_agents:
+            self.max_agents = self.min_agents
+        return self
 
     @field_validator("query")
     @classmethod

@@ -32,6 +32,9 @@ export interface AgentConfigScreenProps {
     summarization_config: Record<string, any>;
     tone: string;
     report_format?: ReportFormat;
+    auto_scale_agents?: boolean;
+    min_agents?: number;
+    max_agents?: number;
     delegated_providers?: string[];
     provider_configs?: Record<string, any>;
     provider_capabilities?: Record<string, any>;
@@ -57,6 +60,9 @@ export interface AgentConfigScreenProps {
   initialDelegatedProviders?: string[];
   initialTone?: string;
   initialReportFormat?: ReportFormat;
+  initialAutoScaleAgents?: boolean;
+  initialMinAgents?: number;
+  initialMaxAgents?: number;
   initialEnableFactCheck?: boolean;
   initialFactCheckProvider?: string;
   initialFactCheckConfig?: Record<string, any>;
@@ -84,6 +90,9 @@ export function AgentConfigScreen({
   initialDelegatedProviders,
   initialTone,
   initialReportFormat,
+  initialAutoScaleAgents,
+  initialMinAgents,
+  initialMaxAgents,
   initialEnableFactCheck,
   initialFactCheckProvider,
   initialFactCheckConfig,
@@ -162,6 +171,16 @@ export function AgentConfigScreen({
   const [reportFormat, setReportFormat] = useState<ReportFormat>(
     initialReportFormat || "narrative"
   );
+  // 8. Auto-Scale Agent Count State
+  const [autoScaleAgents, setAutoScaleAgents] = useState<boolean>(
+    initialAutoScaleAgents ?? true
+  );
+  const [minAgents, setMinAgents] = useState<number>(
+    initialMinAgents ?? 2
+  );
+  const [maxAgents, setMaxAgents] = useState<number>(
+    initialMaxAgents ?? 5
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Synchronize initial props
@@ -174,6 +193,9 @@ export function AgentConfigScreen({
     }
     if (initialTone) setSelectedTone(initialTone);
     if (initialReportFormat) setReportFormat(initialReportFormat);
+    if (initialAutoScaleAgents !== undefined) setAutoScaleAgents(initialAutoScaleAgents);
+    if (initialMinAgents !== undefined) setMinAgents(initialMinAgents);
+    if (initialMaxAgents !== undefined) setMaxAgents(initialMaxAgents);
     if (initialQuery !== undefined) setQuery(initialQuery);
     if (initialEnableFactCheck !== undefined) setEnableFactCheck(initialEnableFactCheck);
     if (initialFactCheckProvider) setSelectedFactChecker(initialFactCheckProvider);
@@ -184,6 +206,9 @@ export function AgentConfigScreen({
     initialDelegatedProviders,
     initialTone,
     initialReportFormat,
+    initialAutoScaleAgents,
+    initialMinAgents,
+    initialMaxAgents,
     initialQuery,
     initialEnableFactCheck,
     initialFactCheckProvider,
@@ -617,6 +642,9 @@ export function AgentConfigScreen({
       },
       tone: selectedTone,
       report_format: reportFormat,
+      auto_scale_agents: autoScaleAgents,
+      min_agents: minAgents,
+      max_agents: maxAgents,
       provider_configs: subProviderConfigs,
       provider_capabilities: subProviderCaps,
       enable_fact_check: enableFactCheck,
@@ -707,6 +735,120 @@ export function AgentConfigScreen({
               syncMessage={orchSyncMessage}
               loadingProvider={loadingProvider}
             />
+          </div>
+
+          {/* Section 2.5: Phân bổ số lượng tác nhân thích ứng (Dynamic Agent Scaling) */}
+          <div
+            className="agent-section"
+            style={{
+              padding: "16px 20px",
+              borderRadius: 12,
+              background: autoScaleAgents ? "rgba(99, 102, 241, 0.05)" : "rgba(255, 255, 255, 0.02)",
+              border: autoScaleAgents ? "1px solid rgba(99, 102, 241, 0.3)" : "1px solid rgba(255, 255, 255, 0.08)",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none" }}>
+                <input
+                  type="checkbox"
+                  checked={autoScaleAgents}
+                  onChange={(e) => setAutoScaleAgents(e.target.checked)}
+                  style={{ width: 17, height: 17, accentColor: "#6366f1", cursor: "pointer" }}
+                />
+                <span style={{ fontWeight: 600, fontSize: 14, color: "var(--text-primary, #fff)" }}>
+                  🧠 Tự động phân bổ số lượng tác nhân (Dynamic Agent Scaling)
+                </span>
+              </label>
+              <span
+                className="agent-role-pill"
+                style={{
+                  background: autoScaleAgents ? "rgba(99, 102, 241, 0.15)" : "rgba(148, 163, 184, 0.15)",
+                  color: autoScaleAgents ? "#818cf8" : "#94a3b8",
+                  borderColor: autoScaleAgents ? "rgba(99, 102, 241, 0.3)" : "rgba(148, 163, 184, 0.3)",
+                }}
+              >
+                {autoScaleAgents ? "⚡ Thích ứng (2-10)" : "Cố định (2-5)"}
+              </span>
+            </div>
+            <p style={{ fontSize: 12, color: "var(--text-secondary, #94a3b8)", marginTop: 6, marginLeft: 27, lineHeight: 1.5 }}>
+              Tự động phân tích độ phức tạp, chiều sâu kỹ thuật và các góc nhìn của đề tài để khuyến nghị số lượng tác nhân tối ưu (tối thiểu cho câu hỏi đơn giản, mở rộng cho đề tài phức tạp).
+            </p>
+
+            {autoScaleAgents && (
+              <div
+                style={{
+                  marginTop: 14,
+                  paddingTop: 14,
+                  borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: 20,
+                  marginLeft: 27,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 13, color: "var(--text-secondary, #94a3b8)", fontWeight: 500 }}>
+                    Tối thiểu (Min):
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={maxAgents}
+                    value={minAgents}
+                    onChange={(e) => {
+                      const v = Math.max(1, Math.min(maxAgents, Number(e.target.value) || 1));
+                      setMinAgents(v);
+                    }}
+                    style={{
+                      width: 56,
+                      padding: "4px 8px",
+                      borderRadius: 6,
+                      border: "1px solid rgba(255, 255, 255, 0.15)",
+                      background: "rgba(0, 0, 0, 0.2)",
+                      color: "#fff",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      textAlign: "center",
+                    }}
+                  />
+                  <span style={{ fontSize: 12, color: "var(--text-muted, #64748b)" }}>tác nhân</span>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 13, color: "var(--text-secondary, #94a3b8)", fontWeight: 500 }}>
+                    Tối đa (Max):
+                  </span>
+                  <input
+                    type="number"
+                    min={minAgents}
+                    max={10}
+                    value={maxAgents}
+                    onChange={(e) => {
+                      const v = Math.max(minAgents, Math.min(10, Number(e.target.value) || minAgents));
+                      setMaxAgents(v);
+                    }}
+                    style={{
+                      width: 56,
+                      padding: "4px 8px",
+                      borderRadius: 6,
+                      border: "1px solid rgba(255, 255, 255, 0.15)",
+                      background: "rgba(0, 0, 0, 0.2)",
+                      color: "#fff",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      textAlign: "center",
+                    }}
+                  />
+                  <span style={{ fontSize: 12, color: "var(--text-muted, #64748b)" }}>tác nhân</span>
+                </div>
+
+                <div style={{ fontSize: 12, color: "#818cf8", fontStyle: "italic" }}>
+                  💡 Khung thích ứng: {minAgents} → {maxAgents} tác nhân tùy theo độ phức tạp
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Section 3: Sub Providers Delegation & Batch Sync */}

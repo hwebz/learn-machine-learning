@@ -108,7 +108,18 @@ export interface Message {
   context_summary?: string;
   report_format?: string;
   report_matrix?: MatrixReport;
+  auto_scale_agents?: boolean;
+  min_agents?: number;
+  max_agents?: number;
+  complexity?: ComplexityAssessment;
   jobId?: string;
+}
+
+export interface ComplexityAssessment {
+  complexity_level: "low" | "medium" | "high";
+  recommended_agent_count: number;
+  recommended_groups?: string[];
+  reasoning?: string;
 }
 
 export interface AgentDispatchPlanItem {
@@ -157,6 +168,10 @@ export interface ChatSession {
   fact_check_results?: ClaimItem[] | any[];
   report_format?: string;
   report_matrix?: MatrixReport;
+  auto_scale_agents?: boolean;
+  min_agents?: number;
+  max_agents?: number;
+  complexity?: ComplexityAssessment;
 }
 
 export interface ProviderInfo {
