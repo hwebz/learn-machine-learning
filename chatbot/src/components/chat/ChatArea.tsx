@@ -12,6 +12,7 @@ import { ProviderActionBanner } from "./ProviderActionBanner";
 import { ScrollableTabsRow } from "./ScrollableTabsRow";
 import { AgentDispatchBanner } from "../agent/AgentDispatchBanner";
 import { DebateTranscript } from "../agent/DebateTranscript";
+import { ConsensusScoresView } from "../agent/ConsensusScoresView";
 import { detectAllProvidersNeedingAction } from "../../lib/providerAction";
 import { useVoiceRecording } from "../../lib/useVoiceRecording";
 import {
@@ -272,6 +273,17 @@ export function ChatArea({
       const jobStatus = (st.data as any)?.job_status;
       if (jobStatus && jobStatus !== "running") return jobStatus;
       if (st.data?.role === "lead" || st.message?.includes("Lead Provider")) return "leading";
+      if (
+        st.status === "consensus" ||
+        st.step === "consensus" ||
+        st.step?.startsWith("round_") ||
+        st.step === "consensus_round" ||
+        st.step === "consensus_complete" ||
+        st.data?.role === "consensus" ||
+        st.data?.stage === "consensus"
+      ) {
+        return "consensus";
+      }
       if (st.status === "debating" || st.step === "debating" || st.step === "debate_round" || st.data?.stage === "debate") return "debating";
       if (st.step === "fact_checking" || st.data?.role === "fact_checker" || (st.status as string) === "fact_checking") return "fact_checking";
       if (st.data?.role === "subtask" || st.step === "orchestrator_result" || st.data?.dispatch) return "researching";
@@ -683,6 +695,11 @@ export function ChatArea({
                     debateDefenderProvider={msg.debate_defender_provider || session.debate_defender_provider}
                     maxDebateRounds={msg.max_debate_rounds ?? session.max_debate_rounds}
                     debateTranscript={msg.debate_transcript || session.debate_transcript}
+                    enableConsensus={msg.enable_consensus ?? session.enable_consensus}
+                    consensusProviders={msg.consensus_providers || session.consensus_providers}
+                    consensusThreshold={msg.consensus_threshold ?? session.consensus_threshold}
+                    maxConsensusRounds={msg.max_consensus_rounds ?? session.max_consensus_rounds}
+                    consensusScores={msg.consensus_scores || session.consensus_scores}
                   />
                 )}
 
@@ -842,6 +859,14 @@ export function ChatArea({
                   (msg.id === session.messages[session.messages.length - 1]?.id && session.debate_transcript && session.debate_transcript.length > 0)) && (
                   <div style={{ margin: "14px 0" }}>
                     <DebateTranscript transcript={msg.debate_transcript || session.debate_transcript} defaultExpanded={false} />
+                  </div>
+                )}
+
+                {/* Delphi Consensus Scores & Convergence Analysis */}
+                {((msg.consensus_scores && ((msg.consensus_scores.theses && msg.consensus_scores.theses.length > 0) || (msg.consensus_scores.rounds && msg.consensus_scores.rounds.length > 0))) ||
+                  (msg.id === session.messages[session.messages.length - 1]?.id && session.consensus_scores && ((session.consensus_scores.theses && session.consensus_scores.theses.length > 0) || (session.consensus_scores.rounds && session.consensus_scores.rounds.length > 0)))) && (
+                  <div style={{ margin: "14px 0" }}>
+                    <ConsensusScoresView consensus={msg.consensus_scores || session.consensus_scores} defaultExpanded={false} />
                   </div>
                 )}
 
@@ -1045,6 +1070,11 @@ export function ChatArea({
                   debateDefenderProvider={session.debate_defender_provider}
                   maxDebateRounds={session.max_debate_rounds}
                   debateTranscript={session.debate_transcript}
+                  enableConsensus={session.enable_consensus}
+                  consensusProviders={session.consensus_providers}
+                  consensusThreshold={session.consensus_threshold}
+                  maxConsensusRounds={session.max_consensus_rounds}
+                  consensusScores={session.consensus_scores}
                 />
               )}
 

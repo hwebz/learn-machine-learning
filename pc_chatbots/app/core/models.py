@@ -54,6 +54,11 @@ class Job(SQLModel, table=True):
     debate_config_json: str | None = None
     max_debate_rounds: int = 2
     debate_transcript_json: str | None = None
+    enable_consensus: bool = False
+    consensus_providers_json: str | None = None
+    consensus_threshold: float = 0.8
+    max_consensus_rounds: int = 3
+    consensus_scores_json: str | None = None
 
 
 class JobEvent(SQLModel, table=True):

@@ -4,6 +4,7 @@ import asyncio
 import inspect
 import json
 import re
+import statistics
 import time
 from typing import Any
 
@@ -229,6 +230,7 @@ def build_lead_prompt(
     context_summary: str | None = None,
     fact_check_claims: list[dict[str, Any]] | None = None,
     debate_transcript: list[dict[str, Any]] | None = None,
+    consensus_result: dict[str, Any] | None = None,
 ) -> str:
     tone_directive = TONE_INSTRUCTIONS.get(tone.lower(), TONE_INSTRUCTIONS["professional"])
 
@@ -294,12 +296,30 @@ IMPORTANT: Clearly mark any disputed claims in the report. Do not present unsupp
 IMPORTANT: Your synthesis MUST address the critiques raised. Acknowledge valid weaknesses. Do NOT ignore Red Team concerns.
 """
 
+    consensus_section = ""
+    if consensus_result and consensus_result.get("final_scores"):
+        scores_lines = []
+        for sc in consensus_result["final_scores"]:
+            thesis = next((t for t in consensus_result.get("theses", []) if t.get("id") == sc.get("id")), {})
+            th_text = thesis.get("thesis", "")
+            scores_lines.append(f'- {sc.get("id", "T")}: "{th_text}" — Score: {sc.get("mean", "?")}/5 (StdDev: {sc.get("stdev", "?")})')
+        consensus_section = f"""
+## Delphi Consensus Results:
+Convergence Achieved: {"✅ Yes (High Agreement)" if consensus_result.get("converged") else "⚠️ No (Divergent Perspectives)"}
+
+### Thesis Confidence Scores:
+{chr(10).join(scores_lines)}
+
+IMPORTANT: Incorporate these consensus scores into your analysis. High-scoring theses (score >= 4.0) should be prioritized as robust core findings. Lower-scoring or high-variance theses should be presented with nuance and appropriate caveats.
+"""
+
     return f"""You are the Lead Research Synthesizer.
 You have been provided with comprehensive findings gathered by specialized AI agents investigating different aspects of the topic:
 "{research_topic}"
 {context_section}
 {fact_check_section}
 {debate_section}
+{consensus_section}
 ## Findings from Autonomous AI Providers:
 {findings_text}
 
@@ -1053,6 +1073,325 @@ Continue your adversarial analysis. Focus on points NOT adequately addressed:"""
     return transcript
 
 
+def build_thesis_extraction_prompt(
+    research_topic: str,
+    findings_summary: str,
+    debate_summary: str | None = None,
+) -> str:
+    """Extract key theses from research findings for consensus scoring."""
+    debate_section = ""
+    if debate_summary:
+        debate_section = f"""
+## Debate Outcomes & Critiques:
+{debate_summary[:3000]}
+"""
+
+    return f"""You are a Research Analyst. Extract the TOP 5-8 most important theses (key conclusions, disputed assertions, or actionable recommendations) from the following research findings.
+
+## Research Topic: {research_topic}
+
+## Research Findings:
+{findings_summary[:5000]}
+{debate_section}
+## Output Format (strict JSON array):
+[
+  {{
+    "id": "T1",
+    "thesis": "<concise thesis statement>",
+    "category": "<technical|economic|strategic|risk>",
+    "supporting_evidence": "<brief summary of evidence>"
+  }}
+]
+
+Rules:
+- Each thesis must be a specific, testable, scorable statement (not vague).
+- Include both well-supported AND contested theses so agents can reach consensus.
+- Output ONLY the JSON array. Do not wrap in markdown fences or include explanations."""
+
+
+def build_consensus_scoring_prompt(
+    theses: list[dict[str, Any]],
+    round_number: int,
+    previous_aggregate: list[dict[str, Any]] | None = None,
+) -> str:
+    """Prompt an agent to score each thesis on confidence (1-5)."""
+    theses_text = "\n".join(
+        f"- **{t.get('id', f'T{i}')}**: {t.get('thesis', '')}"
+        for i, t in enumerate(theses, 1)
+    )
+
+    prev_section = ""
+    if previous_aggregate and round_number > 1:
+        prev_section = f"""
+## Aggregate Scores from Previous Round (Delphi Feedback):
+{json.dumps(previous_aggregate, indent=2, ensure_ascii=False)[:2000]}
+
+Consider the group consensus tendency but exercise your own rigorous, independent domain judgment. If you disagree with the majority, maintain your score with clear reasoning.
+"""
+
+    return f"""You are an Independent Research Evaluator (Delphi Scoring Round {round_number}).
+Score each thesis below on a scale of 1 to 5 for CONFIDENCE (how likely this thesis is correct, well-grounded, and actionable).
+
+Scale:
+1 = Very low confidence (likely wrong, invalid, or impractical)
+2 = Low confidence (significant doubts or lacking evidence)
+3 = Moderate confidence (plausible but uncertain or contested)
+4 = High confidence (well-supported, likely correct)
+5 = Very high confidence (strongly supported, highly actionable, authoritative)
+
+## Theses to Score:
+{theses_text}
+{prev_section}
+## Output Format (strict JSON array):
+[
+  {{"id": "T1", "score": <1-5>, "reasoning": "<brief justification>"}},
+  ...
+]
+
+Rules:
+- Score EVERY thesis listed. Do not skip any.
+- Be honest and calibrated — do not default everything to 3 or 5.
+- Output ONLY the JSON array. Do not wrap in markdown fences or add commentary."""
+
+
+async def run_delphi_consensus(
+    job_id: str,
+    research_topic: str,
+    runs: list[dict[str, Any]],
+    debate_transcript: list[dict[str, Any]],
+    consensus_providers: list[str],
+    threshold: float,
+    max_rounds: int,
+    cancel_event: asyncio.Event,
+    initial_conv_urls: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Phase 4: Delphi Consensus — iterative scoring until convergence."""
+    consensus_start = time.monotonic()
+
+    clean_providers: list[str] = []
+    for p in consensus_providers:
+        if p and p not in clean_providers:
+            clean_providers.append(p)
+    if not clean_providers:
+        clean_providers = ["9router"]
+
+    await _set_agent_status(
+        job_id,
+        "consensus",
+        message=f"Bắt đầu quy trình Delphi Consensus với {len(clean_providers)} nhà đánh giá...",
+        data={
+            "consensus_providers": clean_providers,
+            "threshold": threshold,
+            "max_rounds": max_rounds,
+            "role": "consensus",
+            "provider_role_key": "consensus",
+            "elapsed_s": 0.0,
+        },
+    )
+
+    if cancel_event.is_set():
+        return {"theses": [], "rounds": [], "converged": False, "final_scores": []}
+
+    # Step 1: Extract theses
+    findings_summary = "\n---\n".join(
+        f"### {r.get('branch', 'Branch')}\n{r.get('answer_md', '')[:1500]}"
+        for r in runs if r.get("status") == "ok"
+    )
+    debate_summary = None
+    if debate_transcript:
+        debate_summary = "\n".join(
+            f"[{t.get('side', '')} R{t.get('round', '')}]: {t.get('content', '')[:500]}"
+            for t in debate_transcript if t.get("content")
+        )
+
+    theses: list[dict[str, Any]] = []
+    extraction_prov = clean_providers[0]
+    thesis_adapter = create_adapter(extraction_prov)
+    thesis_prompt = build_thesis_extraction_prompt(research_topic, findings_summary, debate_summary)
+
+    th_kwargs: dict[str, Any] = {"timeout_s": 180, "mode": "default"}
+    try:
+        sig = inspect.signature(thesis_adapter.ask)
+        if "on_step" in sig.parameters:
+            th_kwargs["on_step"] = StepEmitter(
+                job_id=job_id,
+                provider=extraction_prov,
+                status="consensus",
+                role="consensus",
+                cancel_event=cancel_event,
+                start_time=consensus_start,
+                extra_payload={
+                    "stage": "thesis_extraction",
+                    "provider_role_key": "consensus_thesis_extraction",
+                },
+            )
+    except (TypeError, ValueError):
+        pass
+
+    try:
+        thesis_result = await thesis_adapter.ask(thesis_prompt, **th_kwargs)
+        cleaned = _clean_json_str(thesis_result.answer_markdown)
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, list) and len(parsed) > 0:
+            theses = parsed
+        elif isinstance(parsed, dict) and "theses" in parsed and isinstance(parsed["theses"], list):
+            theses = parsed["theses"]
+    except Exception as te:
+        logger.warning("thesis_extraction_failed", error=str(te))
+    finally:
+        try:
+            await BrowserSessionManager.close_session(extraction_prov)
+        except Exception:
+            pass
+
+    if not theses:
+        theses = [
+            {"id": "T1", "thesis": f"Kết luận trọng tâm về {research_topic}", "category": "strategic", "supporting_evidence": "Tổng hợp từ dữ liệu nghiên cứu ban đầu"}
+        ]
+
+    # Step 2: Iterative scoring rounds
+    all_rounds: list[dict[str, Any]] = []
+    previous_aggregate: list[dict[str, Any]] | None = None
+    converged = False
+
+    for round_num in range(1, max_rounds + 1):
+        if cancel_event.is_set():
+            break
+
+        round_scores: dict[str, list[int]] = {t.get("id", f"T{i}"): [] for i, t in enumerate(theses, 1)}
+
+        # Each provider scores
+        for prov_id in clean_providers:
+            if cancel_event.is_set():
+                break
+
+            scorer_adapter = create_adapter(prov_id)
+            score_prompt = build_consensus_scoring_prompt(theses, round_num, previous_aggregate)
+            sc_kwargs: dict[str, Any] = {"timeout_s": 180, "mode": "default"}
+            try:
+                sig = inspect.signature(scorer_adapter.ask)
+                if "on_step" in sig.parameters:
+                    sc_kwargs["on_step"] = StepEmitter(
+                        job_id=job_id,
+                        provider=prov_id,
+                        status="consensus",
+                        role="consensus",
+                        cancel_event=cancel_event,
+                        start_time=consensus_start,
+                        extra_payload={
+                            "stage": "scoring",
+                            "round": round_num,
+                            "provider_role_key": f"consensus_round_{round_num}_{prov_id}",
+                        },
+                    )
+            except (TypeError, ValueError):
+                pass
+
+            try:
+                score_result = await scorer_adapter.ask(score_prompt, **sc_kwargs)
+                cleaned_scores = _clean_json_str(score_result.answer_markdown)
+                parsed_scores = json.loads(cleaned_scores)
+                if isinstance(parsed_scores, dict) and "scores" in parsed_scores:
+                    parsed_scores = parsed_scores["scores"]
+                if isinstance(parsed_scores, list):
+                    for sc in parsed_scores:
+                        tid = sc.get("id", "")
+                        score = sc.get("score", 3)
+                        if tid in round_scores and isinstance(score, (int, float)):
+                            round_scores[tid].append(int(min(5, max(1, score))))
+            except Exception as sc_exc:
+                logger.warning("consensus_scoring_failed", provider=prov_id, round=round_num, error=str(sc_exc))
+            finally:
+                try:
+                    await BrowserSessionManager.close_session(prov_id)
+                except Exception:
+                    pass
+
+        # Calculate aggregate stats
+        aggregate: list[dict[str, Any]] = []
+        std_devs: list[float] = []
+        for tid, scores in round_scores.items():
+            if scores:
+                mean = statistics.mean(scores)
+                stdev = statistics.stdev(scores) if len(scores) > 1 else 0.0
+                aggregate.append({"id": tid, "mean": round(mean, 2), "stdev": round(stdev, 2), "scores": scores, "n": len(scores)})
+                std_devs.append(stdev)
+            else:
+                aggregate.append({"id": tid, "mean": 0, "stdev": 0, "scores": [], "n": 0})
+
+        round_data = {"round": round_num, "aggregate": aggregate}
+        all_rounds.append(round_data)
+        previous_aggregate = aggregate
+
+        # Emit progress
+        avg_stdev = statistics.mean(std_devs) if std_devs else 0.0
+        elapsed_now = round(time.monotonic() - consensus_start, 1)
+        async with SessionLocal() as session:
+            session.add(JobEvent(
+                job_id=job_id,
+                status="consensus",
+                event_type="consensus_round",
+                step=f"round_{round_num}",
+                message=f"Vòng Delphi {round_num}/{max_rounds}: Avg StdDev = {avg_stdev:.2f} (ngưỡng: {threshold})",
+                data_json=json.dumps({
+                    "round": round_num,
+                    "avg_stdev": round(avg_stdev, 3),
+                    "threshold": threshold,
+                    "aggregate": aggregate,
+                    "role": "consensus",
+                    "provider_role_key": "consensus",
+                    "elapsed_s": elapsed_now,
+                }, ensure_ascii=False),
+            ))
+            await session.commit()
+        notify_job_event(job_id)
+
+        # Check convergence
+        if std_devs and avg_stdev <= threshold:
+            converged = True
+            break
+
+    # Build final result
+    if not converged and all_rounds:
+        last_devs = [a.get("stdev", 0.0) for a in all_rounds[-1].get("aggregate", []) if a.get("n", 0) > 0]
+        if last_devs and statistics.mean(last_devs) <= threshold:
+            converged = True
+
+    consensus_result = {
+        "theses": theses,
+        "rounds": all_rounds,
+        "converged": converged,
+        "final_scores": all_rounds[-1].get("aggregate", []) if all_rounds else [],
+    }
+
+    # Persist
+    consensus_duration = round(time.monotonic() - consensus_start, 1)
+    async with SessionLocal() as session:
+        db_j = await session.get(Job, job_id)
+        if db_j is not None:
+            db_j.consensus_scores_json = json.dumps(consensus_result, ensure_ascii=False)
+            db_j.updated_at = utc_now()
+            session.add(JobEvent(
+                job_id=job_id,
+                status="consensus",
+                event_type="consensus_complete",
+                step="consensus_complete",
+                message=f"Delphi Consensus hoàn tất ({len(all_rounds)} vòng, {'đã hội tụ' if converged else 'chưa hội tụ'}, {consensus_duration}s).",
+                data_json=json.dumps({
+                    "converged": converged,
+                    "rounds_completed": len(all_rounds),
+                    "elapsed_s": consensus_duration,
+                    "role": "consensus",
+                    "provider_role_key": "consensus",
+                    "theses_count": len(theses),
+                }, ensure_ascii=False),
+            ))
+            await session.commit()
+        notify_job_event(job_id)
+
+    return consensus_result
+
+
 async def _set_agent_status(
     job_id: str,
     status: str,
@@ -1070,6 +1409,7 @@ async def _set_agent_status(
         "researching": "Các chatbot chuyên biệt đang đồng loạt nghiên cứu...",
         "fact_checking": "Fact-Checker Provider đang kiểm chứng tính xác thực của các luận điểm...",
         "debating": "Red Team và Defender đang tranh luận phản biện các kết quả...",
+        "consensus": "Delphi Consensus đang đánh giá độ hội tụ và thẩm định luận điểm...",
         "leading": "Lead Provider đang tổng hợp và tinh chỉnh báo cáo hoàn chỉnh...",
         "completed": "Nghiên cứu đa tác nhân hoàn tất thành công.",
         "partial": "Nghiên cứu hoàn tất một phần.",
@@ -1725,7 +2065,46 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
             return
 
         # ---------------------------------------------------------
-        # PHASE 4: LEADING (Lead Provider Synthesis)
+        # PHASE 4: DELPHI CONSENSUS (Optional, Iterative Thesis Scoring)
+        # ---------------------------------------------------------
+        consensus_result: dict[str, Any] = {}
+        enable_consensus = False
+        consensus_provs: list[str] = []
+        consensus_thresh = 0.8
+        max_consensus_rnds = 3
+
+        async with SessionLocal() as session:
+            db_j = await session.get(Job, job_id)
+            if db_j is not None:
+                enable_consensus = getattr(db_j, "enable_consensus", False)
+                try:
+                    consensus_provs = json.loads(db_j.consensus_providers_json) if db_j.consensus_providers_json else []
+                except Exception:
+                    consensus_provs = []
+                if not consensus_provs:
+                    consensus_provs = delegated_providers[:3] if delegated_providers else [orchestrator_prov, lead_prov]
+                consensus_thresh = getattr(db_j, "consensus_threshold", 0.8)
+                max_consensus_rnds = getattr(db_j, "max_consensus_rounds", 3)
+
+        if enable_consensus and runs:
+            consensus_result = await run_delphi_consensus(
+                job_id=job_id,
+                research_topic=research_topic,
+                runs=runs,
+                debate_transcript=debate_transcript,
+                consensus_providers=consensus_provs,
+                threshold=consensus_thresh,
+                max_rounds=max_consensus_rnds,
+                cancel_event=cancel_event,
+                initial_conv_urls=initial_conv_urls,
+            )
+
+        if cancel_event.is_set():
+            await _set_agent_status(job_id, "cancelled")
+            return
+
+        # ---------------------------------------------------------
+        # PHASE 5: LEADING (Lead Provider Synthesis)
         # ---------------------------------------------------------
         report_format = "narrative"
         async with SessionLocal() as session:
@@ -1762,6 +2141,7 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 context_summary=context_summary,
                 fact_check_claims=fact_check_claims,
                 debate_transcript=debate_transcript,
+                consensus_result=consensus_result,
             )
         else:
             lead_prompt = build_lead_prompt(
@@ -1771,6 +2151,7 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                 context_summary=context_summary,
                 fact_check_claims=fact_check_claims,
                 debate_transcript=debate_transcript,
+                consensus_result=consensus_result,
             )
 
         lead_kwargs: dict[str, Any] = {

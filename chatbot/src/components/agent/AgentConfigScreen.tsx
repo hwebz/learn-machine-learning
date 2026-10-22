@@ -45,6 +45,10 @@ export interface AgentConfigScreenProps {
     debate_provider?: string;
     debate_defender_provider?: string;
     max_debate_rounds?: number;
+    enable_consensus?: boolean;
+    consensus_providers?: string[];
+    consensus_threshold?: number;
+    max_consensus_rounds?: number;
   }) => void;
   onCancel: () => void;
   providers?: ProviderInfo[];
@@ -74,6 +78,10 @@ export interface AgentConfigScreenProps {
   initialDebateProvider?: string;
   initialDebateDefenderProvider?: string;
   initialMaxDebateRounds?: number;
+  initialEnableConsensus?: boolean;
+  initialConsensusProviders?: string[];
+  initialConsensusThreshold?: number;
+  initialMaxConsensusRounds?: number;
 }
 
 const DEFAULT_DELEGATED = ["copilot", "gemini", "chatgpt", "deepseek", "qwen", "perplexity", "claude"];
@@ -108,6 +116,10 @@ export function AgentConfigScreen({
   initialDebateProvider,
   initialDebateDefenderProvider,
   initialMaxDebateRounds,
+  initialEnableConsensus,
+  initialConsensusProviders,
+  initialConsensusThreshold,
+  initialMaxConsensusRounds,
 }: AgentConfigScreenProps) {
   const availableProviders = providers && providers.length > 0 ? providers : PROVIDERS_LIST;
 
@@ -188,6 +200,16 @@ export function AgentConfigScreen({
     initialMaxDebateRounds || 2
   );
 
+  // 6.6. Delphi Consensus State
+  const [enableConsensus, setEnableConsensus] = useState<boolean>(initialEnableConsensus || false);
+  const [consensusThreshold, setConsensusThreshold] = useState<number>(initialConsensusThreshold ?? 0.8);
+  const [maxConsensusRounds, setMaxConsensusRounds] = useState<number>(initialMaxConsensusRounds ?? 3);
+  const [selectedConsensusProviders, setSelectedConsensusProviders] = useState<string[]>(
+    initialConsensusProviders && initialConsensusProviders.length > 0
+      ? initialConsensusProviders
+      : ["gemini", "chatgpt", "claude"]
+  );
+
   // 7. Tone & Report Format State
   const [selectedTone, setSelectedTone] = useState<string>(
     initialTone || "professional"
@@ -227,6 +249,12 @@ export function AgentConfigScreen({
     if (initialDebateProvider) setSelectedDebateProvider(initialDebateProvider);
     if (initialDebateDefenderProvider) setSelectedDebateDefenderProvider(initialDebateDefenderProvider);
     if (initialMaxDebateRounds !== undefined) setMaxDebateRounds(initialMaxDebateRounds);
+    if (initialEnableConsensus !== undefined) setEnableConsensus(initialEnableConsensus);
+    if (initialConsensusThreshold !== undefined) setConsensusThreshold(initialConsensusThreshold);
+    if (initialMaxConsensusRounds !== undefined) setMaxConsensusRounds(initialMaxConsensusRounds);
+    if (initialConsensusProviders && initialConsensusProviders.length > 0) {
+      setSelectedConsensusProviders(initialConsensusProviders);
+    }
   }, [
     initialOrchestratorProvider,
     initialLeadProvider,
@@ -244,6 +272,10 @@ export function AgentConfigScreen({
     initialDebateProvider,
     initialDebateDefenderProvider,
     initialMaxDebateRounds,
+    initialEnableConsensus,
+    initialConsensusThreshold,
+    initialMaxConsensusRounds,
+    initialConsensusProviders,
   ]);
 
   // Load capabilities if missing
@@ -698,6 +730,10 @@ export function AgentConfigScreen({
       debate_provider: enableDebate ? selectedDebateProvider : undefined,
       debate_defender_provider: enableDebate ? selectedDebateDefenderProvider : undefined,
       max_debate_rounds: enableDebate ? maxDebateRounds : undefined,
+      enable_consensus: enableConsensus,
+      consensus_providers: enableConsensus ? selectedConsensusProviders : undefined,
+      consensus_threshold: enableConsensus ? consensusThreshold : undefined,
+      max_consensus_rounds: enableConsensus ? maxConsensusRounds : undefined,
     });
   };
 
@@ -1211,6 +1247,146 @@ export function AgentConfigScreen({
                       nameRadioGroup="debate_def_radio"
                       selectedCardClass="selected"
                     />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Section 7.6: Delphi Consensus Phase */}
+          <div
+            className="agent-section"
+            style={{
+              border: enableConsensus ? "1px solid rgba(16, 185, 129, 0.4)" : undefined,
+              boxShadow: enableConsensus ? "0 0 16px rgba(16, 185, 129, 0.08)" : undefined,
+              transition: "border 0.2s ease",
+            }}
+          >
+            <div className="agent-section-header-row">
+              <label className="agent-section-label" style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                <span className="agent-section-step" style={{ background: enableConsensus ? "#10b981" : undefined }}>
+                  7.6
+                </span>
+                <span>Đồng thuận Delphi (Delphi Consensus - Convergence Scoring)</span>
+              </label>
+              <span
+                className="agent-role-pill"
+                style={{
+                  background: enableConsensus ? "rgba(16, 185, 129, 0.15)" : "rgba(148, 163, 184, 0.15)",
+                  color: enableConsensus ? "#10b981" : "#94a3b8",
+                  borderColor: enableConsensus ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.3)",
+                }}
+              >
+                {enableConsensus ? "🎯 Đang kích hoạt" : "Tùy chọn"}
+              </span>
+            </div>
+            <div
+              style={{
+                marginTop: 8,
+                padding: "12px 16px",
+                borderRadius: 8,
+                background: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+              }}
+            >
+              <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none" }}>
+                <input
+                  type="checkbox"
+                  checked={enableConsensus}
+                  onChange={(e) => setEnableConsensus(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: "#10b981", cursor: "pointer" }}
+                />
+                <span style={{ fontWeight: 600, fontSize: 13, color: "var(--text-primary, #fff)" }}>
+                  🎯 Kích hoạt đánh giá đồng thuận Delphi đa vòng (Convergence Scoring)
+                </span>
+              </label>
+              <p style={{ fontSize: 12, color: "var(--text-secondary, #94a3b8)", marginTop: 6, marginLeft: 26, lineHeight: 1.5 }}>
+                Các tác nhân AI độc lập chấm điểm các luận điểm then chốt từ nghiên cứu &amp; tranh biện (thang 1-5). Thuật toán tính độ lệch chuẩn (&sigma;) và lặp lại qua các vòng ẩn danh có phản hồi phân phối cho đến khi đạt độ hội tụ cao nhất trước khi Lead chốt báo cáo.
+              </p>
+              {enableConsensus && (
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid rgba(255, 255, 255, 0.08)", display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary, #fff)", display: "flex", alignItems: "center", gap: 8 }}>
+                      <span>Số vòng Delphi tối đa:</span>
+                      <select
+                        value={maxConsensusRounds}
+                        onChange={(e) => setMaxConsensusRounds(Number(e.target.value))}
+                        style={{
+                          background: "rgba(30, 41, 59, 0.8)",
+                          color: "#fff",
+                          border: "1px solid rgba(255, 255, 255, 0.15)",
+                          borderRadius: 6,
+                          padding: "4px 10px",
+                          fontSize: 12,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <option value={1}>1 vòng (Chấm điểm sơ bộ)</option>
+                        <option value={2}>2 vòng (Hội tụ nhanh)</option>
+                        <option value={3}>3 vòng (Khuyến nghị chuẩn Delphi)</option>
+                        <option value={4}>4 vòng (Độ chính xác cao)</option>
+                        <option value={5}>5 vòng (Tối đa)</option>
+                      </select>
+                    </label>
+
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary, #fff)", display: "flex", alignItems: "center", gap: 10 }}>
+                      <span>Ngưỡng hội tụ (&sigma; threshold):</span>
+                      <input
+                        type="range"
+                        min="0.3"
+                        max="1.5"
+                        step="0.05"
+                        value={consensusThreshold}
+                        onChange={(e) => setConsensusThreshold(parseFloat(e.target.value))}
+                        style={{ width: 120, accentColor: "#10b981", cursor: "pointer" }}
+                      />
+                      <span style={{ color: "#10b981", fontFamily: "monospace", fontWeight: 700 }}>
+                        &sigma; &le; {consensusThreshold.toFixed(2)}
+                      </span>
+                    </label>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: "var(--text-primary, #fff)" }}>
+                      Chọn Hội đồng Chấm điểm Delphi (Tối thiểu 2 nhà đánh giá):
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {availableProviders.map((prov) => {
+                        const isSelected = selectedConsensusProviders.includes(prov.id);
+                        return (
+                          <button
+                            key={prov.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedConsensusProviders((prev) =>
+                                isSelected
+                                  ? prev.length > 2
+                                    ? prev.filter((p) => p !== prov.id)
+                                    : prev
+                                  : [...prev, prov.id]
+                              );
+                            }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "6px 12px",
+                              borderRadius: 6,
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              border: isSelected ? "1px solid #10b981" : "1px solid rgba(255, 255, 255, 0.12)",
+                              background: isSelected ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 255, 255, 0.03)",
+                              color: isSelected ? "#10b981" : "var(--text-secondary, #94a3b8)",
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            <span style={{ fontSize: 10 }}>{isSelected ? "✓" : "+"}</span>
+                            <span>{prov.name || prov.id.toUpperCase()}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}

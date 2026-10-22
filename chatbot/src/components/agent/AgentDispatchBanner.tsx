@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { AgentDispatchPlanItem, DebateEntry, Message, StepLog } from "../../types/chat";
+import { AgentDispatchPlanItem, ConsensusScoreResult, DebateEntry, Message, StepLog } from "../../types/chat";
 import { ModelBadgeLogo, BrainIcon, ChevronRightIcon, ExternalLinkIcon } from "../icons/Icons";
 import { DurationBadge } from "../common/DurationBadge";
 import { formatDuration, getStepElapsedDuration } from "../../lib/timeUtils";
@@ -88,6 +88,11 @@ export interface AgentDispatchBannerProps {
   debateDefenderProvider?: string;
   maxDebateRounds?: number;
   debateTranscript?: DebateEntry[];
+  enableConsensus?: boolean;
+  consensusProviders?: string[];
+  consensusThreshold?: number;
+  maxConsensusRounds?: number;
+  consensusScores?: ConsensusScoreResult;
 }
 
 function normalize(p?: string): string {
@@ -132,6 +137,11 @@ export function AgentDispatchBanner({
   debateDefenderProvider,
   maxDebateRounds,
   debateTranscript,
+  enableConsensus,
+  consensusProviders,
+  consensusThreshold,
+  maxConsensusRounds,
+  consensusScores,
 }: AgentDispatchBannerProps) {
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
   const [liveSeconds, setLiveSeconds] = useState<number>(0);
@@ -174,6 +184,20 @@ export function AgentDispatchBanner({
     return [];
   }, [debateTranscript, message?.debate_transcript, steps]);
 
+  const isConsensusEnabled = Boolean(
+    enableConsensus ?? message?.enable_consensus ?? false
+  );
+  const resolvedConsensusProviders = useMemo(() => {
+    if (Array.isArray(consensusProviders) && consensusProviders.length > 0) return consensusProviders;
+    if (Array.isArray(message?.consensus_providers) && message.consensus_providers.length > 0) return message.consensus_providers;
+    return ["gemini", "chatgpt", "claude"];
+  }, [consensusProviders, message?.consensus_providers]);
+  const resolvedConsensusThreshold =
+    consensusThreshold ?? message?.consensus_threshold ?? 0.8;
+  const resolvedMaxConsensusRounds =
+    maxConsensusRounds ?? message?.max_consensus_rounds ?? 3;
+  const consensusScoresData = consensusScores || message?.consensus_scores;
+
   const complexityInfo = useMemo(() => {
     if (message?.complexity) return message.complexity;
     const cStep = steps.find(
@@ -201,6 +225,7 @@ export function AgentDispatchBanner({
       status === "researching" ||
       status === "fact_checking" ||
       status === "debating" ||
+      status === "consensus" ||
       status === "leading" ||
       status === "running";
 
@@ -443,12 +468,79 @@ export function AgentDispatchBanner({
     return "--";
   }, [debateSteps, debateState, liveSeconds]);
 
+  // --- 4.5. DELPHI CONSENSUS STATUS & THINKING ---
+  const consensusSteps = useMemo(() => {
+    return steps.filter((st) => {
+      const isRole = st.data?.role === "consensus" || st.data?.stage === "consensus";
+      const isStatus = (st.status as string) === "consensus";
+      const isStep =
+        st.step === "consensus" ||
+        st.step?.startsWith("round_") ||
+        st.step === "consensus_round" ||
+        st.step === "consensus_complete";
+      return isRole || isStatus || isStep;
+    });
+  }, [steps]);
+
+  const consensusState = useMemo<"live" | "completed" | "waiting" | "error">(() => {
+    if (status === "completed" || status === "leading") return "completed";
+    if (
+      consensusScoresData &&
+      ((consensusScoresData.theses && consensusScoresData.theses.length > 0) ||
+        (consensusScoresData.rounds && consensusScoresData.rounds.length > 0))
+    ) {
+      return "completed";
+    }
+    if (consensusSteps.some((s) => s.step === "consensus_complete")) return "completed";
+    if (status === "consensus") return "live";
+    if (status === "failed") return "error";
+    return "waiting";
+  }, [status, consensusScoresData, consensusSteps]);
+
+  const consensusThinkingText = useMemo(() => {
+    if (consensusSteps.length > 0) {
+      const last = consensusSteps[consensusSteps.length - 1];
+      if (last.thinkingSteps && last.thinkingSteps.length > 0) {
+        return last.thinkingSteps[last.thinkingSteps.length - 1].title;
+      }
+      if (last.data?.thinking_steps && last.data.thinking_steps.length > 0) {
+        const rawSteps = last.data.thinking_steps;
+        return rawSteps[rawSteps.length - 1].title || rawSteps[rawSteps.length - 1];
+      }
+      if (last.message) return last.message;
+    }
+    if (consensusState === "live") {
+      return `Hội đồng Delphi (${resolvedConsensusProviders.map((p) => p.toUpperCase()).join(", ")}) đang đánh giá và hội tụ điểm luận điểm...`;
+    }
+    if (consensusState === "completed") {
+      const count = consensusScoresData?.theses?.length || 0;
+      const rounds = consensusScoresData?.rounds?.length || 0;
+      return `Đã hoàn tất đánh giá đồng thuận Delphi (${count} luận điểm qua ${rounds} vòng, ${consensusScoresData?.converged ? "đạt hội tụ" : "kết thúc vòng lặp"}).`;
+    }
+    if (consensusState === "error") {
+      return "Quá trình đánh giá đồng thuận Delphi gặp sự cố.";
+    }
+    return "Đang chờ hoàn thành các giai đoạn trước để bắt đầu thẩm định đồng thuận Delphi...";
+  }, [consensusSteps, consensusState, resolvedConsensusProviders, consensusScoresData]);
+
+  const consensusTimeTaken = useMemo(() => {
+    const recordedElapsed = getStepElapsedDuration(consensusSteps);
+    if (recordedElapsed !== null) {
+      return formatDuration(recordedElapsed);
+    }
+    if (consensusState === "live") {
+      return formatDuration(liveSeconds);
+    }
+    return "--";
+  }, [consensusSteps, consensusState, liveSeconds]);
+
   // Dynamic step numbering for stepper and tier cards
   let currentStepIdx = 1;
   const orchStepNum = currentStepIdx++;
   const researchStepNum = currentStepIdx++;
   const factCheckStepNum = isFactCheckEnabled ? currentStepIdx++ : 0;
   const debateStepNum = isDebateEnabled ? currentStepIdx++ : 0;
+  const consensusStepNum = isConsensusEnabled ? currentStepIdx++ : 0;
   const leadStepNum = currentStepIdx++;
 
   // Subtask helper
@@ -623,6 +715,25 @@ export function AgentDispatchBanner({
             </div>
           )}
 
+          {isConsensusEnabled && (
+            <div
+              className="agent-meta-badge consensus"
+              style={{
+                background: "rgba(16, 185, 129, 0.12)",
+                borderColor: "rgba(16, 185, 129, 0.3)",
+                color: "#10b981",
+              }}
+              title={`Đồng thuận Delphi (${resolvedMaxConsensusRounds} vòng, ngưỡng σ ≤ ${resolvedConsensusThreshold}): ${resolvedConsensusProviders.join(", ")}`}
+            >
+              <span>🎯</span>
+              <span className="agent-meta-label" style={{ color: "#10b981", fontWeight: 700 }}>
+                Delphi ({resolvedMaxConsensusRounds}R):
+              </span>
+              <span style={{ fontSize: 11 }}>σ &le; {resolvedConsensusThreshold}</span>
+              <span style={{ fontSize: 11, opacity: 0.8 }}>({resolvedConsensusProviders.length} models)</span>
+            </div>
+          )}
+
           {tone && (
             <div className="agent-meta-badge tone">
               <span className="agent-meta-label">Tone:</span>
@@ -678,7 +789,7 @@ export function AgentDispatchBanner({
               {orchStepNum}. Phân rã
             </span>
             <span className="stage-sep">➔</span>
-            <span className={`stage-step-dot ${status === "researching" ? "active" : (status === "fact_checking" || status === "debating" || status === "leading" || status === "completed") ? "done" : ""}`}>
+            <span className={`stage-step-dot ${status === "researching" ? "active" : (status === "fact_checking" || status === "debating" || status === "consensus" || status === "leading" || status === "completed") ? "done" : ""}`}>
               {researchStepNum}. Nghiên cứu ({completedSubtasksCount}/{dispatchPlan?.length || 0})
             </span>
             {isFactCheckEnabled && (
@@ -692,8 +803,16 @@ export function AgentDispatchBanner({
             {isDebateEnabled && (
               <>
                 <span className="stage-sep">➔</span>
-                <span className={`stage-step-dot ${debateState === "live" ? "active" : debateState === "completed" ? "done" : ""}`}>
+                <span className={`stage-step-dot ${debateState === "live" ? "active" : (debateState === "completed" || status === "consensus" || status === "leading" || status === "completed") ? "done" : ""}`}>
                   {debateStepNum}. Tranh biện{debateTranscriptList.length > 0 ? ` (${debateTranscriptList.length} lượt)` : ""}
+                </span>
+              </>
+            )}
+            {isConsensusEnabled && (
+              <>
+                <span className="stage-sep">➔</span>
+                <span className={`stage-step-dot ${consensusState === "live" ? "active" : (consensusState === "completed" || status === "leading" || status === "completed") ? "done" : ""}`}>
+                  {consensusStepNum}. Đồng thuận{consensusScoresData?.theses?.length ? ` (${consensusScoresData.theses.length})` : ""}
                 </span>
               </>
             )}
@@ -1153,6 +1272,146 @@ export function AgentDispatchBanner({
                 {debateTranscriptList.length > 0 && (
                   <div style={{ marginTop: 12 }}>
                     <DebateTranscript transcript={debateTranscriptList} defaultExpanded={false} />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* TIER 2.8: DELPHI CONSENSUS (CONVERGENCE SCORING) */}
+          {/* ======================================================== */}
+          {isConsensusEnabled && (
+            <div className="agent-tier-section">
+              <div className="agent-tier-title-row">
+                <div className="agent-tier-heading">
+                  <span className="agent-tier-num">{consensusStepNum}</span>
+                  <span>Đồng thuận Delphi (Convergence Scoring)</span>
+                  {consensusScoresData?.theses && consensusScoresData.theses.length > 0 && (
+                    <span className="agent-branch-count-pill" style={{ background: "rgba(16, 185, 129, 0.15)", color: "#10b981" }}>
+                      {consensusScoresData.theses.length} luận điểm ({consensusScoresData.rounds?.length || 0} vòng)
+                    </span>
+                  )}
+                </div>
+                <span className="agent-tier-hint">
+                  Hội đồng đa mô hình chấm điểm độc lập (thang 1-5); kiểm soát độ lệch chuẩn (&sigma; &le; {resolvedConsensusThreshold}) để đạt hội tụ
+                </span>
+              </div>
+
+              <div
+                className={`agent-provider-summary-card consensus ${consensusState}`}
+                style={{
+                  borderLeft: "3px solid #10b981",
+                }}
+              >
+                <div className="agent-card-top-row">
+                  <div className="agent-card-provider-info" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 13 }}>🎯</span>
+                      <span className="agent-card-provider-name" style={{ color: "#10b981" }}>
+                        Hội đồng Delphi
+                      </span>
+                      <span className="agent-card-role-tag consensus" style={{ background: "rgba(16, 185, 129, 0.15)", color: "#10b981" }}>
+                        {resolvedConsensusProviders.length} Chuyên gia AI
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      {resolvedConsensusProviders.map((pid) => (
+                        <ModelBadgeLogo key={pid} providerId={pid} size={16} />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="agent-card-meta-right">
+                    <div className={`agent-live-badge ${consensusState}`}>
+                      {consensusState === "live" && (
+                        <>
+                          <span className="pulse-dot live" />
+                          <span className="badge-text">LIVE</span>
+                        </>
+                      )}
+                      {consensusState === "completed" && (
+                        <>
+                          <span className="badge-icon">✓</span>
+                          <span className="badge-text">Completed</span>
+                        </>
+                      )}
+                      {consensusState === "waiting" && (
+                        <>
+                          <span className="badge-icon">⏳</span>
+                          <span className="badge-text">Chờ</span>
+                        </>
+                      )}
+                      {consensusState === "error" && (
+                        <>
+                          <span className="badge-icon">⚠️</span>
+                          <span className="badge-text">Lỗi</span>
+                        </>
+                      )}
+                    </div>
+
+                    <DurationBadge
+                      duration={consensusTimeTaken}
+                      title="Thời gian thẩm định đồng thuận Delphi"
+                    />
+                  </div>
+                </div>
+
+                {/* Active Thinking Step */}
+                <div className="agent-card-thinking-box consensus" style={{ borderLeft: "2px solid #10b981" }}>
+                  <div className="agent-card-thinking-header" style={{ color: "#10b981" }}>
+                    <BrainIcon size={13} color="#10b981" />
+                    <span className="thinking-title-label">
+                      {consensusState === "live"
+                        ? "Tiến trình đồng thuận trực tiếp (Active Delphi Round):"
+                        : "Trạng thái thẩm định đồng thuận:"}
+                    </span>
+                  </div>
+                  <div className="agent-card-thinking-content">{consensusThinkingText}</div>
+                </div>
+
+                {/* Theses quick preview */}
+                {consensusScoresData?.theses && consensusScoresData.theses.length > 0 && (
+                  <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      Luận điểm then chốt đã thẩm định ({consensusScoresData.theses.length}):
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {consensusScoresData.theses.slice(0, 4).map((th, thIdx) => {
+                        const finalScore = consensusScoresData.final_scores?.find((f) => f.id === th.id);
+                        return (
+                          <div
+                            key={th.id || thIdx}
+                            style={{
+                              background: "rgba(255, 255, 255, 0.03)",
+                              border: "1px solid rgba(255, 255, 255, 0.08)",
+                              borderRadius: 6,
+                              padding: "4px 8px",
+                              fontSize: 11,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <span style={{ color: "#10b981", fontWeight: 700 }}>#{th.id}</span>
+                            <span style={{ color: "var(--text-secondary)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {th.thesis}
+                            </span>
+                            {finalScore && finalScore.n > 0 && (
+                              <span style={{ background: "rgba(16, 185, 129, 0.15)", color: "#10b981", padding: "1px 5px", borderRadius: 4, fontWeight: 700 }}>
+                                ★ {finalScore.mean.toFixed(1)}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {consensusScoresData.theses.length > 4 && (
+                        <div style={{ fontSize: 11, color: "var(--text-muted)", alignSelf: "center", padding: "0 4px" }}>
+                          +{consensusScoresData.theses.length - 4} luận điểm khác
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

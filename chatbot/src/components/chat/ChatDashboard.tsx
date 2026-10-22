@@ -114,6 +114,11 @@ export function buildAssistantMessage(
     debate_config?: Record<string, any>;
     max_debate_rounds?: number;
     debate_transcript?: any[];
+    enable_consensus?: boolean;
+    consensus_providers?: string[];
+    consensus_threshold?: number;
+    max_consensus_rounds?: number;
+    consensus_scores?: any;
   }
 ): Message | null {
   const content = resolveAssistantContent(jobData.status, jobData.report_markdown, jobData.error);
@@ -182,6 +187,11 @@ export function buildAssistantMessage(
     debate_config: jobData.debate_config || undefined,
     max_debate_rounds: jobData.max_debate_rounds,
     debate_transcript: (jobData as any).debate_transcript || undefined,
+    enable_consensus: jobData.enable_consensus,
+    consensus_providers: jobData.consensus_providers,
+    consensus_threshold: jobData.consensus_threshold,
+    max_consensus_rounds: jobData.max_consensus_rounds,
+    consensus_scores: jobData.consensus_scores || undefined,
   };
 }
 
@@ -638,6 +648,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             debate_defender_provider: latestJob.debate_defender_provider || (rootJob as any).debate_defender_provider,
             max_debate_rounds: latestJob.max_debate_rounds || (rootJob as any).max_debate_rounds,
             debate_transcript: latestJob.debate_transcript || (rootJob as any).debate_transcript,
+            enable_consensus: latestJob.enable_consensus ?? (rootJob as any).enable_consensus,
+            consensus_providers: latestJob.consensus_providers || (rootJob as any).consensus_providers,
+            consensus_threshold: latestJob.consensus_threshold ?? (rootJob as any).consensus_threshold,
+            max_consensus_rounds: latestJob.max_consensus_rounds || (rootJob as any).max_consensus_rounds,
+            consensus_scores: latestJob.consensus_scores || (rootJob as any).consensus_scores,
             providerConfigurations: (latestJob as any).providerConfigurations || (latestJob as any).provider_options || {
               ...(((latestJob as any).orchestrator_config && (latestJob as any).orchestrator_provider) ? { [(latestJob as any).orchestrator_provider]: (latestJob as any).orchestrator_config } : {}),
               ...(((latestJob as any).lead_config && (latestJob as any).lead_provider) ? { [(latestJob as any).lead_provider]: (latestJob as any).lead_config } : {}),
@@ -706,6 +721,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               debate_defender_provider: directJob.debate_defender_provider || undefined,
               max_debate_rounds: directJob.max_debate_rounds,
               debate_transcript: directJob.debate_transcript,
+              enable_consensus: directJob.enable_consensus,
+              consensus_providers: directJob.consensus_providers,
+              consensus_threshold: directJob.consensus_threshold,
+              max_consensus_rounds: directJob.max_consensus_rounds,
+              consensus_scores: directJob.consensus_scores,
               providerConfigurations: (directJob as any).providerConfigurations || (directJob as any).provider_options || {
                 ...(((directJob as any).orchestrator_config && (directJob as any).orchestrator_provider) ? { [(directJob as any).orchestrator_provider]: (directJob as any).orchestrator_config } : {}),
                 ...(((directJob as any).lead_config && (directJob as any).lead_provider) ? { [(directJob as any).lead_provider]: (directJob as any).lead_config } : {}),
@@ -1069,6 +1089,24 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       activeSession.messages.find((m) => m.max_debate_rounds !== undefined)?.max_debate_rounds ??
       2;
 
+    // 14. Delphi consensus defaults:
+    const resolvedEnableConsensus =
+      activeSession.enable_consensus ??
+      activeSession.messages.find((m) => m.enable_consensus !== undefined)?.enable_consensus ??
+      false;
+    const resolvedConsensusProviders =
+      activeSession.consensus_providers ||
+      activeSession.messages.find((m) => m.consensus_providers)?.consensus_providers ||
+      ["gemini", "chatgpt", "claude"];
+    const resolvedConsensusThreshold =
+      activeSession.consensus_threshold ??
+      activeSession.messages.find((m) => m.consensus_threshold !== undefined)?.consensus_threshold ??
+      0.8;
+    const resolvedMaxConsensusRounds =
+      activeSession.max_consensus_rounds ??
+      activeSession.messages.find((m) => m.max_consensus_rounds !== undefined)?.max_consensus_rounds ??
+      3;
+
     return {
       initialOrchestratorProvider: resolvedOrch,
       initialLeadProvider: resolvedLead,
@@ -1086,6 +1124,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       initialDebateProvider: resolvedDebateProvider,
       initialDebateDefenderProvider: resolvedDebateDefenderProvider,
       initialMaxDebateRounds: resolvedMaxDebateRounds,
+      initialEnableConsensus: resolvedEnableConsensus,
+      initialConsensusProviders: resolvedConsensusProviders,
+      initialConsensusThreshold: resolvedConsensusThreshold,
+      initialMaxConsensusRounds: resolvedMaxConsensusRounds,
       initialReportFormat: resolvedReportFormat,
       initialAutoScaleAgents: resolvedAutoScaleAgents,
       initialMinAgents: resolvedMinAgents,
@@ -1311,6 +1353,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     debate_provider?: string;
     debate_defender_provider?: string;
     max_debate_rounds?: number;
+    enable_consensus?: boolean;
+    consensus_providers?: string[];
+    consensus_threshold?: number;
+    max_consensus_rounds?: number;
   }) => {
     setIsAgentConfigOpen(false);
 
@@ -1341,6 +1387,14 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       enable_fact_check: config.enable_fact_check,
       fact_check_provider: config.fact_check_provider,
       fact_check_config: config.fact_check_config,
+      enable_debate: config.enable_debate,
+      debate_provider: config.debate_provider,
+      debate_defender_provider: config.debate_defender_provider,
+      max_debate_rounds: config.max_debate_rounds,
+      enable_consensus: config.enable_consensus,
+      consensus_providers: config.consensus_providers,
+      consensus_threshold: config.consensus_threshold,
+      max_consensus_rounds: config.max_consensus_rounds,
       provider_options: {
         ...(config.provider_configs || {}),
         [config.orchestrator_provider]: config.orchestrator_config,
@@ -1381,6 +1435,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       debate_provider: config.debate_provider,
       debate_defender_provider: config.debate_defender_provider,
       max_debate_rounds: config.max_debate_rounds,
+      enable_consensus: config.enable_consensus,
+      consensus_providers: config.consensus_providers,
+      consensus_threshold: config.consensus_threshold,
+      max_consensus_rounds: config.max_consensus_rounds,
       providerConfigurations: {
         ...(config.provider_configs || {}),
         [config.orchestrator_provider]: config.orchestrator_config,
@@ -1425,6 +1483,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         debate_provider: config.debate_provider,
         debate_defender_provider: config.debate_defender_provider,
         max_debate_rounds: config.max_debate_rounds,
+        enable_consensus: config.enable_consensus,
+        consensus_providers: config.consensus_providers,
+        consensus_threshold: config.consensus_threshold,
+        max_consensus_rounds: config.max_consensus_rounds,
       });
 
       if (isCancelledRef.current) {
@@ -1469,6 +1531,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           const stepProv = stepLog.provider || (stepLog.data as any)?.provider;
           const orchConvUrl = (stepLog.data as any)?.orch_conv_url;
           const leadConvUrl = (stepLog.data as any)?.lead_conv_url;
+          const stepConsensusResult = (stepLog.data as any)?.consensus_result;
 
           setSessions((prev) =>
             prev.map((s) => {
@@ -1480,6 +1543,16 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                 nextStatus = "fact_checking" as any;
               } else if (stepLog.step === "debating" || (stepLog.data as any)?.phase === "debating" || stepLog.status === "debating") {
                 nextStatus = "debating" as any;
+              } else if (
+                stepLog.step === "consensus" ||
+                stepLog.step?.startsWith("round_") ||
+                stepLog.step === "consensus_round" ||
+                stepLog.step === "consensus_complete" ||
+                (stepLog.data as any)?.phase === "consensus" ||
+                stepLog.status === "consensus" ||
+                (stepLog.data as any)?.role === "consensus"
+              ) {
+                nextStatus = "consensus" as any;
               } else if (stepLog.step === "summarizing") {
                 nextStatus = "summarizing" as any;
               } else if (dispatch && nextStatus === "orchestrating") {
@@ -1496,6 +1569,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                 orchestrator_conversation_url: orchConvUrl || s.orchestrator_conversation_url,
                 lead_conversation_url: leadConvUrl || s.lead_conversation_url,
                 provider_conversations: Object.keys(updatedProviderConvs).length > 0 ? updatedProviderConvs : s.provider_conversations,
+                consensus_scores: stepConsensusResult || s.consensus_scores,
               };
             })
           );
@@ -1526,6 +1600,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               debate_defender_provider: config.debate_defender_provider,
               max_debate_rounds: config.max_debate_rounds,
               debate_transcript: (result as any).debate_transcript,
+              enable_consensus: config.enable_consensus,
+              consensus_providers: config.consensus_providers,
+              consensus_threshold: config.consensus_threshold,
+              max_consensus_rounds: config.max_consensus_rounds,
+              consensus_scores: (result as any).consensus_scores,
               steps: activeSteps,
               job_type: "agent",
               orchestrator_provider: config.orchestrator_provider,
@@ -1580,6 +1659,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                     debate_defender_provider: config.debate_defender_provider || s.debate_defender_provider,
                     max_debate_rounds: config.max_debate_rounds || s.max_debate_rounds,
                     debate_transcript: (result as any).debate_transcript || s.debate_transcript,
+                    enable_consensus: config.enable_consensus ?? s.enable_consensus,
+                    consensus_providers: config.consensus_providers || s.consensus_providers,
+                    consensus_threshold: config.consensus_threshold ?? s.consensus_threshold,
+                    max_consensus_rounds: config.max_consensus_rounds || s.max_consensus_rounds,
+                    consensus_scores: (result as any).consensus_scores || s.consensus_scores,
                     providerConfigurations: s.providerConfigurations || {
                       [config.orchestrator_provider]: config.orchestrator_config,
                       [config.lead_provider]: config.lead_config,
@@ -1628,6 +1712,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                 debate_defender_provider: finalResult.debate_defender_provider || config.debate_defender_provider,
                 max_debate_rounds: finalResult.max_debate_rounds || config.max_debate_rounds,
                 debate_transcript: (finalResult as any).debate_transcript,
+                enable_consensus: finalResult.enable_consensus ?? config.enable_consensus,
+                consensus_providers: finalResult.consensus_providers || config.consensus_providers,
+                consensus_threshold: finalResult.consensus_threshold ?? config.consensus_threshold,
+                max_consensus_rounds: finalResult.max_consensus_rounds || config.max_consensus_rounds,
+                consensus_scores: finalResult.consensus_scores,
                 steps: activeSteps,
                 job_type: "agent",
                 orchestrator_provider: config.orchestrator_provider,
@@ -1678,6 +1767,11 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                       debate_defender_provider: finalResult.debate_defender_provider || config.debate_defender_provider || s.debate_defender_provider,
                       max_debate_rounds: finalResult.max_debate_rounds || config.max_debate_rounds || s.max_debate_rounds,
                       debate_transcript: (finalResult as any).debate_transcript || s.debate_transcript,
+                      enable_consensus: finalResult.enable_consensus ?? config.enable_consensus ?? s.enable_consensus,
+                      consensus_providers: finalResult.consensus_providers || config.consensus_providers || s.consensus_providers,
+                      consensus_threshold: finalResult.consensus_threshold ?? config.consensus_threshold ?? s.consensus_threshold,
+                      max_consensus_rounds: finalResult.max_consensus_rounds || config.max_consensus_rounds || s.max_consensus_rounds,
+                      consensus_scores: finalResult.consensus_scores || s.consensus_scores,
                       providerConfigurations: s.providerConfigurations || {
                         [config.orchestrator_provider]: config.orchestrator_config,
                         [config.lead_provider]: config.lead_config,
@@ -2739,6 +2833,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           initialDebateProvider={activeSessionAgentDefaults.initialDebateProvider}
           initialDebateDefenderProvider={activeSessionAgentDefaults.initialDebateDefenderProvider}
           initialMaxDebateRounds={activeSessionAgentDefaults.initialMaxDebateRounds}
+          initialEnableConsensus={activeSessionAgentDefaults.initialEnableConsensus}
+          initialConsensusProviders={activeSessionAgentDefaults.initialConsensusProviders}
+          initialConsensusThreshold={activeSessionAgentDefaults.initialConsensusThreshold}
+          initialMaxConsensusRounds={activeSessionAgentDefaults.initialMaxConsensusRounds}
         />
       )}
     </div>

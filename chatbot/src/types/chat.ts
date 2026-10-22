@@ -61,7 +61,7 @@ export interface StepLog {
   provider?: string;
   step?: string;
   message: string;
-  status: "pending" | "running" | "completed" | "error" | "orchestrating" | "researching" | "fact_checking" | "debating" | "leading";
+  status: "pending" | "running" | "completed" | "error" | "orchestrating" | "researching" | "fact_checking" | "debating" | "consensus" | "leading";
   data?: any;
   thinkingText?: string;
   thinkingSteps?: ThinkingStep[];
@@ -78,6 +78,33 @@ export interface DebateEntry {
   content?: string;
   error?: string;
   elapsed_s?: number;
+}
+
+export interface ConsensusThesis {
+  id: string;
+  thesis: string;
+  category?: string;
+  supporting_evidence?: string;
+}
+
+export interface ConsensusAggregateScore {
+  id: string;
+  mean: number;
+  stdev: number;
+  scores?: number[];
+  n: number;
+}
+
+export interface ConsensusRound {
+  round: number;
+  aggregate: ConsensusAggregateScore[];
+}
+
+export interface ConsensusScoreResult {
+  theses: ConsensusThesis[];
+  rounds: ConsensusRound[];
+  converged: boolean;
+  final_scores: ConsensusAggregateScore[];
 }
 
 export interface Message {
@@ -127,6 +154,11 @@ export interface Message {
   debate_config?: Record<string, any>;
   max_debate_rounds?: number;
   debate_transcript?: DebateEntry[];
+  enable_consensus?: boolean;
+  consensus_providers?: string[];
+  consensus_threshold?: number;
+  max_consensus_rounds?: number;
+  consensus_scores?: ConsensusScoreResult;
   jobId?: string;
 }
 
@@ -163,7 +195,7 @@ export interface ChatSession {
   selectedProvider?: string;
   depth?: DepthMode;
   jobId?: string;
-  status?: "queued" | "summarizing" | "running" | "completed" | "partial" | "failed" | "cancelled" | "orchestrating" | "researching" | "fact_checking" | "debating" | "leading";
+  status?: "queued" | "summarizing" | "running" | "completed" | "partial" | "failed" | "cancelled" | "orchestrating" | "researching" | "fact_checking" | "debating" | "consensus" | "leading";
   providerConfigurations?: Record<string, ProviderSelectionConfig>;
   job_type?: "research" | "agent";
   orchestrator_provider?: string;
@@ -187,6 +219,11 @@ export interface ChatSession {
   debate_config?: Record<string, any>;
   max_debate_rounds?: number;
   debate_transcript?: DebateEntry[];
+  enable_consensus?: boolean;
+  consensus_providers?: string[];
+  consensus_threshold?: number;
+  max_consensus_rounds?: number;
+  consensus_scores?: ConsensusScoreResult;
   report_format?: string;
   report_matrix?: MatrixReport;
   auto_scale_agents?: boolean;

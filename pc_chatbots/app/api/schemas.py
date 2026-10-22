@@ -12,7 +12,7 @@ ProviderName = Literal[
     "9router", "router",
 ]
 JobStatus = Literal[
-    "queued", "summarizing", "orchestrating", "planning", "researching", "fact_checking", "debating", "extracting", "verifying", "synthesizing", "leading",
+    "queued", "summarizing", "orchestrating", "planning", "researching", "fact_checking", "debating", "consensus", "extracting", "verifying", "synthesizing", "leading",
     "completed", "partial", "failed", "needs_user_action", "cancelled",
 ]
 
@@ -62,6 +62,10 @@ class AgentResearchRequest(BaseModel):
     debate_defender_provider: ProviderName | None = Field(default=None)
     debate_config: dict[str, Any] | None = Field(default_factory=dict)
     max_debate_rounds: int = Field(default=2, ge=1, le=5)
+    enable_consensus: bool = Field(default=False)
+    consensus_providers: list[ProviderName] | None = Field(default=None)
+    consensus_threshold: float = Field(default=0.8, ge=0.1, le=2.0)
+    max_consensus_rounds: int = Field(default=3, ge=1, le=5)
     conversation_urls: dict[str, str] | None = Field(default=None)
     parent_job_id: str | None = Field(default=None)
 
@@ -193,6 +197,11 @@ class ResearchResponse(BaseModel):
     debate_config: dict[str, Any] | None = None
     max_debate_rounds: int = 2
     debate_transcript: list[dict[str, Any]] | None = None
+    enable_consensus: bool = False
+    consensus_providers: list[str] | None = None
+    consensus_threshold: float | None = None
+    max_consensus_rounds: int | None = None
+    consensus_scores: dict[str, Any] | None = None
     parent_job_id: str | None = None
     conversation_id: str | None = None
     created_at: datetime

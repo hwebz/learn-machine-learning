@@ -84,6 +84,11 @@ async def init_db() -> None:
                 "debate_config_json": "TEXT",
                 "max_debate_rounds": "INTEGER DEFAULT 2",
                 "debate_transcript_json": "TEXT",
+                "enable_consensus": "BOOLEAN DEFAULT 0",
+                "consensus_providers_json": "TEXT",
+                "consensus_threshold": "FLOAT DEFAULT 0.8",
+                "max_consensus_rounds": "INTEGER DEFAULT 3",
+                "consensus_scores_json": "TEXT",
             }
             for col_name, col_type in new_cols.items():
                 if col_name not in cols:
