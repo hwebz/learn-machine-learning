@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { PROVIDERS_LIST, DEFAULT_SELECTED_PROVIDERS } from "../../lib/constants";
-import { ChatSession, Message, StepLog, ProviderInfo, SourceLink } from "../../types/chat";
+import { ChatSession, Message, StepLog, ProviderInfo, SourceLink, ReportFormat } from "../../types/chat";
 import { LeftSidebar } from "../sidebar/LeftSidebar";
 import { ChatArea } from "./ChatArea";
 import { RightSidebar } from "../inspector/RightSidebar";
@@ -106,6 +106,8 @@ export function buildAssistantMessage(
     orchestrator_conversation_url?: string | null;
     lead_conversation_url?: string | null;
     provider_conversations?: Record<string, string>;
+    report_format?: string | null;
+    report_matrix?: any | null;
   }
 ): Message | null {
   const content = resolveAssistantContent(jobData.status, jobData.report_markdown, jobData.error);
@@ -166,6 +168,8 @@ export function buildAssistantMessage(
     orchestrator_conversation_url: jobData.orchestrator_conversation_url || undefined,
     lead_conversation_url: jobData.lead_conversation_url || undefined,
     provider_conversations: Object.keys(resolvedConvUrls).length > 0 ? resolvedConvUrls : undefined,
+    report_format: (jobData.report_format as any) || undefined,
+    report_matrix: jobData.report_matrix || undefined,
   };
 }
 
@@ -626,6 +630,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             orchestrator_conversation_url: (latestJob as any).orchestrator_conversation_url || undefined,
             lead_conversation_url: (latestJob as any).lead_conversation_url || undefined,
             provider_conversations: Object.keys(mergedConvUrls).length > 0 ? mergedConvUrls : undefined,
+            report_format: (latestJob as any).report_format || (rootJob as any).report_format || "narrative",
+            report_matrix: (latestJob as any).report_matrix || (rootJob as any).report_matrix,
           });
         }
       }
@@ -687,6 +693,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               orchestrator_conversation_url: (directJob as any).orchestrator_conversation_url || undefined,
               lead_conversation_url: (directJob as any).lead_conversation_url || undefined,
               provider_conversations: (directJob as any).provider_conversations || undefined,
+              report_format: (directJob as any).report_format || "narrative",
+              report_matrix: (directJob as any).report_matrix,
             };
             newSessions.unshift(directSession);
           }
@@ -1000,6 +1008,12 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       activeSession.providerConfigurations?.[resolvedFactCheckProvider] ||
       activeSession.messages.find((m) => m.fact_check_config)?.fact_check_config;
 
+    // 11. Report format defaults:
+    const resolvedReportFormat =
+      (activeSession.report_format as ReportFormat) ||
+      (activeSession.messages.find((m) => m.report_format)?.report_format as ReportFormat) ||
+      "narrative";
+
     return {
       initialOrchestratorProvider: resolvedOrch,
       initialLeadProvider: resolvedLead,
@@ -1013,6 +1027,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       initialEnableFactCheck: resolvedEnableFactCheck,
       initialFactCheckProvider: resolvedFactCheckProvider,
       initialFactCheckConfig: resolvedFactCheckConfig,
+      initialReportFormat: resolvedReportFormat,
     };
   }, [activeSession, capsHook.selectionsMap]);
 
@@ -1138,6 +1153,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           tone: toneVal,
           orchestrator_dispatch: orchDispatch,
           delegated_providers: (fullJob as any).delegated_providers,
+          report_format: (fullJob as any).report_format || session?.report_format,
+          report_matrix: (fullJob as any).report_matrix || session?.report_matrix,
           error: (fullJob as any).error,
         });
 
@@ -1164,6 +1181,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               tone: toneVal || s.tone,
               orchestrator_dispatch: orchDispatch || s.orchestrator_dispatch,
               delegated_providers: (fullJob as any).delegated_providers || s.delegated_providers,
+              report_format: (fullJob as any).report_format || s.report_format,
+              report_matrix: (fullJob as any).report_matrix || s.report_matrix,
               providerConfigurations: s.providerConfigurations || (fullJob as any).providerConfigurations || (fullJob as any).provider_options || {
                 ...((orchProv && (fullJob as any).orchestrator_config) ? { [orchProv]: (fullJob as any).orchestrator_config } : {}),
                 ...((leadProv && (fullJob as any).lead_config) ? { [leadProv]: (fullJob as any).lead_config } : {}),
@@ -1216,6 +1235,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     summarization_provider: string;
     summarization_config: Record<string, any>;
     tone: string;
+    report_format?: ReportFormat;
     delegated_providers?: string[];
     provider_configs?: Record<string, any>;
     provider_capabilities?: Record<string, any>;
@@ -1244,6 +1264,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       summarization_provider: config.summarization_provider,
       summarization_config: config.summarization_config,
       tone: config.tone,
+      report_format: config.report_format || "narrative",
       delegated_providers: config.delegated_providers,
       enable_fact_check: config.enable_fact_check,
       fact_check_provider: config.fact_check_provider,
@@ -1276,6 +1297,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       summarization_provider: config.summarization_provider,
       summarization_config: config.summarization_config,
       tone: config.tone,
+      report_format: config.report_format || "narrative",
       delegated_providers: config.delegated_providers,
       enable_fact_check: config.enable_fact_check,
       fact_check_provider: config.fact_check_provider,
@@ -1310,6 +1332,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         summarization_provider: config.summarization_provider,
         summarization_config: config.summarization_config,
         tone: config.tone,
+        report_format: config.report_format,
         delegated_providers: config.delegated_providers,
         provider_configs: config.provider_configs,
         provider_capabilities: config.provider_capabilities,
@@ -1431,6 +1454,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               orchestrator_conversation_url: result.orchestrator_conversation_url,
               lead_conversation_url: result.lead_conversation_url,
               provider_conversations: result.provider_conversations,
+              report_format: (result as any).report_format || config.report_format || "narrative",
+              report_matrix: (result as any).report_matrix,
             };
 
             setSessions((prev) =>
@@ -1451,6 +1476,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                       ...(s.provider_conversations || {}),
                       ...(result.provider_conversations || {}),
                     },
+                    report_format: (result as any).report_format || config.report_format || s.report_format,
+                    report_matrix: (result as any).report_matrix || s.report_matrix,
                     enable_fact_check: config.enable_fact_check ?? s.enable_fact_check,
                     fact_check_provider: config.fact_check_provider || s.fact_check_provider,
                     fact_check_config: config.fact_check_config || s.fact_check_config,
@@ -1913,6 +1940,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           summarization_provider: sumProv,
           summarization_config: sumConf,
           tone: toneVal,
+          report_format: activeSession.report_format as any,
           delegated_providers: delegatedProvs,
           provider_configs: activeSession.providerConfigurations,
           conversation_urls: Object.keys(existingConvUrls).length > 0 ? existingConvUrls : undefined,
@@ -2040,6 +2068,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
             const asstMsg = buildAssistantMessage(jobAccepted.job_id, {
               report_markdown: result.report_markdown,
+              report_format: (result as any).report_format || activeSession.report_format,
+              report_matrix: (result as any).report_matrix,
               status: result.status || "completed",
               providers: isAgentSession ? [orchProv, leadProv] : currentProviderIds,
               sources: consolidatedSources,
@@ -2587,6 +2617,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           initialSummarizationConfig={activeSessionAgentDefaults.initialSummarizationConfig}
           initialDelegatedProviders={activeSessionAgentDefaults.initialDelegatedProviders}
           initialTone={activeSessionAgentDefaults.initialTone}
+          initialReportFormat={activeSessionAgentDefaults.initialReportFormat}
           initialEnableFactCheck={activeSessionAgentDefaults.initialEnableFactCheck}
           initialFactCheckProvider={activeSessionAgentDefaults.initialFactCheckProvider}
           initialFactCheckConfig={activeSessionAgentDefaults.initialFactCheckConfig}

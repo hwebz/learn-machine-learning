@@ -72,10 +72,13 @@ __all__ = [
     "AgentStageStatus",
     "PROVIDER_CATALOG",
     "build_fact_check_prompt",
+    "build_lead_prompt",
+    "build_matrix_report_prompt",
     "build_orchestrator_prompt",
     "build_summarization_prompt",
     "build_synthesis_prompt",
     "parse_orchestrator_plan",
+    "render_matrix_to_markdown",
     "resolve_provider_live_prompt_info",
     "run_agent_pipeline",
     "run_fact_check_phase",
@@ -266,6 +269,142 @@ Synthesize all the above findings into a single, cohesive, high-quality Markdown
 {tone_directive}
 
 Produce the final comprehensive Markdown report now:"""
+
+
+def build_matrix_report_prompt(
+    research_topic: str,
+    findings: list[dict[str, Any]],
+    tone: str,
+    context_summary: str | None = None,
+    fact_check_claims: list[dict[str, Any]] | None = None,
+    debate_transcript: list[dict[str, Any]] | None = None,
+    consensus_result: dict[str, Any] | None = None,
+) -> str:
+    """Build a prompt that produces a structured Comparative Matrix report."""
+    tone_directive = TONE_INSTRUCTIONS.get(tone.lower(), TONE_INSTRUCTIONS["professional"])
+
+    sections: list[str] = []
+    for item in findings:
+        prov = item.get("provider", "AI")
+        branch = item.get("branch", "Research")
+        ans = item.get("answer_md", "").strip()
+        sections.append(f"### Branch: {branch} (by {prov})\n\n{ans}")
+    findings_text = "\n\n---\n\n".join(sections) if sections else "No detailed data."
+
+    context_section = ""
+    if context_summary and context_summary.strip():
+        context_section = f"\n## Previous Research Context:\n{context_summary.strip()}\n"
+
+    fc_section = ""
+    if fact_check_claims:
+        disputed = [c for c in fact_check_claims if c.get("verdict") in ("unsupported", "conflict", "single_source", "disputed")]
+        if disputed:
+            fc_section = "\n## Disputed Claims:\n" + "\n".join(
+                f"- ⚠️ \"{c.get('claim') or c.get('text', '')}\" [{c.get('verdict', '')}]" for c in disputed[:10]
+            ) + "\n"
+
+    consensus_section = ""
+    if consensus_result and consensus_result.get("final_scores"):
+        scores_lines = []
+        for sc in consensus_result["final_scores"]:
+            thesis = next((t for t in consensus_result.get("theses", []) if t.get("id") == sc.get("id")), {})
+            scores_lines.append(f"- {sc.get('id')}: \"{thesis.get('thesis', '')}\" — {sc.get('mean', '?')}/5")
+        consensus_section = "\n## Consensus Scores:\n" + "\n".join(scores_lines) + "\n"
+
+    return f"""You are the Lead Research Synthesizer producing a STRUCTURED COMPARATIVE REPORT.
+
+## Research Topic: {research_topic}
+{context_section}
+## Research Findings:
+{findings_text}
+{fc_section}
+{consensus_section}
+## Your Task:
+Produce a structured report in the following JSON format:
+
+```json
+{{
+  "title": "<Report title>",
+  "executive_summary": "<2-3 sentence overview>",
+  "alternatives": [
+    {{
+      "name": "<Solution/Approach name>",
+      "description": "<Brief description>",
+      "scores": {{
+        "cost": <1-5>,
+        "performance": <1-5>,
+        "complexity": <1-5>,
+        "maturity": <1-5>,
+        "scalability": <1-5>
+      }},
+      "pros": ["<pro 1>", "<pro 2>", "..."],
+      "cons": ["<con 1>", "<con 2>", "..."]
+    }}
+  ],
+  "recommendation": "<Which alternative is recommended and why>",
+  "caveats": ["<caveat 1>", "<caveat 2>"],
+  "disagreements": ["<area of disagreement 1>"]
+}}
+```
+
+## Rules:
+- Compare 2-6 alternatives/approaches found in the research.
+- Score each on the 5 dimensions (1=worst, 5=best).
+- List 2-5 specific pros and cons per alternative.
+- Be objective — don't oversell any option.
+- If the research doesn't support a comparison format, adapt the alternatives to represent different perspectives or approaches.
+
+## Tone: {tone_directive}
+
+Output ONLY the JSON. No markdown fences around it, no explanations."""
+
+
+def render_matrix_to_markdown(matrix_data: dict[str, Any]) -> str:
+    """Convert a structured matrix JSON into formatted Markdown."""
+    md = f"# {matrix_data.get('title', 'Research Report')}\n\n"
+    md += f"## Executive Summary\n{matrix_data.get('executive_summary', '')}\n\n"
+
+    alternatives = matrix_data.get("alternatives", [])
+    if alternatives:
+        # Build comparison table
+        dimensions = ["cost", "performance", "complexity", "maturity", "scalability"]
+        dim_labels = {"cost": "💰 Cost", "performance": "⚡ Performance", "complexity": "🔧 Complexity", "maturity": "📊 Maturity", "scalability": "📈 Scalability"}
+
+        md += "## Comparative Matrix\n\n"
+        header = "| Dimension | " + " | ".join(a.get("name", f"Option {i+1}") for i, a in enumerate(alternatives)) + " |\n"
+        separator = "|---|" + "|".join("---" for _ in alternatives) + "|\n"
+        md += header + separator
+
+        for dim in dimensions:
+            row = f"| {dim_labels.get(dim, dim)} | "
+            row += " | ".join(
+                "⭐" * int(a.get("scores", {}).get(dim, 0) or 0) + f" ({a.get('scores', {}).get(dim, '?')}/5)"
+                for a in alternatives
+            )
+            row += " |\n"
+            md += row
+
+        md += "\n"
+
+        # Pros/Cons per alternative
+        for alt in alternatives:
+            md += f"### {alt.get('name', 'Option')}\n"
+            md += f"{alt.get('description', '')}\n\n"
+            if alt.get("pros"):
+                md += "**✅ Pros:**\n" + "\n".join(f"- {p}" for p in alt["pros"]) + "\n\n"
+            if alt.get("cons"):
+                md += "**❌ Cons:**\n" + "\n".join(f"- {c}" for c in alt["cons"]) + "\n\n"
+
+    if matrix_data.get("recommendation"):
+        md += f"## 🎯 Recommendation\n{matrix_data['recommendation']}\n\n"
+
+    if matrix_data.get("caveats"):
+        md += "## ⚠️ Caveats\n" + "\n".join(f"- {c}" for c in matrix_data["caveats"]) + "\n\n"
+
+    if matrix_data.get("disagreements"):
+        md += "## 🔀 Disagreements & Open Questions\n" + "\n".join(f"- {d}" for d in matrix_data["disagreements"]) + "\n"
+
+    return md
 
 
 def _clean_json_str(raw: str) -> str:
@@ -1045,19 +1184,49 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
         # ---------------------------------------------------------
         # PHASE 3: LEADING (Lead Provider Synthesis)
         # ---------------------------------------------------------
+        report_format = "narrative"
+        async with SessionLocal() as session:
+            db_j = await session.get(Job, job_id)
+            if db_j is not None:
+                report_format = getattr(db_j, "report_format", "narrative") or "narrative"
+
         lead_start = time.monotonic()
         await _set_agent_status(
             job_id,
             "leading",
-            message=f"Lead Provider ({lead_prov}) đang tổng hợp báo cáo chuyên sâu theo văn phong '{tone}'...",
-            data={"lead": lead_prov, "tone": tone, "config": lead_config, "role": "lead", "provider_role_key": "lead", "elapsed_s": 0.0},
+            message=f"Lead Provider ({lead_prov}) đang tổng hợp báo cáo chuyên sâu (định dạng: {report_format}, văn phong: '{tone}')...",
+            data={
+                "lead": lead_prov,
+                "tone": tone,
+                "report_format": report_format,
+                "config": lead_config,
+                "role": "lead",
+                "provider_role_key": "lead",
+                "elapsed_s": 0.0,
+            },
             subtasks_total=total_subtasks,
             subtasks_done=total_subtasks,
         )
 
         lead_conv_url = initial_conv_urls.get("lead") or initial_conv_urls.get(lead_prov)
         lead_adapter = create_adapter(lead_prov)
-        lead_prompt = build_lead_prompt(research_topic, runs, tone, context_summary=context_summary, fact_check_claims=fact_check_claims)
+
+        if report_format == "matrix":
+            lead_prompt = build_matrix_report_prompt(
+                research_topic,
+                runs,
+                tone,
+                context_summary=context_summary,
+                fact_check_claims=fact_check_claims,
+            )
+        else:
+            lead_prompt = build_lead_prompt(
+                research_topic,
+                runs,
+                tone,
+                context_summary=context_summary,
+                fact_check_claims=fact_check_claims,
+            )
 
         lead_kwargs: dict[str, Any] = {
             "timeout_s": 600,
@@ -1079,9 +1248,50 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
 
         try:
             lead_res = await lead_adapter.ask(lead_prompt, **lead_kwargs)
-            final_report = lead_res.answer_markdown
             new_lead_url = str(lead_res.conversation_url) if getattr(lead_res, "conversation_url", None) else None
             lead_conv_url = new_lead_url or lead_conv_url
+
+            if report_format == "matrix":
+                try:
+                    matrix_json = _clean_json_str(lead_res.answer_markdown)
+                    matrix_data = json.loads(matrix_json)
+                    final_report = render_matrix_to_markdown(matrix_data)
+                    async with SessionLocal() as session:
+                        db_j = await session.get(Job, job_id)
+                        if db_j is not None:
+                            db_j.report_matrix_json = json.dumps(matrix_data, ensure_ascii=False)
+                            await session.commit()
+                except Exception as mx_err:
+                    logger.warning("matrix_parse_failed", error=str(mx_err))
+                    final_report = lead_res.answer_markdown
+            elif report_format == "hybrid":
+                narrative_report = lead_res.answer_markdown
+                try:
+                    matrix_prompt = build_matrix_report_prompt(
+                        research_topic,
+                        runs,
+                        tone,
+                        context_summary=context_summary,
+                        fact_check_claims=fact_check_claims,
+                    )
+                    hybrid_kwargs = dict(lead_kwargs)
+                    if lead_conv_url and ("conversation_url" in inspect.signature(lead_adapter.ask).parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in inspect.signature(lead_adapter.ask).parameters.values())):
+                        hybrid_kwargs["conversation_url"] = lead_conv_url
+                    matrix_res = await lead_adapter.ask(matrix_prompt, **hybrid_kwargs)
+                    matrix_json = _clean_json_str(matrix_res.answer_markdown)
+                    matrix_data = json.loads(matrix_json)
+                    rendered_matrix = render_matrix_to_markdown(matrix_data)
+                    final_report = f"{narrative_report}\n\n---\n\n{rendered_matrix}"
+                    async with SessionLocal() as session:
+                        db_j = await session.get(Job, job_id)
+                        if db_j is not None:
+                            db_j.report_matrix_json = json.dumps(matrix_data, ensure_ascii=False)
+                            await session.commit()
+                except Exception as hy_err:
+                    logger.warning("hybrid_matrix_failed", error=str(hy_err))
+                    final_report = narrative_report
+            else:
+                final_report = lead_res.answer_markdown
         except Exception as exc:
             logger.error("lead_synthesis_failed", provider=lead_prov, error=str(exc))
             # Fallback report compilation

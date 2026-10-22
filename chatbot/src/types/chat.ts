@@ -23,6 +23,31 @@ export interface DisagreementItem {
   viewpoints: Record<string, string>;
 }
 
+export type ReportFormat = "narrative" | "matrix" | "hybrid";
+
+export interface MatrixAlternative {
+  name: string;
+  description: string;
+  scores: {
+    cost: number;
+    performance: number;
+    complexity: number;
+    maturity: number;
+    scalability: number;
+  };
+  pros: string[];
+  cons: string[];
+}
+
+export interface MatrixReport {
+  title: string;
+  executive_summary: string;
+  alternatives: MatrixAlternative[];
+  recommendation: string;
+  caveats: string[];
+  disagreements: string[];
+}
+
 export interface ThinkingStep {
   title: string;
   description?: string;
@@ -81,6 +106,8 @@ export interface Message {
   summarization_provider?: string;
   summarization_config?: Record<string, any>;
   context_summary?: string;
+  report_format?: string;
+  report_matrix?: MatrixReport;
   jobId?: string;
 }
 
@@ -128,6 +155,8 @@ export interface ChatSession {
   fact_check_provider?: string;
   fact_check_config?: Record<string, any>;
   fact_check_results?: ClaimItem[] | any[];
+  report_format?: string;
+  report_matrix?: MatrixReport;
 }
 
 export interface ProviderInfo {

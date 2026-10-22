@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { PROVIDERS_LIST } from "../../lib/constants";
-import { ProviderInfo } from "../../types/chat";
+import { ProviderInfo, ReportFormat } from "../../types/chat";
 import { ProviderLiveCapabilities, ProviderSelectionConfig } from "../../types/capabilities";
 import { CloseIcon } from "../icons/Icons";
 
@@ -31,6 +31,7 @@ export interface AgentConfigScreenProps {
     summarization_provider: string;
     summarization_config: Record<string, any>;
     tone: string;
+    report_format?: ReportFormat;
     delegated_providers?: string[];
     provider_configs?: Record<string, any>;
     provider_capabilities?: Record<string, any>;
@@ -55,6 +56,7 @@ export interface AgentConfigScreenProps {
   initialSummarizationConfig?: Record<string, any>;
   initialDelegatedProviders?: string[];
   initialTone?: string;
+  initialReportFormat?: ReportFormat;
   initialEnableFactCheck?: boolean;
   initialFactCheckProvider?: string;
   initialFactCheckConfig?: Record<string, any>;
@@ -81,6 +83,7 @@ export function AgentConfigScreen({
   initialSummarizationConfig,
   initialDelegatedProviders,
   initialTone,
+  initialReportFormat,
   initialEnableFactCheck,
   initialFactCheckProvider,
   initialFactCheckConfig,
@@ -152,9 +155,12 @@ export function AgentConfigScreen({
     initialFactCheckProvider || "perplexity"
   );
 
-  // 7. Tone & Submit State
+  // 7. Tone & Report Format State
   const [selectedTone, setSelectedTone] = useState<string>(
     initialTone || "professional"
+  );
+  const [reportFormat, setReportFormat] = useState<ReportFormat>(
+    initialReportFormat || "narrative"
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -167,6 +173,7 @@ export function AgentConfigScreen({
       setSelectedDelegatedProviders(initialDelegatedProviders);
     }
     if (initialTone) setSelectedTone(initialTone);
+    if (initialReportFormat) setReportFormat(initialReportFormat);
     if (initialQuery !== undefined) setQuery(initialQuery);
     if (initialEnableFactCheck !== undefined) setEnableFactCheck(initialEnableFactCheck);
     if (initialFactCheckProvider) setSelectedFactChecker(initialFactCheckProvider);
@@ -176,6 +183,7 @@ export function AgentConfigScreen({
     initialSummarizationProvider,
     initialDelegatedProviders,
     initialTone,
+    initialReportFormat,
     initialQuery,
     initialEnableFactCheck,
     initialFactCheckProvider,
@@ -608,6 +616,7 @@ export function AgentConfigScreen({
         mode: sumMode,
       },
       tone: selectedTone,
+      report_format: reportFormat,
       provider_configs: subProviderConfigs,
       provider_capabilities: subProviderCaps,
       enable_fact_check: enableFactCheck,
@@ -906,6 +915,133 @@ export function AgentConfigScreen({
                   />
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Section 8: Định dạng báo cáo (Report Format) */}
+          <div
+            className="agent-config-section"
+            style={{
+              borderColor: reportFormat !== "narrative" ? "rgba(99, 102, 241, 0.4)" : undefined,
+              boxShadow: reportFormat !== "narrative" ? "0 0 16px rgba(99, 102, 241, 0.08)" : undefined,
+            }}
+          >
+            <div className="agent-section-header-row">
+              <label className="agent-section-label" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span className="agent-section-step" style={{ background: reportFormat !== "narrative" ? "#6366f1" : undefined }}>
+                  8
+                </span>
+                <span>Định dạng đầu ra báo cáo (Report Format)</span>
+              </label>
+              <span
+                className="agent-role-pill"
+                style={{
+                  background: reportFormat === "narrative" ? "rgba(148, 163, 184, 0.15)" : "rgba(99, 102, 241, 0.15)",
+                  color: reportFormat === "narrative" ? "#94a3b8" : "#818cf8",
+                  borderColor: reportFormat === "narrative" ? "rgba(148, 163, 184, 0.3)" : "rgba(99, 102, 241, 0.3)",
+                }}
+              >
+                {reportFormat === "narrative" ? "Mặc định (Tự sự)" : reportFormat === "matrix" ? "📊 Ma trận so sánh" : "🔀 Hybrid (Cả hai)"}
+              </span>
+            </div>
+
+            <p style={{ fontSize: 13, color: "var(--text-secondary, #94a3b8)", marginTop: 6, marginBottom: 12 }}>
+              Chọn cách Lead Synthesizer cấu trúc kết quả phân tích. Định dạng Ma trận tối ưu cho so sánh công nghệ, giải pháp hoặc quyết định kiến trúc.
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+              <div
+                onClick={() => setReportFormat("narrative")}
+                style={{
+                  padding: "14px 16px",
+                  borderRadius: 10,
+                  cursor: "pointer",
+                  border: reportFormat === "narrative" ? "1.5px solid #6366f1" : "1px solid rgba(255, 255, 255, 0.08)",
+                  background: reportFormat === "narrative" ? "rgba(99, 102, 241, 0.1)" : "rgba(255, 255, 255, 0.02)",
+                  transition: "all 0.2s ease",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: reportFormat === "narrative" ? "#818cf8" : "var(--text-primary, #fff)" }}>
+                    📝 Báo cáo tự sự (Narrative)
+                  </span>
+                  <input
+                    type="radio"
+                    name="report_format"
+                    checked={reportFormat === "narrative"}
+                    onChange={() => setReportFormat("narrative")}
+                    style={{ accentColor: "#6366f1" }}
+                  />
+                </div>
+                <span style={{ fontSize: 12, color: "var(--text-secondary, #94a3b8)", lineHeight: 1.4 }}>
+                  Văn bản chi tiết nhiều chương mục, luận giải sâu và kết luận tổng quan. Phù hợp với mọi đề tài nghiên cứu.
+                </span>
+              </div>
+
+              <div
+                onClick={() => setReportFormat("matrix")}
+                style={{
+                  padding: "14px 16px",
+                  borderRadius: 10,
+                  cursor: "pointer",
+                  border: reportFormat === "matrix" ? "1.5px solid #6366f1" : "1px solid rgba(255, 255, 255, 0.08)",
+                  background: reportFormat === "matrix" ? "rgba(99, 102, 241, 0.1)" : "rgba(255, 255, 255, 0.02)",
+                  transition: "all 0.2s ease",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: reportFormat === "matrix" ? "#818cf8" : "var(--text-primary, #fff)" }}>
+                    📊 Ma trận so sánh (Matrix)
+                  </span>
+                  <input
+                    type="radio"
+                    name="report_format"
+                    checked={reportFormat === "matrix"}
+                    onChange={() => setReportFormat("matrix")}
+                    style={{ accentColor: "#6366f1" }}
+                  />
+                </div>
+                <span style={{ fontSize: 12, color: "var(--text-secondary, #94a3b8)", lineHeight: 1.4 }}>
+                  Bảng so sánh đa chiều theo tiêu chí, chấm điểm trọng số, thẻ Pros/Cons và khuyến nghị cụ thể.
+                </span>
+              </div>
+
+              <div
+                onClick={() => setReportFormat("hybrid")}
+                style={{
+                  padding: "14px 16px",
+                  borderRadius: 10,
+                  cursor: "pointer",
+                  border: reportFormat === "hybrid" ? "1.5px solid #6366f1" : "1px solid rgba(255, 255, 255, 0.08)",
+                  background: reportFormat === "hybrid" ? "rgba(99, 102, 241, 0.1)" : "rgba(255, 255, 255, 0.02)",
+                  transition: "all 0.2s ease",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: reportFormat === "hybrid" ? "#818cf8" : "var(--text-primary, #fff)" }}>
+                    🔀 Kết hợp (Hybrid)
+                  </span>
+                  <input
+                    type="radio"
+                    name="report_format"
+                    checked={reportFormat === "hybrid"}
+                    onChange={() => setReportFormat("hybrid")}
+                    style={{ accentColor: "#6366f1" }}
+                  />
+                </div>
+                <span style={{ fontSize: 12, color: "var(--text-secondary, #94a3b8)", lineHeight: 1.4 }}>
+                  Tạo cả báo cáo tự sự chi tiết và ma trận so sánh. Giao diện cho phép chuyển đổi tab linh hoạt.
+                </span>
+              </div>
             </div>
           </div>
 

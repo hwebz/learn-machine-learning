@@ -1,4 +1,4 @@
-import { DepthMode, SourceLink, StepLog, ProviderLiveCapabilities } from "../types/chat";
+import { DepthMode, SourceLink, StepLog, ProviderLiveCapabilities, MatrixReport, ReportFormat } from "../types/chat";
 
 export const DEFAULT_API_KEY = "changeme";
 
@@ -49,6 +49,8 @@ export interface ResearchResponseData {
   fact_check_provider?: string;
   fact_check_config?: Record<string, any>;
   fact_check_results?: any[];
+  report_format?: string;
+  report_matrix?: MatrixReport;
   parent_job_id?: string;
   conversation_id?: string;
 }
@@ -86,6 +88,8 @@ export interface ResearchHistoryItem {
   fact_check_provider?: string;
   fact_check_config?: Record<string, any>;
   fact_check_results?: any[];
+  report_format?: string;
+  report_matrix?: MatrixReport;
   parent_job_id?: string;
   conversation_id?: string;
   created_at?: string;
@@ -113,6 +117,7 @@ export interface AgentResearchRequestPayload {
   lead_provider: string;
   lead_config?: Record<string, any>;
   tone: string;
+  report_format?: ReportFormat;
   max_minutes?: number;
   delegated_providers?: string[];
   provider_configs?: Record<string, any>;

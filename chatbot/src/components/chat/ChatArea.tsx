@@ -5,6 +5,7 @@ import { ChatSession, ProviderInfo, StepLog, ThinkingStep, SourceLink, Message }
 import { SUGGESTED_PROMPTS } from "../../lib/constants";
 import { extractProviderResponse } from "../../lib/providerResponse";
 import { MarkdownContent } from "./MarkdownContent";
+import { MatrixReportView } from "./MatrixReportView";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { ScrollNavButtons } from "./ScrollNavButtons";
 import { ProviderActionBanner } from "./ProviderActionBanner";
@@ -96,6 +97,7 @@ export function ChatArea({
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<{ id: string; name: string; size: string; type: string }[]>([]);
   const [activeOptionsProviderId, setActiveOptionsProviderId] = useState<string>("");
+  const [messageMatrixTabs, setMessageMatrixTabs] = useState<Record<string, "matrix" | "narrative">>({});
   const modelDropdownRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -706,10 +708,127 @@ export function ChatArea({
                   </div>
                 )}
 
-                {/* Main Content Body with Full Markdown & Syntax Highlighter */}
-                <div className="message-content-body">
-                  <MarkdownContent content={msg.content} />
-                </div>
+                {/* Matrix / Hybrid Report Section */}
+                {msg.report_matrix ? (
+                  <div className="message-report-container" style={{ margin: "12px 0" }}>
+                    {msg.report_format === "hybrid" ? (
+                      <div>
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            background: "rgba(255, 255, 255, 0.04)",
+                            border: "1px solid rgba(255, 255, 255, 0.08)",
+                            borderRadius: 8,
+                            padding: 3,
+                            marginBottom: 16,
+                            gap: 4,
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setMessageMatrixTabs((prev) => ({ ...prev, [msg.id]: "matrix" }))
+                            }
+                            style={{
+                              padding: "6px 14px",
+                              borderRadius: 6,
+                              fontSize: 13,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              border: "none",
+                              transition: "all 0.15s ease",
+                              background:
+                                (messageMatrixTabs[msg.id] ?? "matrix") === "matrix"
+                                  ? "#6366f1"
+                                  : "transparent",
+                              color:
+                                (messageMatrixTabs[msg.id] ?? "matrix") === "matrix"
+                                  ? "#fff"
+                                  : "var(--text-secondary, #94a3b8)",
+                            }}
+                          >
+                            📊 Ma trận so sánh (Matrix)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setMessageMatrixTabs((prev) => ({ ...prev, [msg.id]: "narrative" }))
+                            }
+                            style={{
+                              padding: "6px 14px",
+                              borderRadius: 6,
+                              fontSize: 13,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              border: "none",
+                              transition: "all 0.15s ease",
+                              background:
+                                (messageMatrixTabs[msg.id] ?? "matrix") === "narrative"
+                                  ? "#6366f1"
+                                  : "transparent",
+                              color:
+                                (messageMatrixTabs[msg.id] ?? "matrix") === "narrative"
+                                  ? "#fff"
+                                  : "var(--text-secondary, #94a3b8)",
+                            }}
+                          >
+                            📝 Báo cáo tự sự (Narrative)
+                          </button>
+                        </div>
+
+                        {(messageMatrixTabs[msg.id] ?? "matrix") === "matrix" ? (
+                          <MatrixReportView report={msg.report_matrix} />
+                        ) : (
+                          <div className="message-content-body">
+                            <MarkdownContent content={msg.content} />
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setMessageMatrixTabs((prev) => ({
+                                ...prev,
+                                [msg.id]: prev[msg.id] === "narrative" ? "matrix" : "narrative",
+                              }))
+                            }
+                            style={{
+                              background: "transparent",
+                              border: "1px solid rgba(255, 255, 255, 0.1)",
+                              color: "var(--text-secondary, #94a3b8)",
+                              borderRadius: 6,
+                              padding: "4px 10px",
+                              fontSize: 12,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                            }}
+                          >
+                            {messageMatrixTabs[msg.id] === "narrative" ? "📊 Xem dạng Ma trận" : "📄 Xem dạng Markdown"}
+                          </button>
+                        </div>
+
+                        {messageMatrixTabs[msg.id] === "narrative" ? (
+                          <div className="message-content-body">
+                            <MarkdownContent content={msg.content} />
+                          </div>
+                        ) : (
+                          <MatrixReportView report={msg.report_matrix} />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Main Content Body with Full Markdown & Syntax Highlighter */
+                  <div className="message-content-body">
+                    <MarkdownContent content={msg.content} />
+                  </div>
+                )}
 
                 {/* Citations & Source Links Section */}
                 {msg.sources && msg.sources.length > 0 && (

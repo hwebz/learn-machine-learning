@@ -76,6 +76,8 @@ async def init_db() -> None:
                 "fact_check_provider": "VARCHAR",
                 "fact_check_config_json": "TEXT",
                 "fact_check_results_json": "TEXT",
+                "report_format": "VARCHAR DEFAULT 'narrative'",
+                "report_matrix_json": "TEXT",
             }
             for col_name, col_type in new_cols.items():
                 if col_name not in cols:

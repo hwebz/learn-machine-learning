@@ -46,6 +46,8 @@ class Job(SQLModel, table=True):
     fact_check_provider: str | None = None
     fact_check_config_json: str | None = None
     fact_check_results_json: str | None = None
+    report_format: str = "narrative"
+    report_matrix_json: str | None = None
 
 
 class JobEvent(SQLModel, table=True):

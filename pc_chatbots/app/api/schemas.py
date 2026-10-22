@@ -20,6 +20,7 @@ TonePreset = Literal[
     "academic", "professional", "analytical", "explanatory",
     "journalistic", "creative", "executive", "conversational",
 ]
+ReportFormat = Literal["narrative", "matrix", "hybrid"]
 
 
 class AgentDispatchItem(BaseModel):
@@ -43,6 +44,7 @@ class AgentResearchRequest(BaseModel):
     lead_provider: ProviderName
     lead_config: dict[str, Any] | None = Field(default_factory=dict)
     tone: str = Field(default="professional")
+    report_format: ReportFormat = Field(default="narrative")
     max_minutes: int = Field(default=30, ge=1, le=180)
     delegated_providers: list[ProviderName] | None = Field(default=None)
     provider_configs: dict[str, Any] | None = Field(default_factory=dict)
@@ -144,6 +146,8 @@ class ResearchResponse(BaseModel):
     status: JobStatus
     progress: Progress
     report_markdown: str | None
+    report_format: str | None = None
+    report_matrix: dict[str, Any] | None = None
     sources: list[SourceResponse]
     claims: list[ClaimResponse]
     disagreements: list[DisagreementResponse]
