@@ -5,11 +5,14 @@ import { ChatSession, ProviderInfo, StepLog, ThinkingStep, SourceLink, Message }
 import { SUGGESTED_PROMPTS } from "../../lib/constants";
 import { extractProviderResponse } from "../../lib/providerResponse";
 import { MarkdownContent } from "./MarkdownContent";
+import { MatrixReportView } from "./MatrixReportView";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { ScrollNavButtons } from "./ScrollNavButtons";
 import { ProviderActionBanner } from "./ProviderActionBanner";
 import { ScrollableTabsRow } from "./ScrollableTabsRow";
 import { AgentDispatchBanner } from "../agent/AgentDispatchBanner";
+import { DebateTranscript } from "../agent/DebateTranscript";
+import { ConsensusScoresView } from "../agent/ConsensusScoresView";
 import { detectAllProvidersNeedingAction } from "../../lib/providerAction";
 import { useVoiceRecording } from "../../lib/useVoiceRecording";
 import {
@@ -96,6 +99,7 @@ export function ChatArea({
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<{ id: string; name: string; size: string; type: string }[]>([]);
   const [activeOptionsProviderId, setActiveOptionsProviderId] = useState<string>("");
+  const [messageMatrixTabs, setMessageMatrixTabs] = useState<Record<string, "matrix" | "narrative">>({});
   const modelDropdownRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -269,6 +273,19 @@ export function ChatArea({
       const jobStatus = (st.data as any)?.job_status;
       if (jobStatus && jobStatus !== "running") return jobStatus;
       if (st.data?.role === "lead" || st.message?.includes("Lead Provider")) return "leading";
+      if (
+        st.status === "consensus" ||
+        st.step === "consensus" ||
+        st.step?.startsWith("round_") ||
+        st.step === "consensus_round" ||
+        st.step === "consensus_complete" ||
+        st.data?.role === "consensus" ||
+        st.data?.stage === "consensus"
+      ) {
+        return "consensus";
+      }
+      if (st.status === "debating" || st.step === "debating" || st.step === "debate_round" || st.data?.stage === "debate") return "debating";
+      if (st.step === "fact_checking" || st.data?.role === "fact_checker" || (st.status as string) === "fact_checking") return "fact_checking";
       if (st.data?.role === "subtask" || st.step === "orchestrator_result" || st.data?.dispatch) return "researching";
       if (st.data?.role === "orchestrator") return "orchestrating";
     }
@@ -670,6 +687,19 @@ export function ChatArea({
                     }
                     message={msg}
                     onSelectThinking={onSelectThinking}
+                    enableFactCheck={msg.enable_fact_check ?? session.enable_fact_check}
+                    factCheckProvider={msg.fact_check_provider || session.fact_check_provider}
+                    factCheckResults={msg.fact_check_results || session.fact_check_results}
+                    enableDebate={msg.enable_debate ?? session.enable_debate}
+                    debateProvider={msg.debate_provider || session.debate_provider}
+                    debateDefenderProvider={msg.debate_defender_provider || session.debate_defender_provider}
+                    maxDebateRounds={msg.max_debate_rounds ?? session.max_debate_rounds}
+                    debateTranscript={msg.debate_transcript || session.debate_transcript}
+                    enableConsensus={msg.enable_consensus ?? session.enable_consensus}
+                    consensusProviders={msg.consensus_providers || session.consensus_providers}
+                    consensusThreshold={msg.consensus_threshold ?? session.consensus_threshold}
+                    maxConsensusRounds={msg.max_consensus_rounds ?? session.max_consensus_rounds}
+                    consensusScores={msg.consensus_scores || session.consensus_scores}
                   />
                 )}
 
@@ -702,10 +732,143 @@ export function ChatArea({
                   </div>
                 )}
 
-                {/* Main Content Body with Full Markdown & Syntax Highlighter */}
-                <div className="message-content-body">
-                  <MarkdownContent content={msg.content} />
-                </div>
+                {/* Matrix / Hybrid Report Section */}
+                {msg.report_matrix ? (
+                  <div className="message-report-container" style={{ margin: "12px 0" }}>
+                    {msg.report_format === "hybrid" ? (
+                      <div>
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            background: "rgba(255, 255, 255, 0.04)",
+                            border: "1px solid rgba(255, 255, 255, 0.08)",
+                            borderRadius: 8,
+                            padding: 3,
+                            marginBottom: 16,
+                            gap: 4,
+                          }}
+                        >
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setMessageMatrixTabs((prev) => ({ ...prev, [msg.id]: "matrix" }))
+                            }
+                            style={{
+                              padding: "6px 14px",
+                              borderRadius: 6,
+                              fontSize: 13,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              border: "none",
+                              transition: "all 0.15s ease",
+                              background:
+                                (messageMatrixTabs[msg.id] ?? "matrix") === "matrix"
+                                  ? "#6366f1"
+                                  : "transparent",
+                              color:
+                                (messageMatrixTabs[msg.id] ?? "matrix") === "matrix"
+                                  ? "#fff"
+                                  : "var(--text-secondary, #94a3b8)",
+                            }}
+                          >
+                            📊 Ma trận so sánh (Matrix)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setMessageMatrixTabs((prev) => ({ ...prev, [msg.id]: "narrative" }))
+                            }
+                            style={{
+                              padding: "6px 14px",
+                              borderRadius: 6,
+                              fontSize: 13,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              border: "none",
+                              transition: "all 0.15s ease",
+                              background:
+                                (messageMatrixTabs[msg.id] ?? "matrix") === "narrative"
+                                  ? "#6366f1"
+                                  : "transparent",
+                              color:
+                                (messageMatrixTabs[msg.id] ?? "matrix") === "narrative"
+                                  ? "#fff"
+                                  : "var(--text-secondary, #94a3b8)",
+                            }}
+                          >
+                            📝 Báo cáo tự sự (Narrative)
+                          </button>
+                        </div>
+
+                        {(messageMatrixTabs[msg.id] ?? "matrix") === "matrix" ? (
+                          <MatrixReportView report={msg.report_matrix} />
+                        ) : (
+                          <div className="message-content-body">
+                            <MarkdownContent content={msg.content} />
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setMessageMatrixTabs((prev) => ({
+                                ...prev,
+                                [msg.id]: prev[msg.id] === "narrative" ? "matrix" : "narrative",
+                              }))
+                            }
+                            style={{
+                              background: "transparent",
+                              border: "1px solid rgba(255, 255, 255, 0.1)",
+                              color: "var(--text-secondary, #94a3b8)",
+                              borderRadius: 6,
+                              padding: "4px 10px",
+                              fontSize: 12,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                            }}
+                          >
+                            {messageMatrixTabs[msg.id] === "narrative" ? "📊 Xem dạng Ma trận" : "📄 Xem dạng Markdown"}
+                          </button>
+                        </div>
+
+                        {messageMatrixTabs[msg.id] === "narrative" ? (
+                          <div className="message-content-body">
+                            <MarkdownContent content={msg.content} />
+                          </div>
+                        ) : (
+                          <MatrixReportView report={msg.report_matrix} />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Main Content Body with Full Markdown & Syntax Highlighter */
+                  <div className="message-content-body">
+                    <MarkdownContent content={msg.content} />
+                  </div>
+                )}
+
+                {/* Adversarial Debate Transcript (Red Team vs Defender) */}
+                {((msg.debate_transcript && msg.debate_transcript.length > 0) ||
+                  (msg.id === session.messages[session.messages.length - 1]?.id && session.debate_transcript && session.debate_transcript.length > 0)) && (
+                  <div style={{ margin: "14px 0" }}>
+                    <DebateTranscript transcript={msg.debate_transcript || session.debate_transcript} defaultExpanded={false} />
+                  </div>
+                )}
+
+                {/* Delphi Consensus Scores & Convergence Analysis */}
+                {((msg.consensus_scores && ((msg.consensus_scores.theses && msg.consensus_scores.theses.length > 0) || (msg.consensus_scores.rounds && msg.consensus_scores.rounds.length > 0))) ||
+                  (msg.id === session.messages[session.messages.length - 1]?.id && session.consensus_scores && ((session.consensus_scores.theses && session.consensus_scores.theses.length > 0) || (session.consensus_scores.rounds && session.consensus_scores.rounds.length > 0)))) && (
+                  <div style={{ margin: "14px 0" }}>
+                    <ConsensusScoresView consensus={msg.consensus_scores || session.consensus_scores} defaultExpanded={false} />
+                  </div>
+                )}
 
                 {/* Citations & Source Links Section */}
                 {msg.sources && msg.sources.length > 0 && (
@@ -899,6 +1062,19 @@ export function ChatArea({
                   steps={activeSteps}
                   topic={session.title || session.messages[0]?.content}
                   onSelectThinking={onSelectThinking}
+                  enableFactCheck={session.enable_fact_check}
+                  factCheckProvider={session.fact_check_provider}
+                  factCheckResults={session.fact_check_results}
+                  enableDebate={session.enable_debate}
+                  debateProvider={session.debate_provider}
+                  debateDefenderProvider={session.debate_defender_provider}
+                  maxDebateRounds={session.max_debate_rounds}
+                  debateTranscript={session.debate_transcript}
+                  enableConsensus={session.enable_consensus}
+                  consensusProviders={session.consensus_providers}
+                  consensusThreshold={session.consensus_threshold}
+                  maxConsensusRounds={session.max_consensus_rounds}
+                  consensusScores={session.consensus_scores}
                 />
               )}
 

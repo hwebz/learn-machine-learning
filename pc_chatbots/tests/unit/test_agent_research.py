@@ -266,5 +266,120 @@ def test_build_orchestrator_prompt_with_live_dom_configs() -> None:
     assert '"agents_dispatch"' in prompt
     assert '"sub_topic"' in prompt
     assert '"question"' in prompt
+    assert '"role_group"' in prompt
+
+
+def test_agent_dispatch_item_role_group_schema_and_backward_compat() -> None:
+    from app.api.schemas import AgentDispatchItem, OrchestratorOutput
+
+    # Default role_group is "researcher"
+    item = AgentDispatchItem(
+        id="deepseek",
+        name="DeepSeek",
+        sub_topic="Lý thuyết",
+        question="Giải thích chi tiết",
+    )
+    assert item.role_group == "researcher"
+
+    # Explicit role_group
+    item_infra = AgentDispatchItem(
+        id="copilot",
+        name="Copilot",
+        role_group="infra",
+        sub_topic="Benchmark",
+        question="Thu thập số liệu",
+    )
+    assert item_infra.role_group == "infra"
+
+    # Backward compatibility: legacy payload without role_group parses and defaults to "researcher"
+    legacy_json = {
+        "research_topic": "Test Topic",
+        "agents_dispatch": [
+            {
+                "id": "gemini",
+                "name": "Gemini",
+                "config": {},
+                "sub_topic": "Khảo sát",
+                "question": "Tìm kiếm tài liệu",
+            }
+        ],
+    }
+    validated = OrchestratorOutput.model_validate(legacy_json)
+    assert len(validated.agents_dispatch) == 1
+    assert validated.agents_dispatch[0].role_group == "researcher"
+
+
+def test_build_fact_check_prompt_and_clean_json_str() -> None:
+    from app.orchestrator.agent_pipeline import build_fact_check_prompt, _clean_json_str
+
+    prompt = build_fact_check_prompt("Deep Learning", "This is an answer text with multiple factual claims.")
+    assert "Fact-Checker" in prompt
+    assert "Deep Learning" in prompt
+    assert "strict JSON array" in prompt
+
+    # Clean json array wrapped in markdown
+    md_array = "```json\n[\n  {\"claim\": \"AI works\", \"verdict\": \"supported\"}\n]\n```"
+    cleaned = _clean_json_str(md_array)
+    assert cleaned.startswith("[") and cleaned.endswith("]")
+
+    # Clean json object wrapped in markdown
+    md_obj = "```json\n{\"topic\": \"test\"}\n```"
+    cleaned_obj = _clean_json_str(md_obj)
+    assert cleaned_obj.startswith("{") and cleaned_obj.endswith("}")
+
+
+def test_agent_pipeline_lifecycle_with_fact_check_enabled(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(pipeline, "create_adapter", lambda provider: FakeAdapter(provider))
+    monkeypatch.setattr(agent_pipeline, "create_adapter", lambda provider: FakeAdapter(provider))
+
+    with TestClient(app) as client:
+        payload = {
+            "query": "Kiểm chứng ứng dụng của Deep Learning trong y tế",
+            "orchestrator_provider": "gemini",
+            "lead_provider": "chatgpt",
+            "enable_fact_check": True,
+            "fact_check_provider": "perplexity",
+            "fact_check_config": {"model": "sonar-reasoning"},
+            "tone": "academic",
+            "max_minutes": 5,
+        }
+        res = client.post("/agent-research", headers=API_HEADERS, json=payload)
+        assert res.status_code == 202
+        data = res.json()
+        assert "job_id" in data
+        job_id = data["job_id"]
+
+        # Wait for worker to finish
+        deadline = time.monotonic() + 10
+        job = None
+        while time.monotonic() < deadline:
+            resp = client.get(f"/research/{job_id}", headers=API_HEADERS)
+            assert resp.status_code == 200
+            job = resp.json()
+            if job["status"] in ("completed", "failed"):
+                break
+            time.sleep(0.05)
+
+        assert job is not None
+        assert job["status"] == "completed"
+        assert job["enable_fact_check"] is True
+        assert job["fact_check_provider"] == "perplexity"
+        assert job["claims"] is not None
+        assert len(job["claims"]) >= 2
+
+        # Check claim verdicts
+        supported = [c for c in job["claims"] if c.get("verdict") == "supported"]
+        unsupported = [c for c in job["claims"] if c.get("verdict") == "unsupported"]
+        assert len(supported) >= 1
+        assert len(unsupported) >= 1
+
+        # Check events include fact_checking and fact_check_complete
+        events_resp = client.get(f"/research/{job_id}/events", headers=API_HEADERS)
+        assert events_resp.status_code == 200
+        events_text = events_resp.text
+        assert "fact_checking" in events_text
+        assert "fact_check_complete" in events_text
+
+
 
 

@@ -1,4 +1,4 @@
-import { DepthMode, SourceLink, StepLog, ProviderLiveCapabilities } from "../types/chat";
+import { DepthMode, SourceLink, StepLog, ProviderLiveCapabilities, MatrixReport, ReportFormat, DebateEntry, ConsensusScoreResult } from "../types/chat";
 
 export const DEFAULT_API_KEY = "changeme";
 
@@ -45,6 +45,23 @@ export interface ResearchResponseData {
   summarization_provider?: string;
   summarization_config?: Record<string, any>;
   context_summary?: string;
+  enable_fact_check?: boolean;
+  fact_check_provider?: string;
+  fact_check_config?: Record<string, any>;
+  fact_check_results?: any[];
+  enable_debate?: boolean;
+  debate_provider?: string;
+  debate_defender_provider?: string;
+  debate_config?: Record<string, any>;
+  max_debate_rounds?: number;
+  debate_transcript?: DebateEntry[];
+  enable_consensus?: boolean;
+  consensus_providers?: string[];
+  consensus_threshold?: number;
+  max_consensus_rounds?: number;
+  consensus_scores?: ConsensusScoreResult;
+  report_format?: string;
+  report_matrix?: MatrixReport;
   parent_job_id?: string;
   conversation_id?: string;
 }
@@ -52,7 +69,7 @@ export interface ResearchResponseData {
 export interface ResearchHistoryItem {
   job_id: string;
   query: string;
-  status: "queued" | "running" | "completed" | "partial" | "failed" | "cancelled" | "orchestrating" | "leading";
+  status: "queued" | "summarizing" | "running" | "completed" | "partial" | "failed" | "cancelled" | "orchestrating" | "researching" | "fact_checking" | "debating" | "consensus" | "leading";
   subtasks_total: number;
   subtasks_done: number;
   report_markdown: string;
@@ -78,6 +95,23 @@ export interface ResearchHistoryItem {
   summarization_provider?: string;
   summarization_config?: Record<string, any>;
   context_summary?: string;
+  enable_fact_check?: boolean;
+  fact_check_provider?: string;
+  fact_check_config?: Record<string, any>;
+  fact_check_results?: any[];
+  enable_debate?: boolean;
+  debate_provider?: string;
+  debate_defender_provider?: string;
+  debate_config?: Record<string, any>;
+  max_debate_rounds?: number;
+  debate_transcript?: DebateEntry[];
+  enable_consensus?: boolean;
+  consensus_providers?: string[];
+  consensus_threshold?: number;
+  max_consensus_rounds?: number;
+  consensus_scores?: ConsensusScoreResult;
+  report_format?: string;
+  report_matrix?: MatrixReport;
   parent_job_id?: string;
   conversation_id?: string;
   created_at?: string;
@@ -105,12 +139,28 @@ export interface AgentResearchRequestPayload {
   lead_provider: string;
   lead_config?: Record<string, any>;
   tone: string;
+  report_format?: ReportFormat;
+  auto_scale_agents?: boolean;
+  min_agents?: number;
+  max_agents?: number;
   max_minutes?: number;
   delegated_providers?: string[];
   provider_configs?: Record<string, any>;
   provider_capabilities?: Record<string, any>;
   summarization_provider?: string;
   summarization_config?: Record<string, any>;
+  enable_fact_check?: boolean;
+  fact_check_provider?: string;
+  fact_check_config?: Record<string, any>;
+  enable_debate?: boolean;
+  debate_provider?: string;
+  debate_defender_provider?: string;
+  debate_config?: Record<string, any>;
+  max_debate_rounds?: number;
+  enable_consensus?: boolean;
+  consensus_providers?: string[];
+  consensus_threshold?: number;
+  max_consensus_rounds?: number;
   conversation_urls?: Record<string, string>;
   parent_job_id?: string;
 }
@@ -361,7 +411,12 @@ export function subscribeJobEvents(
               ? "completed"
               : data.status === "failed" || data.status === "error"
               ? "error"
-              : data.status === "orchestrating" || data.status === "researching" || data.status === "leading"
+              : data.status === "orchestrating" ||
+                data.status === "researching" ||
+                data.status === "fact_checking" ||
+                data.status === "debating" ||
+                data.status === "consensus" ||
+                data.status === "leading"
               ? (data.status as any)
               : "running",
           data: {
@@ -409,6 +464,10 @@ export function subscribeJobEvents(
       "agent_status",
       "status",
       "completed",
+      "debate_round",
+      "debate_complete",
+      "consensus_round",
+      "consensus_complete",
     ];
     for (const evtName of sseEventNames) {
       eventSource.addEventListener(evtName, (e: MessageEvent) => {

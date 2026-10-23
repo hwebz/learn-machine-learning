@@ -231,6 +231,14 @@ export function ChevronRightIcon({ className = "", size = 16, color = "currentCo
   );
 }
 
+export function ChevronDownIcon({ className = "", size = 16, color = "currentColor" }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
 export function PinIcon({ className = "", size = 14, color = "currentColor", filled = false }: IconProps & { filled?: boolean }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? color : "none"} stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>

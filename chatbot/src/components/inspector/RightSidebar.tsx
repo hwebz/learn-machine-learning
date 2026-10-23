@@ -265,7 +265,8 @@ interface ProviderThinkingDetail {
   key: string;
   provider: string;
   displayName: string;
-  role?: "orchestrator" | "subtask" | "lead" | "standard";
+  role?: "orchestrator" | "subtask" | "fact_checker" | "lead" | "standard";
+  roleGroup?: string;
   subTopic?: string;
   timeTaken?: string;
   branchIdx?: number;
@@ -441,6 +442,7 @@ export function RightSidebar({
         provider: sp,
         displayName: `${(item.name || sp).toUpperCase()} (Nhánh #${branchIdx})`,
         role: "subtask",
+        roleGroup: item.role_group,
         subTopic: item.sub_topic,
         branchIdx,
         thinkingSteps: [],
@@ -451,6 +453,30 @@ export function RightSidebar({
         timestamp: "",
       });
     });
+
+    const isFactCheckEnabled = Boolean(
+      session?.enable_fact_check ||
+      currentMessage?.enable_fact_check ||
+      stepsToInspect.some((st) => st.step === "fact_checking" || st.data?.role === "fact_checker")
+    );
+    const factCheckerProv = normalizeProvider(
+      session?.fact_check_provider || currentMessage?.fact_check_provider || "perplexity"
+    );
+
+    if (isFactCheckEnabled && factCheckerProv) {
+      providersMap.set("fact_checker", {
+        key: "fact_checker",
+        provider: factCheckerProv,
+        displayName: `${factCheckerProv.toUpperCase()} (Fact-Checker)`,
+        role: "fact_checker",
+        thinkingSteps: [],
+        thinkingText: "",
+        citations: [],
+        logs: [],
+        isRunning: Boolean(isGenerating && (session?.status as string) === "fact_checking"),
+        timestamp: "",
+      });
+    }
 
     if (leadProv) {
       providersMap.set("lead", {
@@ -525,12 +551,15 @@ export function RightSidebar({
 
   for (const [mapKey, detail] of providersMap.entries()) {
     const pSteps = stepsToInspect.filter((st) => {
-      const stRole = st.data?.role || ((st.status as string) === "orchestrating" ? "orchestrator" : (st.status as string) === "leading" ? "lead" : undefined);
+      const stRole = st.data?.role || ((st.status as string) === "orchestrating" ? "orchestrator" : (st.status as string) === "fact_checking" ? "fact_checker" : (st.status as string) === "leading" ? "lead" : undefined);
       const stKey = st.data?.provider_role_key;
       const stProv = normalizeProvider(st.provider || st.data?.provider || "");
 
       if (detail.role === "orchestrator") {
         return stKey === "orchestrator" || stRole === "orchestrator" || st.step === "orchestrator_result";
+      }
+      if (detail.role === "fact_checker") {
+        return stKey === "fact_checker" || stRole === "fact_checker" || st.step === "fact_checking" || (st.status as string) === "fact_checking";
       }
       if (detail.role === "lead") {
         return stKey === "lead" || stRole === "lead" || (st.status as string) === "leading";
@@ -660,6 +689,11 @@ export function RightSidebar({
         if (recordedElapsed !== null) {
           foundTime = formatDuration(recordedElapsed);
         }
+      } else if (detail.role === "fact_checker") {
+        const recordedElapsed = getStepElapsedDuration(pSteps);
+        if (recordedElapsed !== null) {
+          foundTime = formatDuration(recordedElapsed);
+        }
       } else if (detail.role === "lead") {
         const recordedElapsed = getStepElapsedDuration(pSteps);
         if (recordedElapsed !== null) {
@@ -724,6 +758,7 @@ export function RightSidebar({
     const isRoleStillRunning =
       (detail.role === "orchestrator" && (session?.status as string) === "orchestrating") ||
       (detail.role === "subtask" && (session?.status as string) === "researching" && !isDone) ||
+      (detail.role === "fact_checker" && (session?.status as string) === "fact_checking") ||
       (detail.role === "lead" && (session?.status as string) === "leading");
 
     detail.isRunning = isAgent
@@ -767,6 +802,8 @@ export function RightSidebar({
     if (!foundConvUrl) {
       if (detail.role === "orchestrator") {
         foundConvUrl = currentMessage?.orchestrator_conversation_url || session?.orchestrator_conversation_url || "";
+      } else if (detail.role === "fact_checker") {
+        foundConvUrl = (session?.provider_conversations && session.fact_check_provider ? session.provider_conversations[session.fact_check_provider] : "") || "";
       } else if (detail.role === "lead") {
         foundConvUrl = currentMessage?.lead_conversation_url || session?.lead_conversation_url || "";
       } else if (detail.role === "subtask") {
@@ -816,6 +853,26 @@ export function RightSidebar({
     let providerResponse = "";
     if (detail.role === "lead") {
       providerResponse = currentMessage?.content || "";
+    } else if (detail.role === "fact_checker") {
+      const factResults = currentMessage?.fact_check_results || session?.fact_check_results;
+      if (factResults && factResults.length > 0) {
+        providerResponse = `### Kết quả Fact-Check (${factResults.length} luận điểm):\n\n` +
+          factResults.map((c: any, i: number) => {
+            const verdictEmoji = c.verdict === "supported" ? "✅" : c.verdict === "single_source" ? "⚠️" : c.verdict === "unsupported" ? "❌" : "⚡";
+            return `#### ${i + 1}. [${verdictEmoji} ${c.verdict?.toUpperCase()}] ${c.claim || c.text}\n- **Độ tin cậy**: ${Math.round((c.confidence || 0) * 100)}%\n- **Nhận định**: ${c.reasoning || ""}`;
+          }).join("\n\n");
+      } else {
+        const fcStep = pSteps.find((s) => s.step === "fact_checking" || s.data?.role === "fact_checker");
+        if (fcStep?.data?.claims) {
+          providerResponse = `### Kết quả Fact-Check (${fcStep.data.claims.length} luận điểm):\n\n` +
+            fcStep.data.claims.map((c: any, i: number) => {
+              const verdictEmoji = c.verdict === "supported" ? "✅" : c.verdict === "single_source" ? "⚠️" : c.verdict === "unsupported" ? "❌" : "⚡";
+              return `#### ${i + 1}. [${verdictEmoji} ${c.verdict?.toUpperCase()}] ${c.claim || c.text}\n- **Độ tin cậy**: ${Math.round((c.confidence || 0) * 100)}%\n- **Nhận định**: ${c.reasoning || ""}`;
+            }).join("\n\n");
+        } else {
+          providerResponse = extractProviderResponse(detail.provider, pSteps, currentMessage);
+        }
+      }
     } else if (detail.role === "orchestrator") {
       const resStep = pSteps.find((s) => s.step === "orchestrator_result" || s.data?.dispatch);
       if (resStep?.data?.dispatch) {
@@ -1077,9 +1134,16 @@ export function RightSidebar({
                     </span>
                   )}
                   {prov.role === "subtask" && (
-                    <span className="hidden" style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: "rgba(59, 130, 246, 0.15)", color: "#2563eb", fontWeight: 700 }}>
-                      Nhánh #{prov.branchIdx || 1}
-                    </span>
+                    <>
+                      <span className="hidden" style={{ fontSize: 9, padding: "1px 5px", borderRadius: 4, background: "rgba(59, 130, 246, 0.15)", color: "#2563eb", fontWeight: 700 }}>
+                        Nhánh #{prov.branchIdx || 1}
+                      </span>
+                      {prov.roleGroup && (
+                        <span className={`agent-role-badge ${prov.roleGroup}`} style={{ marginLeft: 0 }}>
+                          {prov.roleGroup === "fact_checker" ? "Fact-Check" : prov.roleGroup === "red_team" ? "Red Team" : prov.roleGroup === "infra" ? "Infra" : "Researcher"}
+                        </span>
+                      )}
+                    </>
                   )}
                   <span
                     style={{

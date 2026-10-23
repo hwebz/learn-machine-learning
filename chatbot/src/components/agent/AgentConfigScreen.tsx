@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { PROVIDERS_LIST } from "../../lib/constants";
-import { ProviderInfo } from "../../types/chat";
+import { ProviderInfo, ReportFormat } from "../../types/chat";
 import { ProviderLiveCapabilities, ProviderSelectionConfig } from "../../types/capabilities";
 import { CloseIcon } from "../icons/Icons";
 
@@ -31,9 +31,24 @@ export interface AgentConfigScreenProps {
     summarization_provider: string;
     summarization_config: Record<string, any>;
     tone: string;
+    report_format?: ReportFormat;
+    auto_scale_agents?: boolean;
+    min_agents?: number;
+    max_agents?: number;
     delegated_providers?: string[];
     provider_configs?: Record<string, any>;
     provider_capabilities?: Record<string, any>;
+    enable_fact_check?: boolean;
+    fact_check_provider?: string;
+    fact_check_config?: Record<string, any>;
+    enable_debate?: boolean;
+    debate_provider?: string;
+    debate_defender_provider?: string;
+    max_debate_rounds?: number;
+    enable_consensus?: boolean;
+    consensus_providers?: string[];
+    consensus_threshold?: number;
+    max_consensus_rounds?: number;
   }) => void;
   onCancel: () => void;
   providers?: ProviderInfo[];
@@ -52,6 +67,21 @@ export interface AgentConfigScreenProps {
   initialSummarizationConfig?: Record<string, any>;
   initialDelegatedProviders?: string[];
   initialTone?: string;
+  initialReportFormat?: ReportFormat;
+  initialAutoScaleAgents?: boolean;
+  initialMinAgents?: number;
+  initialMaxAgents?: number;
+  initialEnableFactCheck?: boolean;
+  initialFactCheckProvider?: string;
+  initialFactCheckConfig?: Record<string, any>;
+  initialEnableDebate?: boolean;
+  initialDebateProvider?: string;
+  initialDebateDefenderProvider?: string;
+  initialMaxDebateRounds?: number;
+  initialEnableConsensus?: boolean;
+  initialConsensusProviders?: string[];
+  initialConsensusThreshold?: number;
+  initialMaxConsensusRounds?: number;
 }
 
 const DEFAULT_DELEGATED = ["copilot", "gemini", "chatgpt", "deepseek", "qwen", "perplexity", "claude"];
@@ -75,6 +105,21 @@ export function AgentConfigScreen({
   initialSummarizationConfig,
   initialDelegatedProviders,
   initialTone,
+  initialReportFormat,
+  initialAutoScaleAgents,
+  initialMinAgents,
+  initialMaxAgents,
+  initialEnableFactCheck,
+  initialFactCheckProvider,
+  initialFactCheckConfig,
+  initialEnableDebate,
+  initialDebateProvider,
+  initialDebateDefenderProvider,
+  initialMaxDebateRounds,
+  initialEnableConsensus,
+  initialConsensusProviders,
+  initialConsensusThreshold,
+  initialMaxConsensusRounds,
 }: AgentConfigScreenProps) {
   const availableProviders = providers && providers.length > 0 ? providers : PROVIDERS_LIST;
 
@@ -137,9 +182,50 @@ export function AgentConfigScreen({
   const [isSyncingSum, setIsSyncingSum] = useState(false);
   const [sumSyncMessage, setSumSyncMessage] = useState<string | null>(null);
 
-  // 6. Tone & Submit State
+  // 6. Fact-Check State
+  const [enableFactCheck, setEnableFactCheck] = useState<boolean>(initialEnableFactCheck || false);
+  const [selectedFactChecker, setSelectedFactChecker] = useState<string>(
+    initialFactCheckProvider || "perplexity"
+  );
+
+  // 6.5. Adversarial Debate State
+  const [enableDebate, setEnableDebate] = useState<boolean>(initialEnableDebate || false);
+  const [selectedDebateProvider, setSelectedDebateProvider] = useState<string>(
+    initialDebateProvider || "claude"
+  );
+  const [selectedDebateDefenderProvider, setSelectedDebateDefenderProvider] = useState<string>(
+    initialDebateDefenderProvider || initialLeadProvider || "chatgpt"
+  );
+  const [maxDebateRounds, setMaxDebateRounds] = useState<number>(
+    initialMaxDebateRounds || 2
+  );
+
+  // 6.6. Delphi Consensus State
+  const [enableConsensus, setEnableConsensus] = useState<boolean>(initialEnableConsensus || false);
+  const [consensusThreshold, setConsensusThreshold] = useState<number>(initialConsensusThreshold ?? 0.8);
+  const [maxConsensusRounds, setMaxConsensusRounds] = useState<number>(initialMaxConsensusRounds ?? 3);
+  const [selectedConsensusProviders, setSelectedConsensusProviders] = useState<string[]>(
+    initialConsensusProviders && initialConsensusProviders.length > 0
+      ? initialConsensusProviders
+      : ["gemini", "chatgpt", "claude"]
+  );
+
+  // 7. Tone & Report Format State
   const [selectedTone, setSelectedTone] = useState<string>(
     initialTone || "professional"
+  );
+  const [reportFormat, setReportFormat] = useState<ReportFormat>(
+    initialReportFormat || "narrative"
+  );
+  // 8. Auto-Scale Agent Count State
+  const [autoScaleAgents, setAutoScaleAgents] = useState<boolean>(
+    initialAutoScaleAgents ?? true
+  );
+  const [minAgents, setMinAgents] = useState<number>(
+    initialMinAgents ?? 2
+  );
+  const [maxAgents, setMaxAgents] = useState<number>(
+    initialMaxAgents ?? 5
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -152,8 +238,45 @@ export function AgentConfigScreen({
       setSelectedDelegatedProviders(initialDelegatedProviders);
     }
     if (initialTone) setSelectedTone(initialTone);
+    if (initialReportFormat) setReportFormat(initialReportFormat);
+    if (initialAutoScaleAgents !== undefined) setAutoScaleAgents(initialAutoScaleAgents);
+    if (initialMinAgents !== undefined) setMinAgents(initialMinAgents);
+    if (initialMaxAgents !== undefined) setMaxAgents(initialMaxAgents);
     if (initialQuery !== undefined) setQuery(initialQuery);
-  }, [initialOrchestratorProvider, initialLeadProvider, initialSummarizationProvider, initialDelegatedProviders, initialTone, initialQuery]);
+    if (initialEnableFactCheck !== undefined) setEnableFactCheck(initialEnableFactCheck);
+    if (initialFactCheckProvider) setSelectedFactChecker(initialFactCheckProvider);
+    if (initialEnableDebate !== undefined) setEnableDebate(initialEnableDebate);
+    if (initialDebateProvider) setSelectedDebateProvider(initialDebateProvider);
+    if (initialDebateDefenderProvider) setSelectedDebateDefenderProvider(initialDebateDefenderProvider);
+    if (initialMaxDebateRounds !== undefined) setMaxDebateRounds(initialMaxDebateRounds);
+    if (initialEnableConsensus !== undefined) setEnableConsensus(initialEnableConsensus);
+    if (initialConsensusThreshold !== undefined) setConsensusThreshold(initialConsensusThreshold);
+    if (initialMaxConsensusRounds !== undefined) setMaxConsensusRounds(initialMaxConsensusRounds);
+    if (initialConsensusProviders && initialConsensusProviders.length > 0) {
+      setSelectedConsensusProviders(initialConsensusProviders);
+    }
+  }, [
+    initialOrchestratorProvider,
+    initialLeadProvider,
+    initialSummarizationProvider,
+    initialDelegatedProviders,
+    initialTone,
+    initialReportFormat,
+    initialAutoScaleAgents,
+    initialMinAgents,
+    initialMaxAgents,
+    initialQuery,
+    initialEnableFactCheck,
+    initialFactCheckProvider,
+    initialEnableDebate,
+    initialDebateProvider,
+    initialDebateDefenderProvider,
+    initialMaxDebateRounds,
+    initialEnableConsensus,
+    initialConsensusThreshold,
+    initialMaxConsensusRounds,
+    initialConsensusProviders,
+  ]);
 
   // Load capabilities if missing
   useEffect(() => {
@@ -173,6 +296,24 @@ export function AgentConfigScreen({
       onLoadCapabilities(selectedSummarizer);
     }
   }, [selectedSummarizer, capabilitiesMap, onLoadCapabilities]);
+
+  useEffect(() => {
+    if (onLoadCapabilities && selectedFactChecker && !capabilitiesMap[selectedFactChecker]) {
+      onLoadCapabilities(selectedFactChecker);
+    }
+  }, [selectedFactChecker, capabilitiesMap, onLoadCapabilities]);
+
+  useEffect(() => {
+    if (onLoadCapabilities && selectedDebateProvider && !capabilitiesMap[selectedDebateProvider]) {
+      onLoadCapabilities(selectedDebateProvider);
+    }
+  }, [selectedDebateProvider, capabilitiesMap, onLoadCapabilities]);
+
+  useEffect(() => {
+    if (onLoadCapabilities && selectedDebateDefenderProvider && !capabilitiesMap[selectedDebateDefenderProvider]) {
+      onLoadCapabilities(selectedDebateDefenderProvider);
+    }
+  }, [selectedDebateDefenderProvider, capabilitiesMap, onLoadCapabilities]);
 
   // Merged selections for active providers
   const orchSel = useMemo(() => {
@@ -547,6 +688,10 @@ export function AgentConfigScreen({
       }
     });
 
+    const fcResolved = enableFactCheck
+      ? resolveSubProviderLiveConfig(selectedFactChecker, selectionsMap, capabilitiesMap)
+      : null;
+
     onStartAgentResearch({
       query: query.trim(),
       orchestrator_provider: selectedOrchestrator,
@@ -572,8 +717,23 @@ export function AgentConfigScreen({
         mode: sumMode,
       },
       tone: selectedTone,
+      report_format: reportFormat,
+      auto_scale_agents: autoScaleAgents,
+      min_agents: minAgents,
+      max_agents: maxAgents,
       provider_configs: subProviderConfigs,
       provider_capabilities: subProviderCaps,
+      enable_fact_check: enableFactCheck,
+      fact_check_provider: enableFactCheck ? selectedFactChecker : undefined,
+      fact_check_config: enableFactCheck ? fcResolved?.configObj : undefined,
+      enable_debate: enableDebate,
+      debate_provider: enableDebate ? selectedDebateProvider : undefined,
+      debate_defender_provider: enableDebate ? selectedDebateDefenderProvider : undefined,
+      max_debate_rounds: enableDebate ? maxDebateRounds : undefined,
+      enable_consensus: enableConsensus,
+      consensus_providers: enableConsensus ? selectedConsensusProviders : undefined,
+      consensus_threshold: enableConsensus ? consensusThreshold : undefined,
+      max_consensus_rounds: enableConsensus ? maxConsensusRounds : undefined,
     });
   };
 
@@ -659,6 +819,120 @@ export function AgentConfigScreen({
               syncMessage={orchSyncMessage}
               loadingProvider={loadingProvider}
             />
+          </div>
+
+          {/* Section 2.5: Phân bổ số lượng tác nhân thích ứng (Dynamic Agent Scaling) */}
+          <div
+            className="agent-section"
+            style={{
+              padding: "16px 20px",
+              borderRadius: 12,
+              background: autoScaleAgents ? "rgba(99, 102, 241, 0.05)" : "rgba(255, 255, 255, 0.02)",
+              border: autoScaleAgents ? "1px solid rgba(99, 102, 241, 0.3)" : "1px solid rgba(255, 255, 255, 0.08)",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none" }}>
+                <input
+                  type="checkbox"
+                  checked={autoScaleAgents}
+                  onChange={(e) => setAutoScaleAgents(e.target.checked)}
+                  style={{ width: 17, height: 17, accentColor: "#6366f1", cursor: "pointer" }}
+                />
+                <span style={{ fontWeight: 600, fontSize: 14, color: "var(--text-primary, #fff)" }}>
+                  🧠 Tự động phân bổ số lượng tác nhân (Dynamic Agent Scaling)
+                </span>
+              </label>
+              <span
+                className="agent-role-pill"
+                style={{
+                  background: autoScaleAgents ? "rgba(99, 102, 241, 0.15)" : "rgba(148, 163, 184, 0.15)",
+                  color: autoScaleAgents ? "#818cf8" : "#94a3b8",
+                  borderColor: autoScaleAgents ? "rgba(99, 102, 241, 0.3)" : "rgba(148, 163, 184, 0.3)",
+                }}
+              >
+                {autoScaleAgents ? "⚡ Thích ứng (2-10)" : "Cố định (2-5)"}
+              </span>
+            </div>
+            <p style={{ fontSize: 12, color: "var(--text-secondary, #94a3b8)", marginTop: 6, marginLeft: 27, lineHeight: 1.5 }}>
+              Tự động phân tích độ phức tạp, chiều sâu kỹ thuật và các góc nhìn của đề tài để khuyến nghị số lượng tác nhân tối ưu (tối thiểu cho câu hỏi đơn giản, mở rộng cho đề tài phức tạp).
+            </p>
+
+            {autoScaleAgents && (
+              <div
+                style={{
+                  marginTop: 14,
+                  paddingTop: 14,
+                  borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: 20,
+                  marginLeft: 27,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 13, color: "var(--text-secondary, #94a3b8)", fontWeight: 500 }}>
+                    Tối thiểu (Min):
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={maxAgents}
+                    value={minAgents}
+                    onChange={(e) => {
+                      const v = Math.max(1, Math.min(maxAgents, Number(e.target.value) || 1));
+                      setMinAgents(v);
+                    }}
+                    style={{
+                      width: 56,
+                      padding: "4px 8px",
+                      borderRadius: 6,
+                      border: "1px solid rgba(255, 255, 255, 0.15)",
+                      background: "rgba(0, 0, 0, 0.2)",
+                      color: "#fff",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      textAlign: "center",
+                    }}
+                  />
+                  <span style={{ fontSize: 12, color: "var(--text-muted, #64748b)" }}>tác nhân</span>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 13, color: "var(--text-secondary, #94a3b8)", fontWeight: 500 }}>
+                    Tối đa (Max):
+                  </span>
+                  <input
+                    type="number"
+                    min={minAgents}
+                    max={10}
+                    value={maxAgents}
+                    onChange={(e) => {
+                      const v = Math.max(minAgents, Math.min(10, Number(e.target.value) || minAgents));
+                      setMaxAgents(v);
+                    }}
+                    style={{
+                      width: 56,
+                      padding: "4px 8px",
+                      borderRadius: 6,
+                      border: "1px solid rgba(255, 255, 255, 0.15)",
+                      background: "rgba(0, 0, 0, 0.2)",
+                      color: "#fff",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      textAlign: "center",
+                    }}
+                  />
+                  <span style={{ fontSize: 12, color: "var(--text-muted, #64748b)" }}>tác nhân</span>
+                </div>
+
+                <div style={{ fontSize: 12, color: "#818cf8", fontStyle: "italic" }}>
+                  💡 Khung thích ứng: {minAgents} → {maxAgents} tác nhân tùy theo độ phức tạp
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Section 3: Sub Providers Delegation & Batch Sync */}
@@ -802,6 +1076,449 @@ export function AgentConfigScreen({
             setSelectedTone={setSelectedTone}
             step={6}
           />
+
+          {/* Section 7: Fact-Check Phase (Post-Research Verification) */}
+          <div
+            className="agent-section"
+            style={{
+              border: enableFactCheck ? "1px solid rgba(16, 185, 129, 0.4)" : undefined,
+              transition: "border 0.2s ease",
+            }}
+          >
+            <div className="agent-section-header-row">
+              <label className="agent-section-label" style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                <span className="agent-section-step" style={{ background: enableFactCheck ? "#10b981" : undefined }}>
+                  7
+                </span>
+                <span>Kiểm chứng sự thật (Fact-Check Phase)</span>
+              </label>
+              <span
+                className="agent-role-pill"
+                style={{
+                  background: enableFactCheck ? "rgba(16, 185, 129, 0.15)" : "rgba(148, 163, 184, 0.15)",
+                  color: enableFactCheck ? "#10b981" : "#94a3b8",
+                  borderColor: enableFactCheck ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.3)",
+                }}
+              >
+                {enableFactCheck ? "✅ Đang kích hoạt" : "Tùy chọn"}
+              </span>
+            </div>
+            <div
+              style={{
+                marginTop: 8,
+                padding: "12px 16px",
+                borderRadius: 8,
+                background: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+              }}
+            >
+              <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none" }}>
+                <input
+                  type="checkbox"
+                  checked={enableFactCheck}
+                  onChange={(e) => setEnableFactCheck(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: "#10b981", cursor: "pointer" }}
+                />
+                <span style={{ fontWeight: 600, fontSize: 13, color: "var(--text-primary, #fff)" }}>
+                  🔍 Kích hoạt kiểm chứng chéo luận điểm sau nghiên cứu
+                </span>
+              </label>
+              <p style={{ fontSize: 12, color: "var(--text-secondary, #94a3b8)", marginTop: 6, marginLeft: 26, lineHeight: 1.5 }}>
+                Sau khi các tác nhân hoàn thành nghiên cứu, Fact-Checker sẽ trích xuất 5-10 luận điểm thực tế then chốt, gán nhãn kiểm chứng (supported / single_source / unsupported / conflict) và chuyển trực tiếp vào chỉ thị cho Lead Provider trước khi tổng hợp báo cáo.
+              </p>
+              {enableFactCheck && (
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid rgba(255, 255, 255, 0.08)" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: "var(--text-primary, #fff)" }}>
+                    Chọn Tác nhân Kiểm chứng (Fact-Checker Provider):
+                  </div>
+                  <ProviderGridPicker
+                    providers={availableProviders}
+                    selectedProviderId={selectedFactChecker}
+                    onSelectProvider={setSelectedFactChecker}
+                    capabilitiesMap={capabilitiesMap}
+                    nameRadioGroup="fact_checker_radio"
+                    selectedCardClass="selected"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Section 7.5: Adversarial Debate Phase */}
+          <div
+            className="agent-section"
+            style={{
+              border: enableDebate ? "1px solid rgba(244, 63, 94, 0.4)" : undefined,
+              boxShadow: enableDebate ? "0 0 16px rgba(244, 63, 94, 0.08)" : undefined,
+              transition: "border 0.2s ease",
+            }}
+          >
+            <div className="agent-section-header-row">
+              <label className="agent-section-label" style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                <span className="agent-section-step" style={{ background: enableDebate ? "#f43f5e" : undefined }}>
+                  7.5
+                </span>
+                <span>Tranh luận phản biện (Adversarial Debate - Red Team)</span>
+              </label>
+              <span
+                className="agent-role-pill"
+                style={{
+                  background: enableDebate ? "rgba(244, 63, 94, 0.15)" : "rgba(148, 163, 184, 0.15)",
+                  color: enableDebate ? "#f43f5e" : "#94a3b8",
+                  borderColor: enableDebate ? "rgba(244, 63, 94, 0.3)" : "rgba(148, 163, 184, 0.3)",
+                }}
+              >
+                {enableDebate ? "⚔️ Đang kích hoạt" : "Tùy chọn"}
+              </span>
+            </div>
+            <div
+              style={{
+                marginTop: 8,
+                padding: "12px 16px",
+                borderRadius: 8,
+                background: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+              }}
+            >
+              <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none" }}>
+                <input
+                  type="checkbox"
+                  checked={enableDebate}
+                  onChange={(e) => setEnableDebate(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: "#f43f5e", cursor: "pointer" }}
+                />
+                <span style={{ fontWeight: 600, fontSize: 13, color: "var(--text-primary, #fff)" }}>
+                  ⚔️ Kích hoạt vòng tranh luận đối kháng Red Team vs Defender
+                </span>
+              </label>
+              <p style={{ fontSize: 12, color: "var(--text-secondary, #94a3b8)", marginTop: 6, marginLeft: 26, lineHeight: 1.5 }}>
+                Tác nhân Red Team đóng vai trò phê phán đối kháng để tìm lỗ hổng logic, điểm thiên vị và thiếu sót dữ liệu. Tác nhân Bảo vệ sẽ phản hồi và củng cố luận điểm trước khi Lead Provider chốt báo cáo. Thêm khoảng ~2-5 phút xử lý.
+              </p>
+              {enableDebate && (
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid rgba(255, 255, 255, 0.08)", display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary, #fff)", display: "flex", alignItems: "center", gap: 8 }}>
+                      <span>Số vòng tranh luận (Rounds):</span>
+                      <select
+                        value={maxDebateRounds}
+                        onChange={(e) => setMaxDebateRounds(Number(e.target.value))}
+                        style={{
+                          background: "rgba(30, 41, 59, 0.8)",
+                          color: "#fff",
+                          border: "1px solid rgba(255, 255, 255, 0.15)",
+                          borderRadius: 6,
+                          padding: "4px 10px",
+                          fontSize: 12,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <option value={1}>1 vòng (1 critique + 1 defense)</option>
+                        <option value={2}>2 vòng (2 critiques + 2 defenses - Khuyến nghị)</option>
+                        <option value={3}>3 vòng (3 critiques + 3 defenses - Chuyên sâu)</option>
+                        <option value={4}>4 vòng (Đối kháng mở rộng)</option>
+                        <option value={5}>5 vòng (Tối đa)</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: "var(--text-primary, #fff)" }}>
+                      Chọn Tác nhân Red Team (Phản biện gay gắt):
+                    </div>
+                    <ProviderGridPicker
+                      providers={availableProviders}
+                      selectedProviderId={selectedDebateProvider}
+                      onSelectProvider={setSelectedDebateProvider}
+                      capabilitiesMap={capabilitiesMap}
+                      nameRadioGroup="debate_rt_radio"
+                      selectedCardClass="selected"
+                    />
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: "var(--text-primary, #fff)" }}>
+                      Chọn Tác nhân Defender (Bảo vệ luận điểm):
+                    </div>
+                    <ProviderGridPicker
+                      providers={availableProviders}
+                      selectedProviderId={selectedDebateDefenderProvider}
+                      onSelectProvider={setSelectedDebateDefenderProvider}
+                      capabilitiesMap={capabilitiesMap}
+                      nameRadioGroup="debate_def_radio"
+                      selectedCardClass="selected"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Section 7.6: Delphi Consensus Phase */}
+          <div
+            className="agent-section"
+            style={{
+              border: enableConsensus ? "1px solid rgba(16, 185, 129, 0.4)" : undefined,
+              boxShadow: enableConsensus ? "0 0 16px rgba(16, 185, 129, 0.08)" : undefined,
+              transition: "border 0.2s ease",
+            }}
+          >
+            <div className="agent-section-header-row">
+              <label className="agent-section-label" style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                <span className="agent-section-step" style={{ background: enableConsensus ? "#10b981" : undefined }}>
+                  7.6
+                </span>
+                <span>Đồng thuận Delphi (Delphi Consensus - Convergence Scoring)</span>
+              </label>
+              <span
+                className="agent-role-pill"
+                style={{
+                  background: enableConsensus ? "rgba(16, 185, 129, 0.15)" : "rgba(148, 163, 184, 0.15)",
+                  color: enableConsensus ? "#10b981" : "#94a3b8",
+                  borderColor: enableConsensus ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.3)",
+                }}
+              >
+                {enableConsensus ? "🎯 Đang kích hoạt" : "Tùy chọn"}
+              </span>
+            </div>
+            <div
+              style={{
+                marginTop: 8,
+                padding: "12px 16px",
+                borderRadius: 8,
+                background: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+              }}
+            >
+              <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none" }}>
+                <input
+                  type="checkbox"
+                  checked={enableConsensus}
+                  onChange={(e) => setEnableConsensus(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: "#10b981", cursor: "pointer" }}
+                />
+                <span style={{ fontWeight: 600, fontSize: 13, color: "var(--text-primary, #fff)" }}>
+                  🎯 Kích hoạt đánh giá đồng thuận Delphi đa vòng (Convergence Scoring)
+                </span>
+              </label>
+              <p style={{ fontSize: 12, color: "var(--text-secondary, #94a3b8)", marginTop: 6, marginLeft: 26, lineHeight: 1.5 }}>
+                Các tác nhân AI độc lập chấm điểm các luận điểm then chốt từ nghiên cứu &amp; tranh biện (thang 1-5). Thuật toán tính độ lệch chuẩn (&sigma;) và lặp lại qua các vòng ẩn danh có phản hồi phân phối cho đến khi đạt độ hội tụ cao nhất trước khi Lead chốt báo cáo.
+              </p>
+              {enableConsensus && (
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid rgba(255, 255, 255, 0.08)", display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary, #fff)", display: "flex", alignItems: "center", gap: 8 }}>
+                      <span>Số vòng Delphi tối đa:</span>
+                      <select
+                        value={maxConsensusRounds}
+                        onChange={(e) => setMaxConsensusRounds(Number(e.target.value))}
+                        style={{
+                          background: "rgba(30, 41, 59, 0.8)",
+                          color: "#fff",
+                          border: "1px solid rgba(255, 255, 255, 0.15)",
+                          borderRadius: 6,
+                          padding: "4px 10px",
+                          fontSize: 12,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <option value={1}>1 vòng (Chấm điểm sơ bộ)</option>
+                        <option value={2}>2 vòng (Hội tụ nhanh)</option>
+                        <option value={3}>3 vòng (Khuyến nghị chuẩn Delphi)</option>
+                        <option value={4}>4 vòng (Độ chính xác cao)</option>
+                        <option value={5}>5 vòng (Tối đa)</option>
+                      </select>
+                    </label>
+
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary, #fff)", display: "flex", alignItems: "center", gap: 10 }}>
+                      <span>Ngưỡng hội tụ (&sigma; threshold):</span>
+                      <input
+                        type="range"
+                        min="0.3"
+                        max="1.5"
+                        step="0.05"
+                        value={consensusThreshold}
+                        onChange={(e) => setConsensusThreshold(parseFloat(e.target.value))}
+                        style={{ width: 120, accentColor: "#10b981", cursor: "pointer" }}
+                      />
+                      <span style={{ color: "#10b981", fontFamily: "monospace", fontWeight: 700 }}>
+                        &sigma; &le; {consensusThreshold.toFixed(2)}
+                      </span>
+                    </label>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: "var(--text-primary, #fff)" }}>
+                      Chọn Hội đồng Chấm điểm Delphi (Tối thiểu 2 nhà đánh giá):
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {availableProviders.map((prov) => {
+                        const isSelected = selectedConsensusProviders.includes(prov.id);
+                        return (
+                          <button
+                            key={prov.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedConsensusProviders((prev) =>
+                                isSelected
+                                  ? prev.length > 2
+                                    ? prev.filter((p) => p !== prov.id)
+                                    : prev
+                                  : [...prev, prov.id]
+                              );
+                            }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "6px 12px",
+                              borderRadius: 6,
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              border: isSelected ? "1px solid #10b981" : "1px solid rgba(255, 255, 255, 0.12)",
+                              background: isSelected ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 255, 255, 0.03)",
+                              color: isSelected ? "#10b981" : "var(--text-secondary, #94a3b8)",
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            <span style={{ fontSize: 10 }}>{isSelected ? "✓" : "+"}</span>
+                            <span>{prov.name || prov.id.toUpperCase()}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Section 8: Định dạng báo cáo (Report Format) */}
+          <div
+            className="agent-config-section"
+            style={{
+              borderColor: reportFormat !== "narrative" ? "rgba(99, 102, 241, 0.4)" : undefined,
+              boxShadow: reportFormat !== "narrative" ? "0 0 16px rgba(99, 102, 241, 0.08)" : undefined,
+            }}
+          >
+            <div className="agent-section-header-row">
+              <label className="agent-section-label" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span className="agent-section-step" style={{ background: reportFormat !== "narrative" ? "#6366f1" : undefined }}>
+                  8
+                </span>
+                <span>Định dạng đầu ra báo cáo (Report Format)</span>
+              </label>
+              <span
+                className="agent-role-pill"
+                style={{
+                  background: reportFormat === "narrative" ? "rgba(148, 163, 184, 0.15)" : "rgba(99, 102, 241, 0.15)",
+                  color: reportFormat === "narrative" ? "#94a3b8" : "#818cf8",
+                  borderColor: reportFormat === "narrative" ? "rgba(148, 163, 184, 0.3)" : "rgba(99, 102, 241, 0.3)",
+                }}
+              >
+                {reportFormat === "narrative" ? "Mặc định (Tự sự)" : reportFormat === "matrix" ? "📊 Ma trận so sánh" : "🔀 Hybrid (Cả hai)"}
+              </span>
+            </div>
+
+            <p style={{ fontSize: 13, color: "var(--text-secondary, #94a3b8)", marginTop: 6, marginBottom: 12 }}>
+              Chọn cách Lead Synthesizer cấu trúc kết quả phân tích. Định dạng Ma trận tối ưu cho so sánh công nghệ, giải pháp hoặc quyết định kiến trúc.
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+              <div
+                onClick={() => setReportFormat("narrative")}
+                style={{
+                  padding: "14px 16px",
+                  borderRadius: 10,
+                  cursor: "pointer",
+                  border: reportFormat === "narrative" ? "1.5px solid #6366f1" : "1px solid rgba(255, 255, 255, 0.08)",
+                  background: reportFormat === "narrative" ? "rgba(99, 102, 241, 0.1)" : "rgba(255, 255, 255, 0.02)",
+                  transition: "all 0.2s ease",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: reportFormat === "narrative" ? "#818cf8" : "var(--text-primary, #fff)" }}>
+                    📝 Báo cáo tự sự (Narrative)
+                  </span>
+                  <input
+                    type="radio"
+                    name="report_format"
+                    checked={reportFormat === "narrative"}
+                    onChange={() => setReportFormat("narrative")}
+                    style={{ accentColor: "#6366f1" }}
+                  />
+                </div>
+                <span style={{ fontSize: 12, color: "var(--text-secondary, #94a3b8)", lineHeight: 1.4 }}>
+                  Văn bản chi tiết nhiều chương mục, luận giải sâu và kết luận tổng quan. Phù hợp với mọi đề tài nghiên cứu.
+                </span>
+              </div>
+
+              <div
+                onClick={() => setReportFormat("matrix")}
+                style={{
+                  padding: "14px 16px",
+                  borderRadius: 10,
+                  cursor: "pointer",
+                  border: reportFormat === "matrix" ? "1.5px solid #6366f1" : "1px solid rgba(255, 255, 255, 0.08)",
+                  background: reportFormat === "matrix" ? "rgba(99, 102, 241, 0.1)" : "rgba(255, 255, 255, 0.02)",
+                  transition: "all 0.2s ease",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: reportFormat === "matrix" ? "#818cf8" : "var(--text-primary, #fff)" }}>
+                    📊 Ma trận so sánh (Matrix)
+                  </span>
+                  <input
+                    type="radio"
+                    name="report_format"
+                    checked={reportFormat === "matrix"}
+                    onChange={() => setReportFormat("matrix")}
+                    style={{ accentColor: "#6366f1" }}
+                  />
+                </div>
+                <span style={{ fontSize: 12, color: "var(--text-secondary, #94a3b8)", lineHeight: 1.4 }}>
+                  Bảng so sánh đa chiều theo tiêu chí, chấm điểm trọng số, thẻ Pros/Cons và khuyến nghị cụ thể.
+                </span>
+              </div>
+
+              <div
+                onClick={() => setReportFormat("hybrid")}
+                style={{
+                  padding: "14px 16px",
+                  borderRadius: 10,
+                  cursor: "pointer",
+                  border: reportFormat === "hybrid" ? "1.5px solid #6366f1" : "1px solid rgba(255, 255, 255, 0.08)",
+                  background: reportFormat === "hybrid" ? "rgba(99, 102, 241, 0.1)" : "rgba(255, 255, 255, 0.02)",
+                  transition: "all 0.2s ease",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: reportFormat === "hybrid" ? "#818cf8" : "var(--text-primary, #fff)" }}>
+                    🔀 Kết hợp (Hybrid)
+                  </span>
+                  <input
+                    type="radio"
+                    name="report_format"
+                    checked={reportFormat === "hybrid"}
+                    onChange={() => setReportFormat("hybrid")}
+                    style={{ accentColor: "#6366f1" }}
+                  />
+                </div>
+                <span style={{ fontSize: 12, color: "var(--text-secondary, #94a3b8)", lineHeight: 1.4 }}>
+                  Tạo cả báo cáo tự sự chi tiết và ma trận so sánh. Giao diện cho phép chuyển đổi tab linh hoạt.
+                </span>
+              </div>
+            </div>
+          </div>
 
           {/* Footer Submit */}
           <div className="agent-config-footer">

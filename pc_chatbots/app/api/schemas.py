@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 ProviderName = Literal[
     "perplexity", "gemini", "chatgpt", "claude", "copilot",
@@ -12,7 +12,7 @@ ProviderName = Literal[
     "9router", "router",
 ]
 JobStatus = Literal[
-    "queued", "summarizing", "orchestrating", "planning", "researching", "extracting", "verifying", "synthesizing", "leading",
+    "queued", "summarizing", "orchestrating", "planning", "researching", "fact_checking", "debating", "consensus", "extracting", "verifying", "synthesizing", "leading",
     "completed", "partial", "failed", "needs_user_action", "cancelled",
 ]
 
@@ -20,6 +20,7 @@ TonePreset = Literal[
     "academic", "professional", "analytical", "explanatory",
     "journalistic", "creative", "executive", "conversational",
 ]
+ReportFormat = Literal["narrative", "matrix", "hybrid"]
 
 
 class AgentDispatchItem(BaseModel):
@@ -28,6 +29,7 @@ class AgentDispatchItem(BaseModel):
     config: dict[str, Any] = Field(default_factory=dict)
     sub_topic: str
     question: str
+    role_group: str = Field(default="researcher")
 
 
 class OrchestratorOutput(BaseModel):
@@ -42,14 +44,36 @@ class AgentResearchRequest(BaseModel):
     lead_provider: ProviderName
     lead_config: dict[str, Any] | None = Field(default_factory=dict)
     tone: str = Field(default="professional")
+    report_format: ReportFormat = Field(default="narrative")
+    auto_scale_agents: bool = Field(default=True)
+    min_agents: int = Field(default=2, ge=1, le=10)
+    max_agents: int = Field(default=5, ge=2, le=10)
     max_minutes: int = Field(default=30, ge=1, le=180)
     delegated_providers: list[ProviderName] | None = Field(default=None)
     provider_configs: dict[str, Any] | None = Field(default_factory=dict)
     provider_capabilities: dict[str, Any] | None = Field(default_factory=dict)
     summarization_provider: ProviderName | None = Field(default="9router")
     summarization_config: dict[str, Any] | None = Field(default_factory=lambda: {"model_id": "Daily"})
+    enable_fact_check: bool = Field(default=False)
+    fact_check_provider: ProviderName | None = Field(default="perplexity")
+    fact_check_config: dict[str, Any] | None = Field(default_factory=dict)
+    enable_debate: bool = Field(default=False)
+    debate_provider: ProviderName | None = Field(default=None)
+    debate_defender_provider: ProviderName | None = Field(default=None)
+    debate_config: dict[str, Any] | None = Field(default_factory=dict)
+    max_debate_rounds: int = Field(default=2, ge=1, le=5)
+    enable_consensus: bool = Field(default=False)
+    consensus_providers: list[ProviderName] | None = Field(default=None)
+    consensus_threshold: float = Field(default=0.8, ge=0.1, le=2.0)
+    max_consensus_rounds: int = Field(default=3, ge=1, le=5)
     conversation_urls: dict[str, str] | None = Field(default=None)
     parent_job_id: str | None = Field(default=None)
+
+    @model_validator(mode="after")
+    def validate_agent_bounds(self) -> "AgentResearchRequest":
+        if self.min_agents > self.max_agents:
+            self.max_agents = self.min_agents
+        return self
 
     @field_validator("query")
     @classmethod
@@ -101,10 +125,14 @@ class SourceResponse(BaseModel):
 
 
 class ClaimResponse(BaseModel):
-    id: str
-    text: str
-    source_ids: list[str]
-    verdict: Literal["supported", "single_source", "unsupported", "conflict"]
+    id: str = ""
+    text: str = ""
+    source_ids: list[str] = Field(default_factory=list)
+    verdict: Literal["supported", "single_source", "unsupported", "conflict", "disputed", "verified"] = "unsupported"
+    confidence: float | None = None
+    reasoning: str | None = None
+    branch: str | None = None
+    claim: str | None = None
 
 
 class DisagreementResponse(BaseModel):
@@ -136,6 +164,8 @@ class ResearchResponse(BaseModel):
     status: JobStatus
     progress: Progress
     report_markdown: str | None
+    report_format: str | None = None
+    report_matrix: dict[str, Any] | None = None
     sources: list[SourceResponse]
     claims: list[ClaimResponse]
     disagreements: list[DisagreementResponse]
@@ -157,6 +187,21 @@ class ResearchResponse(BaseModel):
     summarization_provider: str | None = None
     summarization_config: dict[str, Any] | None = None
     context_summary: str | None = None
+    enable_fact_check: bool = False
+    fact_check_provider: str | None = None
+    fact_check_config: dict[str, Any] | None = None
+    fact_check_results: list[dict[str, Any]] | None = None
+    enable_debate: bool = False
+    debate_provider: str | None = None
+    debate_defender_provider: str | None = None
+    debate_config: dict[str, Any] | None = None
+    max_debate_rounds: int = 2
+    debate_transcript: list[dict[str, Any]] | None = None
+    enable_consensus: bool = False
+    consensus_providers: list[str] | None = None
+    consensus_threshold: float | None = None
+    max_consensus_rounds: int | None = None
+    consensus_scores: dict[str, Any] | None = None
     parent_job_id: str | None = None
     conversation_id: str | None = None
     created_at: datetime

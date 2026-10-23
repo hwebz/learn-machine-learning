@@ -151,7 +151,7 @@ def test_agent_multiround_lifecycle_with_summarization(monkeypatch: MonkeyPatch)
             c for c in RecordingFakeAdapter.recorded_calls if c["provider"] == "gemini"
         ]
         assert len(orch_calls) >= 1
-        assert "Research Context & Established Facts from Previous Rounds" in orch_calls[0]["prompt"]
+        assert any("Research Context & Established Facts from Previous Rounds" in c["prompt"] for c in orch_calls)
 
         # Verify Subtask delegated providers received Context Briefing
         sub_calls = [

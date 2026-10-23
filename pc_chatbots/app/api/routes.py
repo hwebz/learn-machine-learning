@@ -57,11 +57,11 @@ async def generated_media(filename: str) -> FileResponse:
 def _safe_json_loads(raw: str | None, fallback: Any = None) -> Any:
     """Safely parse a JSON string with a fallback value on None or decode error."""
     if not raw:
-        return fallback if fallback is not None else []
+        return fallback
     try:
         return json.loads(raw)
     except Exception:
-        return fallback if fallback is not None else []
+        return fallback
 
 
 def _event_to_step_dict(ev: JobEvent) -> dict[str, Any]:
@@ -122,6 +122,8 @@ def _job_response(
         status=job.status,
         progress={"subtasks_total": job.subtasks_total, "subtasks_done": job.subtasks_done},
         report_markdown=job.report_markdown,
+        report_format=getattr(job, "report_format", "narrative"),
+        report_matrix=_safe_json_loads(getattr(job, "report_matrix_json", None), None),
         sources=sources,
         claims=claims,
         disagreements=disagreements,
@@ -139,6 +141,21 @@ def _job_response(
         summarization_provider=getattr(job, "summarization_provider", None) or config.get("summarization_provider"),
         summarization_config=_safe_json_loads(getattr(job, "summarization_config_json", None), None) or config.get("summarization_config"),
         context_summary=getattr(job, "context_summary", None),
+        enable_fact_check=getattr(job, "enable_fact_check", False),
+        fact_check_provider=getattr(job, "fact_check_provider", None),
+        fact_check_config=_safe_json_loads(getattr(job, "fact_check_config_json", None), None),
+        fact_check_results=_safe_json_loads(getattr(job, "fact_check_results_json", None), None),
+        enable_debate=getattr(job, "enable_debate", False),
+        debate_provider=getattr(job, "debate_provider", None),
+        debate_defender_provider=getattr(job, "debate_defender_provider", None),
+        debate_config=_safe_json_loads(getattr(job, "debate_config_json", None), None),
+        max_debate_rounds=getattr(job, "max_debate_rounds", 2),
+        debate_transcript=_safe_json_loads(getattr(job, "debate_transcript_json", None), None),
+        enable_consensus=getattr(job, "enable_consensus", False),
+        consensus_providers=_safe_json_loads(getattr(job, "consensus_providers_json", None), None),
+        consensus_threshold=getattr(job, "consensus_threshold", 0.8),
+        max_consensus_rounds=getattr(job, "max_consensus_rounds", 3),
+        consensus_scores=_safe_json_loads(getattr(job, "consensus_scores_json", None), None),
         orchestrator_conversation_url=getattr(job, "orchestrator_conversation_url", None),
         lead_conversation_url=getattr(job, "lead_conversation_url", None),
         provider_conversations=provider_conversations,
@@ -329,6 +346,19 @@ async def create_agent_research(payload: AgentResearchRequest, request: Request)
             tone=payload.tone,
             summarization_provider=payload.summarization_provider or "9router",
             summarization_config_json=json.dumps(payload.summarization_config or {"model_id": "Daily"}),
+            enable_fact_check=payload.enable_fact_check,
+            fact_check_provider=payload.fact_check_provider,
+            fact_check_config_json=json.dumps(payload.fact_check_config or {}) if payload.fact_check_config else None,
+            enable_debate=payload.enable_debate,
+            debate_provider=payload.debate_provider,
+            debate_defender_provider=payload.debate_defender_provider,
+            debate_config_json=json.dumps(payload.debate_config or {}) if payload.debate_config else None,
+            max_debate_rounds=payload.max_debate_rounds,
+            enable_consensus=payload.enable_consensus,
+            consensus_providers_json=json.dumps(payload.consensus_providers) if payload.consensus_providers else None,
+            consensus_threshold=payload.consensus_threshold,
+            max_consensus_rounds=payload.max_consensus_rounds,
+            report_format=payload.report_format,
             subtasks_total=1,
             parent_job_id=parent_job_id,
             conversation_id=conversation_id,
@@ -431,9 +461,25 @@ async def list_research(limit: int = 50) -> list[dict[str, Any]]:
                 "summarization_provider": getattr(j, "summarization_provider", None) or config.get("summarization_provider"),
                 "summarization_config": _safe_json_loads(getattr(j, "summarization_config_json", None), None) or config.get("summarization_config"),
                 "context_summary": getattr(j, "context_summary", None),
+                "enable_fact_check": getattr(j, "enable_fact_check", False),
+                "fact_check_provider": getattr(j, "fact_check_provider", None),
+                "fact_check_config": _safe_json_loads(getattr(j, "fact_check_config_json", None), None),
+                "fact_check_results": _safe_json_loads(getattr(j, "fact_check_results_json", None), None),
+                "enable_debate": getattr(j, "enable_debate", False),
+                "debate_provider": getattr(j, "debate_provider", None),
+                "debate_defender_provider": getattr(j, "debate_defender_provider", None),
+                "max_debate_rounds": getattr(j, "max_debate_rounds", 2),
+                "debate_transcript": _safe_json_loads(getattr(j, "debate_transcript_json", None), None),
+                "enable_consensus": getattr(j, "enable_consensus", False),
+                "consensus_providers": _safe_json_loads(getattr(j, "consensus_providers_json", None), None),
+                "consensus_threshold": getattr(j, "consensus_threshold", 0.8),
+                "max_consensus_rounds": getattr(j, "max_consensus_rounds", 3),
+                "consensus_scores": _safe_json_loads(getattr(j, "consensus_scores_json", None), None),
                 "orchestrator_conversation_url": getattr(j, "orchestrator_conversation_url", None),
                 "lead_conversation_url": getattr(j, "lead_conversation_url", None),
                 "provider_conversations": provider_conversations,
+                "report_format": getattr(j, "report_format", "narrative") or "narrative",
+                "report_matrix": _safe_json_loads(getattr(j, "report_matrix_json", None), None),
                 "parent_job_id": getattr(j, "parent_job_id", None),
                 "conversation_id": getattr(j, "conversation_id", None) or j.id,
                 "created_at": j.created_at.isoformat() if j.created_at else None,

@@ -42,6 +42,23 @@ class Job(SQLModel, table=True):
     context_summary: str | None = None
     parent_job_id: str | None = Field(default=None, index=True)
     conversation_id: str | None = Field(default=None, index=True)
+    enable_fact_check: bool = False
+    fact_check_provider: str | None = None
+    fact_check_config_json: str | None = None
+    fact_check_results_json: str | None = None
+    report_format: str = "narrative"
+    report_matrix_json: str | None = None
+    enable_debate: bool = False
+    debate_provider: str | None = None
+    debate_defender_provider: str | None = None
+    debate_config_json: str | None = None
+    max_debate_rounds: int = 2
+    debate_transcript_json: str | None = None
+    enable_consensus: bool = False
+    consensus_providers_json: str | None = None
+    consensus_threshold: float = 0.8
+    max_consensus_rounds: int = 3
+    consensus_scores_json: str | None = None
 
 
 class JobEvent(SQLModel, table=True):

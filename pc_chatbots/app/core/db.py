@@ -18,11 +18,19 @@ def _ensure_sqlite_parent(db_url: str) -> None:
 
 
 _ensure_sqlite_parent(settings.db_url)
-engine = create_async_engine(settings.db_url, connect_args={"check_same_thread": False})
+engine = create_async_engine(settings.db_url, connect_args={"check_same_thread": False, "timeout": 15})
 SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
+from sqlalchemy import event, text
 
-from sqlalchemy import text
+@event.listens_for(engine.sync_engine, "connect")
+def _set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.close()
+
 
 
 async def init_db() -> None:
@@ -64,6 +72,23 @@ async def init_db() -> None:
                 "context_summary": "TEXT",
                 "parent_job_id": "VARCHAR",
                 "conversation_id": "VARCHAR",
+                "enable_fact_check": "BOOLEAN DEFAULT 0",
+                "fact_check_provider": "VARCHAR",
+                "fact_check_config_json": "TEXT",
+                "fact_check_results_json": "TEXT",
+                "report_format": "VARCHAR DEFAULT 'narrative'",
+                "report_matrix_json": "TEXT",
+                "enable_debate": "BOOLEAN DEFAULT 0",
+                "debate_provider": "VARCHAR",
+                "debate_defender_provider": "VARCHAR",
+                "debate_config_json": "TEXT",
+                "max_debate_rounds": "INTEGER DEFAULT 2",
+                "debate_transcript_json": "TEXT",
+                "enable_consensus": "BOOLEAN DEFAULT 0",
+                "consensus_providers_json": "TEXT",
+                "consensus_threshold": "FLOAT DEFAULT 0.8",
+                "max_consensus_rounds": "INTEGER DEFAULT 3",
+                "consensus_scores_json": "TEXT",
             }
             for col_name, col_type in new_cols.items():
                 if col_name not in cols:

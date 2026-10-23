@@ -8,14 +8,44 @@ export interface SourceLink {
 }
 
 export interface ClaimItem {
-  claim: string;
-  verdict?: "verified" | "supported" | "disputed";
+  id?: string;
+  claim?: string;
+  text?: string;
+  verdict?: "verified" | "supported" | "single_source" | "unsupported" | "conflict" | "disputed";
   confidence?: number;
+  reasoning?: string;
+  branch?: string;
+  provider?: string;
 }
 
 export interface DisagreementItem {
   topic: string;
   viewpoints: Record<string, string>;
+}
+
+export type ReportFormat = "narrative" | "matrix" | "hybrid";
+
+export interface MatrixAlternative {
+  name: string;
+  description: string;
+  scores: {
+    cost: number;
+    performance: number;
+    complexity: number;
+    maturity: number;
+    scalability: number;
+  };
+  pros: string[];
+  cons: string[];
+}
+
+export interface MatrixReport {
+  title: string;
+  executive_summary: string;
+  alternatives: MatrixAlternative[];
+  recommendation: string;
+  caveats: string[];
+  disagreements: string[];
 }
 
 export interface ThinkingStep {
@@ -31,7 +61,7 @@ export interface StepLog {
   provider?: string;
   step?: string;
   message: string;
-  status: "pending" | "running" | "completed" | "error" | "orchestrating" | "researching" | "leading";
+  status: "pending" | "running" | "completed" | "error" | "orchestrating" | "researching" | "fact_checking" | "debating" | "consensus" | "leading";
   data?: any;
   thinkingText?: string;
   thinkingSteps?: ThinkingStep[];
@@ -39,6 +69,42 @@ export interface StepLog {
   isThinking?: boolean;
   streamingText?: string;
   conversationUrl?: string;
+}
+
+export interface DebateEntry {
+  round: number;
+  side: "red_team" | "defender";
+  provider: string;
+  content?: string;
+  error?: string;
+  elapsed_s?: number;
+}
+
+export interface ConsensusThesis {
+  id: string;
+  thesis: string;
+  category?: string;
+  supporting_evidence?: string;
+}
+
+export interface ConsensusAggregateScore {
+  id: string;
+  mean: number;
+  stdev: number;
+  scores?: number[];
+  n: number;
+}
+
+export interface ConsensusRound {
+  round: number;
+  aggregate: ConsensusAggregateScore[];
+}
+
+export interface ConsensusScoreResult {
+  theses: ConsensusThesis[];
+  rounds: ConsensusRound[];
+  converged: boolean;
+  final_scores: ConsensusAggregateScore[];
 }
 
 export interface Message {
@@ -59,6 +125,10 @@ export interface Message {
   provider_runs?: Record<string, any> | any[];
   provider_options?: Record<string, any>;
   factCheckStatus?: "verified" | "reviewing" | "unverified";
+  enable_fact_check?: boolean;
+  fact_check_provider?: string;
+  fact_check_config?: Record<string, any>;
+  fact_check_results?: ClaimItem[] | any[];
   steps?: StepLog[];
   job_type?: "research" | "agent";
   orchestrator_provider?: string;
@@ -72,7 +142,31 @@ export interface Message {
   summarization_provider?: string;
   summarization_config?: Record<string, any>;
   context_summary?: string;
+  report_format?: string;
+  report_matrix?: MatrixReport;
+  auto_scale_agents?: boolean;
+  min_agents?: number;
+  max_agents?: number;
+  complexity?: ComplexityAssessment;
+  enable_debate?: boolean;
+  debate_provider?: string;
+  debate_defender_provider?: string;
+  debate_config?: Record<string, any>;
+  max_debate_rounds?: number;
+  debate_transcript?: DebateEntry[];
+  enable_consensus?: boolean;
+  consensus_providers?: string[];
+  consensus_threshold?: number;
+  max_consensus_rounds?: number;
+  consensus_scores?: ConsensusScoreResult;
   jobId?: string;
+}
+
+export interface ComplexityAssessment {
+  complexity_level: "low" | "medium" | "high";
+  recommended_agent_count: number;
+  recommended_groups?: string[];
+  reasoning?: string;
 }
 
 export interface AgentDispatchPlanItem {
@@ -84,6 +178,7 @@ export interface AgentDispatchPlanItem {
   branch_index?: number;
   provider_role_key?: string;
   conversation_url?: string;
+  role_group?: string;
 }
 
 import { ProviderSelectionConfig } from "./capabilities";
@@ -100,7 +195,7 @@ export interface ChatSession {
   selectedProvider?: string;
   depth?: DepthMode;
   jobId?: string;
-  status?: "queued" | "summarizing" | "running" | "completed" | "partial" | "failed" | "cancelled" | "orchestrating" | "researching" | "leading";
+  status?: "queued" | "summarizing" | "running" | "completed" | "partial" | "failed" | "cancelled" | "orchestrating" | "researching" | "fact_checking" | "debating" | "consensus" | "leading";
   providerConfigurations?: Record<string, ProviderSelectionConfig>;
   job_type?: "research" | "agent";
   orchestrator_provider?: string;
@@ -114,6 +209,27 @@ export interface ChatSession {
   summarization_provider?: string;
   summarization_config?: Record<string, any>;
   context_summary?: string;
+  enable_fact_check?: boolean;
+  fact_check_provider?: string;
+  fact_check_config?: Record<string, any>;
+  fact_check_results?: ClaimItem[] | any[];
+  enable_debate?: boolean;
+  debate_provider?: string;
+  debate_defender_provider?: string;
+  debate_config?: Record<string, any>;
+  max_debate_rounds?: number;
+  debate_transcript?: DebateEntry[];
+  enable_consensus?: boolean;
+  consensus_providers?: string[];
+  consensus_threshold?: number;
+  max_consensus_rounds?: number;
+  consensus_scores?: ConsensusScoreResult;
+  report_format?: string;
+  report_matrix?: MatrixReport;
+  auto_scale_agents?: boolean;
+  min_agents?: number;
+  max_agents?: number;
+  complexity?: ComplexityAssessment;
 }
 
 export interface ProviderInfo {

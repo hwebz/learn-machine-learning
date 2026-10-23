@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { PROVIDERS_LIST, DEFAULT_SELECTED_PROVIDERS } from "../../lib/constants";
-import { ChatSession, Message, StepLog, ProviderInfo, SourceLink } from "../../types/chat";
+import { ChatSession, Message, StepLog, ProviderInfo, SourceLink, ReportFormat } from "../../types/chat";
 import { LeftSidebar } from "../sidebar/LeftSidebar";
 import { ChatArea } from "./ChatArea";
 import { RightSidebar } from "../inspector/RightSidebar";
@@ -98,10 +98,27 @@ export function buildAssistantMessage(
     summarization_provider?: string | null;
     summarization_config?: Record<string, any>;
     context_summary?: string | null;
+    enable_fact_check?: boolean;
+    fact_check_provider?: string | null;
+    fact_check_config?: Record<string, any>;
+    fact_check_results?: any[];
     error?: string | null;
     orchestrator_conversation_url?: string | null;
     lead_conversation_url?: string | null;
     provider_conversations?: Record<string, string>;
+    report_format?: string | null;
+    report_matrix?: any | null;
+    enable_debate?: boolean;
+    debate_provider?: string | null;
+    debate_defender_provider?: string | null;
+    debate_config?: Record<string, any>;
+    max_debate_rounds?: number;
+    debate_transcript?: any[];
+    enable_consensus?: boolean;
+    consensus_providers?: string[];
+    consensus_threshold?: number;
+    max_consensus_rounds?: number;
+    consensus_scores?: any;
   }
 ): Message | null {
   const content = resolveAssistantContent(jobData.status, jobData.report_markdown, jobData.error);
@@ -145,6 +162,10 @@ export function buildAssistantMessage(
     provider_runs: jobData.provider_runs || {},
     provider_options: jobData.provider_options || {},
     factCheckStatus: jobData.status === "completed" ? "verified" : "unverified",
+    enable_fact_check: jobData.enable_fact_check,
+    fact_check_provider: jobData.fact_check_provider || undefined,
+    fact_check_config: jobData.fact_check_config,
+    fact_check_results: jobData.fact_check_results,
     steps: jobData.steps || [],
     job_type: isAgent ? "agent" : "research",
     orchestrator_provider: jobData.orchestrator_provider,
@@ -158,6 +179,19 @@ export function buildAssistantMessage(
     orchestrator_conversation_url: jobData.orchestrator_conversation_url || undefined,
     lead_conversation_url: jobData.lead_conversation_url || undefined,
     provider_conversations: Object.keys(resolvedConvUrls).length > 0 ? resolvedConvUrls : undefined,
+    report_format: (jobData.report_format as any) || undefined,
+    report_matrix: jobData.report_matrix || undefined,
+    enable_debate: jobData.enable_debate,
+    debate_provider: jobData.debate_provider || undefined,
+    debate_defender_provider: jobData.debate_defender_provider || undefined,
+    debate_config: jobData.debate_config || undefined,
+    max_debate_rounds: jobData.max_debate_rounds,
+    debate_transcript: (jobData as any).debate_transcript || undefined,
+    enable_consensus: jobData.enable_consensus,
+    consensus_providers: jobData.consensus_providers,
+    consensus_threshold: jobData.consensus_threshold,
+    max_consensus_rounds: jobData.max_consensus_rounds,
+    consensus_scores: jobData.consensus_scores || undefined,
   };
 }
 
@@ -340,6 +374,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               let nextStatus = s.status;
               if (rawJobStatus && rawJobStatus !== "running") {
                 nextStatus = rawJobStatus as any;
+              } else if (stepLog.step === "fact_checking" || (stepLog.data as any)?.phase === "fact_checking") {
+                nextStatus = "fact_checking" as any;
+              } else if (stepLog.step === "summarizing") {
+                nextStatus = "summarizing" as any;
               } else if (dispatch && nextStatus === "orchestrating") {
                 nextStatus = "researching" as any;
               }
@@ -385,13 +423,20 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               providers: jobProviders,
               sources: consolidatedSources,
               claims: result.claims || [],
+              disagreements: (result as any).disagreements || [],
               provider_runs: result.provider_runs || {},
               provider_options:
                 (result as any).provider_options || jobMeta?.providerConfigurations || {},
+              enable_fact_check: (result as any).enable_fact_check ?? jobMeta?.enable_fact_check,
+              fact_check_provider: (result as any).fact_check_provider || jobMeta?.fact_check_provider,
+              fact_check_config: (result as any).fact_check_config || jobMeta?.fact_check_config,
+              fact_check_results: (result as any).fact_check_results || jobMeta?.fact_check_results,
               steps: latestSteps,
               job_type: isAgent ? "agent" : "research",
               orchestrator_provider: orchProv,
               lead_provider: leadProv,
+              summarization_provider: (result as any).summarization_provider || jobMeta?.summarization_provider,
+              summarization_config: (result as any).summarization_config || jobMeta?.summarization_config,
               tone: jobMeta?.tone,
               orchestrator_dispatch:
                 (result as any).orchestrator_dispatch || jobMeta?.orchestrator_dispatch,
@@ -420,6 +465,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                       ...(s.provider_conversations || {}),
                       ...(result.provider_conversations || {}),
                     },
+                    enable_fact_check: (result as any).enable_fact_check ?? s.enable_fact_check,
+                    fact_check_provider: (result as any).fact_check_provider || s.fact_check_provider,
+                    fact_check_config: (result as any).fact_check_config || s.fact_check_config,
+                    fact_check_results: (result as any).fact_check_results || s.fact_check_results,
                   };
                 })
               );
@@ -590,14 +639,31 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
             tone: (latestJob as any).tone,
             orchestrator_dispatch: (latestJob as any).orchestrator_dispatch,
             delegated_providers: (latestJob as any).delegated_providers,
+            enable_fact_check: latestJob.enable_fact_check ?? (rootJob as any).enable_fact_check,
+            fact_check_provider: latestJob.fact_check_provider || (rootJob as any).fact_check_provider,
+            fact_check_config: latestJob.fact_check_config || (rootJob as any).fact_check_config,
+            fact_check_results: latestJob.fact_check_results || (rootJob as any).fact_check_results,
+            enable_debate: latestJob.enable_debate ?? (rootJob as any).enable_debate,
+            debate_provider: latestJob.debate_provider || (rootJob as any).debate_provider,
+            debate_defender_provider: latestJob.debate_defender_provider || (rootJob as any).debate_defender_provider,
+            max_debate_rounds: latestJob.max_debate_rounds || (rootJob as any).max_debate_rounds,
+            debate_transcript: latestJob.debate_transcript || (rootJob as any).debate_transcript,
+            enable_consensus: latestJob.enable_consensus ?? (rootJob as any).enable_consensus,
+            consensus_providers: latestJob.consensus_providers || (rootJob as any).consensus_providers,
+            consensus_threshold: latestJob.consensus_threshold ?? (rootJob as any).consensus_threshold,
+            max_consensus_rounds: latestJob.max_consensus_rounds || (rootJob as any).max_consensus_rounds,
+            consensus_scores: latestJob.consensus_scores || (rootJob as any).consensus_scores,
             providerConfigurations: (latestJob as any).providerConfigurations || (latestJob as any).provider_options || {
               ...(((latestJob as any).orchestrator_config && (latestJob as any).orchestrator_provider) ? { [(latestJob as any).orchestrator_provider]: (latestJob as any).orchestrator_config } : {}),
               ...(((latestJob as any).lead_config && (latestJob as any).lead_provider) ? { [(latestJob as any).lead_provider]: (latestJob as any).lead_config } : {}),
               ...(((latestJob as any).summarization_config && (latestJob as any).summarization_provider) ? { [(latestJob as any).summarization_provider]: (latestJob as any).summarization_config } : {}),
+              ...(((latestJob as any).fact_check_config && (latestJob as any).fact_check_provider) ? { [(latestJob as any).fact_check_provider]: (latestJob as any).fact_check_config } : {}),
             },
             orchestrator_conversation_url: (latestJob as any).orchestrator_conversation_url || undefined,
             lead_conversation_url: (latestJob as any).lead_conversation_url || undefined,
             provider_conversations: Object.keys(mergedConvUrls).length > 0 ? mergedConvUrls : undefined,
+            report_format: (latestJob as any).report_format || (rootJob as any).report_format || "narrative",
+            report_matrix: (latestJob as any).report_matrix || (rootJob as any).report_matrix,
           });
         }
       }
@@ -646,14 +712,31 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               tone: (directJob as any).tone,
               orchestrator_dispatch: (directJob as any).orchestrator_dispatch,
               delegated_providers: (directJob as any).delegated_providers,
+              enable_fact_check: directJob.enable_fact_check,
+              fact_check_provider: directJob.fact_check_provider || undefined,
+              fact_check_config: directJob.fact_check_config,
+              fact_check_results: directJob.fact_check_results,
+              enable_debate: directJob.enable_debate,
+              debate_provider: directJob.debate_provider || undefined,
+              debate_defender_provider: directJob.debate_defender_provider || undefined,
+              max_debate_rounds: directJob.max_debate_rounds,
+              debate_transcript: directJob.debate_transcript,
+              enable_consensus: directJob.enable_consensus,
+              consensus_providers: directJob.consensus_providers,
+              consensus_threshold: directJob.consensus_threshold,
+              max_consensus_rounds: directJob.max_consensus_rounds,
+              consensus_scores: directJob.consensus_scores,
               providerConfigurations: (directJob as any).providerConfigurations || (directJob as any).provider_options || {
                 ...(((directJob as any).orchestrator_config && (directJob as any).orchestrator_provider) ? { [(directJob as any).orchestrator_provider]: (directJob as any).orchestrator_config } : {}),
                 ...(((directJob as any).lead_config && (directJob as any).lead_provider) ? { [(directJob as any).lead_provider]: (directJob as any).lead_config } : {}),
                 ...(((directJob as any).summarization_config && (directJob as any).summarization_provider) ? { [(directJob as any).summarization_provider]: (directJob as any).summarization_config } : {}),
+                ...(((directJob as any).fact_check_config && (directJob as any).fact_check_provider) ? { [(directJob as any).fact_check_provider]: (directJob as any).fact_check_config } : {}),
               },
               orchestrator_conversation_url: (directJob as any).orchestrator_conversation_url || undefined,
               lead_conversation_url: (directJob as any).lead_conversation_url || undefined,
               provider_conversations: (directJob as any).provider_conversations || undefined,
+              report_format: (directJob as any).report_format || "narrative",
+              report_matrix: (directJob as any).report_matrix,
             };
             newSessions.unshift(directSession);
           }
@@ -857,6 +940,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         initialQuery: "",
         initialOrchestratorConfig: undefined as Record<string, any> | undefined,
         initialLeadConfig: undefined as Record<string, any> | undefined,
+        initialEnableFactCheck: false,
+        initialFactCheckProvider: "perplexity",
+        initialFactCheckConfig: undefined as Record<string, any> | undefined,
       };
     }
 
@@ -950,6 +1036,77 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         ? { model_id: "Daily" }
         : (capsHook.selectionsMap?.[resolvedSum] || { model_id: "Daily" }));
 
+    // 10. Fact-Check defaults:
+    const resolvedEnableFactCheck =
+      activeSession.enable_fact_check ??
+      activeSession.messages.find((m) => m.enable_fact_check !== undefined)?.enable_fact_check ??
+      false;
+    const resolvedFactCheckProvider =
+      activeSession.fact_check_provider ||
+      activeSession.messages.find((m) => m.fact_check_provider)?.fact_check_provider ||
+      "perplexity";
+    const resolvedFactCheckConfig =
+      activeSession.fact_check_config ||
+      activeSession.providerConfigurations?.[resolvedFactCheckProvider] ||
+      activeSession.messages.find((m) => m.fact_check_config)?.fact_check_config;
+
+    // 11. Report format defaults:
+    const resolvedReportFormat =
+      (activeSession.report_format as ReportFormat) ||
+      (activeSession.messages.find((m) => m.report_format)?.report_format as ReportFormat) ||
+      "narrative";
+
+    // 12. Auto-scale agents defaults:
+    const resolvedAutoScaleAgents =
+      activeSession.auto_scale_agents ??
+      activeSession.messages.find((m) => m.auto_scale_agents !== undefined)?.auto_scale_agents ??
+      true;
+    const resolvedMinAgents =
+      activeSession.min_agents ??
+      activeSession.messages.find((m) => m.min_agents !== undefined)?.min_agents ??
+      2;
+    const resolvedMaxAgents =
+      activeSession.max_agents ??
+      activeSession.messages.find((m) => m.max_agents !== undefined)?.max_agents ??
+      5;
+
+    // 13. Adversarial debate defaults:
+    const resolvedEnableDebate =
+      activeSession.enable_debate ??
+      activeSession.messages.find((m) => m.enable_debate !== undefined)?.enable_debate ??
+      false;
+    const resolvedDebateProvider =
+      activeSession.debate_provider ||
+      activeSession.messages.find((m) => m.debate_provider)?.debate_provider ||
+      "claude";
+    const resolvedDebateDefenderProvider =
+      activeSession.debate_defender_provider ||
+      activeSession.messages.find((m) => m.debate_defender_provider)?.debate_defender_provider ||
+      resolvedLead ||
+      "chatgpt";
+    const resolvedMaxDebateRounds =
+      activeSession.max_debate_rounds ??
+      activeSession.messages.find((m) => m.max_debate_rounds !== undefined)?.max_debate_rounds ??
+      2;
+
+    // 14. Delphi consensus defaults:
+    const resolvedEnableConsensus =
+      activeSession.enable_consensus ??
+      activeSession.messages.find((m) => m.enable_consensus !== undefined)?.enable_consensus ??
+      false;
+    const resolvedConsensusProviders =
+      activeSession.consensus_providers ||
+      activeSession.messages.find((m) => m.consensus_providers)?.consensus_providers ||
+      ["gemini", "chatgpt", "claude"];
+    const resolvedConsensusThreshold =
+      activeSession.consensus_threshold ??
+      activeSession.messages.find((m) => m.consensus_threshold !== undefined)?.consensus_threshold ??
+      0.8;
+    const resolvedMaxConsensusRounds =
+      activeSession.max_consensus_rounds ??
+      activeSession.messages.find((m) => m.max_consensus_rounds !== undefined)?.max_consensus_rounds ??
+      3;
+
     return {
       initialOrchestratorProvider: resolvedOrch,
       initialLeadProvider: resolvedLead,
@@ -960,6 +1117,21 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       initialQuery: resolvedQuery,
       initialOrchestratorConfig: orchConfig,
       initialLeadConfig: leadConfig,
+      initialEnableFactCheck: resolvedEnableFactCheck,
+      initialFactCheckProvider: resolvedFactCheckProvider,
+      initialFactCheckConfig: resolvedFactCheckConfig,
+      initialEnableDebate: resolvedEnableDebate,
+      initialDebateProvider: resolvedDebateProvider,
+      initialDebateDefenderProvider: resolvedDebateDefenderProvider,
+      initialMaxDebateRounds: resolvedMaxDebateRounds,
+      initialEnableConsensus: resolvedEnableConsensus,
+      initialConsensusProviders: resolvedConsensusProviders,
+      initialConsensusThreshold: resolvedConsensusThreshold,
+      initialMaxConsensusRounds: resolvedMaxConsensusRounds,
+      initialReportFormat: resolvedReportFormat,
+      initialAutoScaleAgents: resolvedAutoScaleAgents,
+      initialMinAgents: resolvedMinAgents,
+      initialMaxAgents: resolvedMaxAgents,
     };
   }, [activeSession, capsHook.selectionsMap]);
 
@@ -1085,6 +1257,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           tone: toneVal,
           orchestrator_dispatch: orchDispatch,
           delegated_providers: (fullJob as any).delegated_providers,
+          report_format: (fullJob as any).report_format || session?.report_format,
+          report_matrix: (fullJob as any).report_matrix || session?.report_matrix,
           error: (fullJob as any).error,
         });
 
@@ -1111,6 +1285,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               tone: toneVal || s.tone,
               orchestrator_dispatch: orchDispatch || s.orchestrator_dispatch,
               delegated_providers: (fullJob as any).delegated_providers || s.delegated_providers,
+              report_format: (fullJob as any).report_format || s.report_format,
+              report_matrix: (fullJob as any).report_matrix || s.report_matrix,
               providerConfigurations: s.providerConfigurations || (fullJob as any).providerConfigurations || (fullJob as any).provider_options || {
                 ...((orchProv && (fullJob as any).orchestrator_config) ? { [orchProv]: (fullJob as any).orchestrator_config } : {}),
                 ...((leadProv && (fullJob as any).lead_config) ? { [leadProv]: (fullJob as any).lead_config } : {}),
@@ -1163,9 +1339,24 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
     summarization_provider: string;
     summarization_config: Record<string, any>;
     tone: string;
+    report_format?: ReportFormat;
+    auto_scale_agents?: boolean;
+    min_agents?: number;
+    max_agents?: number;
     delegated_providers?: string[];
     provider_configs?: Record<string, any>;
     provider_capabilities?: Record<string, any>;
+    enable_fact_check?: boolean;
+    fact_check_provider?: string;
+    fact_check_config?: Record<string, any>;
+    enable_debate?: boolean;
+    debate_provider?: string;
+    debate_defender_provider?: string;
+    max_debate_rounds?: number;
+    enable_consensus?: boolean;
+    consensus_providers?: string[];
+    consensus_threshold?: number;
+    max_consensus_rounds?: number;
   }) => {
     setIsAgentConfigOpen(false);
 
@@ -1188,12 +1379,30 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       summarization_provider: config.summarization_provider,
       summarization_config: config.summarization_config,
       tone: config.tone,
+      report_format: config.report_format || "narrative",
+      auto_scale_agents: config.auto_scale_agents,
+      min_agents: config.min_agents,
+      max_agents: config.max_agents,
       delegated_providers: config.delegated_providers,
+      enable_fact_check: config.enable_fact_check,
+      fact_check_provider: config.fact_check_provider,
+      fact_check_config: config.fact_check_config,
+      enable_debate: config.enable_debate,
+      debate_provider: config.debate_provider,
+      debate_defender_provider: config.debate_defender_provider,
+      max_debate_rounds: config.max_debate_rounds,
+      enable_consensus: config.enable_consensus,
+      consensus_providers: config.consensus_providers,
+      consensus_threshold: config.consensus_threshold,
+      max_consensus_rounds: config.max_consensus_rounds,
       provider_options: {
         ...(config.provider_configs || {}),
         [config.orchestrator_provider]: config.orchestrator_config,
         [config.lead_provider]: config.lead_config,
         [config.summarization_provider]: config.summarization_config,
+        ...(config.fact_check_provider && config.fact_check_config
+          ? { [config.fact_check_provider]: config.fact_check_config }
+          : {}),
       },
     };
 
@@ -1214,12 +1423,30 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
       summarization_provider: config.summarization_provider,
       summarization_config: config.summarization_config,
       tone: config.tone,
+      report_format: config.report_format || "narrative",
+      auto_scale_agents: config.auto_scale_agents,
+      min_agents: config.min_agents,
+      max_agents: config.max_agents,
       delegated_providers: config.delegated_providers,
+      enable_fact_check: config.enable_fact_check,
+      fact_check_provider: config.fact_check_provider,
+      fact_check_config: config.fact_check_config,
+      enable_debate: config.enable_debate,
+      debate_provider: config.debate_provider,
+      debate_defender_provider: config.debate_defender_provider,
+      max_debate_rounds: config.max_debate_rounds,
+      enable_consensus: config.enable_consensus,
+      consensus_providers: config.consensus_providers,
+      consensus_threshold: config.consensus_threshold,
+      max_consensus_rounds: config.max_consensus_rounds,
       providerConfigurations: {
         ...(config.provider_configs || {}),
         [config.orchestrator_provider]: config.orchestrator_config,
         [config.lead_provider]: config.lead_config,
         [config.summarization_provider]: config.summarization_config,
+        ...(config.fact_check_provider && config.fact_check_config
+          ? { [config.fact_check_provider]: config.fact_check_config }
+          : {}),
       },
     };
 
@@ -1242,9 +1469,24 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
         summarization_provider: config.summarization_provider,
         summarization_config: config.summarization_config,
         tone: config.tone,
+        report_format: config.report_format,
+        auto_scale_agents: config.auto_scale_agents,
+        min_agents: config.min_agents,
+        max_agents: config.max_agents,
         delegated_providers: config.delegated_providers,
         provider_configs: config.provider_configs,
         provider_capabilities: config.provider_capabilities,
+        enable_fact_check: config.enable_fact_check,
+        fact_check_provider: config.fact_check_provider,
+        fact_check_config: config.fact_check_config,
+        enable_debate: config.enable_debate,
+        debate_provider: config.debate_provider,
+        debate_defender_provider: config.debate_defender_provider,
+        max_debate_rounds: config.max_debate_rounds,
+        enable_consensus: config.enable_consensus,
+        consensus_providers: config.consensus_providers,
+        consensus_threshold: config.consensus_threshold,
+        max_consensus_rounds: config.max_consensus_rounds,
       });
 
       if (isCancelledRef.current) {
@@ -1289,6 +1531,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           const stepProv = stepLog.provider || (stepLog.data as any)?.provider;
           const orchConvUrl = (stepLog.data as any)?.orch_conv_url;
           const leadConvUrl = (stepLog.data as any)?.lead_conv_url;
+          const stepConsensusResult = (stepLog.data as any)?.consensus_result;
 
           setSessions((prev) =>
             prev.map((s) => {
@@ -1296,6 +1539,20 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               let nextStatus = s.status;
               if (rawJobStatus && rawJobStatus !== "running") {
                 nextStatus = rawJobStatus as any;
+              } else if (stepLog.step === "fact_checking" || (stepLog.data as any)?.phase === "fact_checking") {
+                nextStatus = "fact_checking" as any;
+              } else if (stepLog.step === "debating" || (stepLog.data as any)?.phase === "debating" || stepLog.status === "debating") {
+                nextStatus = "debating" as any;
+              } else if (
+                stepLog.step === "consensus" ||
+                stepLog.step?.startsWith("round_") ||
+                stepLog.step === "consensus_round" ||
+                stepLog.step === "consensus_complete" ||
+                (stepLog.data as any)?.phase === "consensus" ||
+                stepLog.status === "consensus" ||
+                (stepLog.data as any)?.role === "consensus"
+              ) {
+                nextStatus = "consensus" as any;
               } else if (stepLog.step === "summarizing") {
                 nextStatus = "summarizing" as any;
               } else if (dispatch && nextStatus === "orchestrating") {
@@ -1312,6 +1569,7 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                 orchestrator_conversation_url: orchConvUrl || s.orchestrator_conversation_url,
                 lead_conversation_url: leadConvUrl || s.lead_conversation_url,
                 provider_conversations: Object.keys(updatedProviderConvs).length > 0 ? updatedProviderConvs : s.provider_conversations,
+                consensus_scores: stepConsensusResult || s.consensus_scores,
               };
             })
           );
@@ -1330,8 +1588,23 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
               providers: [config.orchestrator_provider, config.lead_provider],
               sources: result.sources || [],
               claims: result.claims || [],
+              disagreements: (result as any).disagreements || [],
               provider_runs: result.provider_runs || [],
               factCheckStatus: "verified",
+              enable_fact_check: config.enable_fact_check,
+              fact_check_provider: config.fact_check_provider,
+              fact_check_config: config.fact_check_config,
+              fact_check_results: (result as any).fact_check_results,
+              enable_debate: config.enable_debate,
+              debate_provider: config.debate_provider,
+              debate_defender_provider: config.debate_defender_provider,
+              max_debate_rounds: config.max_debate_rounds,
+              debate_transcript: (result as any).debate_transcript,
+              enable_consensus: config.enable_consensus,
+              consensus_providers: config.consensus_providers,
+              consensus_threshold: config.consensus_threshold,
+              max_consensus_rounds: config.max_consensus_rounds,
+              consensus_scores: (result as any).consensus_scores,
               steps: activeSteps,
               job_type: "agent",
               orchestrator_provider: config.orchestrator_provider,
@@ -1346,10 +1619,15 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                 [config.orchestrator_provider]: config.orchestrator_config,
                 [config.lead_provider]: config.lead_config,
                 [config.summarization_provider]: config.summarization_config,
+                ...(config.fact_check_provider && config.fact_check_config
+                  ? { [config.fact_check_provider]: config.fact_check_config }
+                  : {}),
               },
               orchestrator_conversation_url: result.orchestrator_conversation_url,
               lead_conversation_url: result.lead_conversation_url,
               provider_conversations: result.provider_conversations,
+              report_format: (result as any).report_format || config.report_format || "narrative",
+              report_matrix: (result as any).report_matrix,
             };
 
             setSessions((prev) =>
@@ -1370,10 +1648,29 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                       ...(s.provider_conversations || {}),
                       ...(result.provider_conversations || {}),
                     },
+                    report_format: (result as any).report_format || config.report_format || s.report_format,
+                    report_matrix: (result as any).report_matrix || s.report_matrix,
+                    enable_fact_check: config.enable_fact_check ?? s.enable_fact_check,
+                    fact_check_provider: config.fact_check_provider || s.fact_check_provider,
+                    fact_check_config: config.fact_check_config || s.fact_check_config,
+                    fact_check_results: (result as any).fact_check_results || s.fact_check_results,
+                    enable_debate: config.enable_debate ?? s.enable_debate,
+                    debate_provider: config.debate_provider || s.debate_provider,
+                    debate_defender_provider: config.debate_defender_provider || s.debate_defender_provider,
+                    max_debate_rounds: config.max_debate_rounds || s.max_debate_rounds,
+                    debate_transcript: (result as any).debate_transcript || s.debate_transcript,
+                    enable_consensus: config.enable_consensus ?? s.enable_consensus,
+                    consensus_providers: config.consensus_providers || s.consensus_providers,
+                    consensus_threshold: config.consensus_threshold ?? s.consensus_threshold,
+                    max_consensus_rounds: config.max_consensus_rounds || s.max_consensus_rounds,
+                    consensus_scores: (result as any).consensus_scores || s.consensus_scores,
                     providerConfigurations: s.providerConfigurations || {
                       [config.orchestrator_provider]: config.orchestrator_config,
                       [config.lead_provider]: config.lead_config,
                       [config.summarization_provider]: config.summarization_config,
+                      ...(config.fact_check_provider && config.fact_check_config
+                        ? { [config.fact_check_provider]: config.fact_check_config }
+                        : {}),
                     },
                   }
                   : s
@@ -1403,8 +1700,23 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                 providers: [config.orchestrator_provider, config.lead_provider],
                 sources: finalResult.sources || [],
                 claims: finalResult.claims || [],
+                disagreements: finalResult.disagreements || [],
                 provider_runs: finalResult.provider_runs || [],
                 factCheckStatus: "verified",
+                enable_fact_check: finalResult.enable_fact_check ?? config.enable_fact_check,
+                fact_check_provider: finalResult.fact_check_provider || config.fact_check_provider,
+                fact_check_config: finalResult.fact_check_config || config.fact_check_config,
+                fact_check_results: finalResult.fact_check_results,
+                enable_debate: finalResult.enable_debate ?? config.enable_debate,
+                debate_provider: finalResult.debate_provider || config.debate_provider,
+                debate_defender_provider: finalResult.debate_defender_provider || config.debate_defender_provider,
+                max_debate_rounds: finalResult.max_debate_rounds || config.max_debate_rounds,
+                debate_transcript: (finalResult as any).debate_transcript,
+                enable_consensus: finalResult.enable_consensus ?? config.enable_consensus,
+                consensus_providers: finalResult.consensus_providers || config.consensus_providers,
+                consensus_threshold: finalResult.consensus_threshold ?? config.consensus_threshold,
+                max_consensus_rounds: finalResult.max_consensus_rounds || config.max_consensus_rounds,
+                consensus_scores: finalResult.consensus_scores,
                 steps: activeSteps,
                 job_type: "agent",
                 orchestrator_provider: config.orchestrator_provider,
@@ -1419,6 +1731,9 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                   [config.orchestrator_provider]: config.orchestrator_config,
                   [config.lead_provider]: config.lead_config,
                   [config.summarization_provider]: config.summarization_config,
+                  ...(config.fact_check_provider && config.fact_check_config
+                    ? { [config.fact_check_provider]: config.fact_check_config }
+                    : {}),
                 },
                 orchestrator_conversation_url: finalResult.orchestrator_conversation_url,
                 lead_conversation_url: finalResult.lead_conversation_url,
@@ -1443,10 +1758,27 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
                         ...(s.provider_conversations || {}),
                         ...(finalResult.provider_conversations || {}),
                       },
+                      enable_fact_check: finalResult.enable_fact_check ?? config.enable_fact_check ?? s.enable_fact_check,
+                      fact_check_provider: finalResult.fact_check_provider || config.fact_check_provider || s.fact_check_provider,
+                      fact_check_config: finalResult.fact_check_config || config.fact_check_config || s.fact_check_config,
+                      fact_check_results: finalResult.fact_check_results || s.fact_check_results,
+                      enable_debate: finalResult.enable_debate ?? config.enable_debate ?? s.enable_debate,
+                      debate_provider: finalResult.debate_provider || config.debate_provider || s.debate_provider,
+                      debate_defender_provider: finalResult.debate_defender_provider || config.debate_defender_provider || s.debate_defender_provider,
+                      max_debate_rounds: finalResult.max_debate_rounds || config.max_debate_rounds || s.max_debate_rounds,
+                      debate_transcript: (finalResult as any).debate_transcript || s.debate_transcript,
+                      enable_consensus: finalResult.enable_consensus ?? config.enable_consensus ?? s.enable_consensus,
+                      consensus_providers: finalResult.consensus_providers || config.consensus_providers || s.consensus_providers,
+                      consensus_threshold: finalResult.consensus_threshold ?? config.consensus_threshold ?? s.consensus_threshold,
+                      max_consensus_rounds: finalResult.max_consensus_rounds || config.max_consensus_rounds || s.max_consensus_rounds,
+                      consensus_scores: finalResult.consensus_scores || s.consensus_scores,
                       providerConfigurations: s.providerConfigurations || {
                         [config.orchestrator_provider]: config.orchestrator_config,
                         [config.lead_provider]: config.lead_config,
                         [config.summarization_provider]: config.summarization_config,
+                        ...(config.fact_check_provider && config.fact_check_config
+                          ? { [config.fact_check_provider]: config.fact_check_config }
+                          : {}),
                       },
                     }
                     : s
@@ -1810,6 +2142,10 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           summarization_provider: sumProv,
           summarization_config: sumConf,
           tone: toneVal,
+          report_format: activeSession.report_format as any,
+          auto_scale_agents: activeSession.auto_scale_agents,
+          min_agents: activeSession.min_agents,
+          max_agents: activeSession.max_agents,
           delegated_providers: delegatedProvs,
           provider_configs: activeSession.providerConfigurations,
           conversation_urls: Object.keys(existingConvUrls).length > 0 ? existingConvUrls : undefined,
@@ -1937,6 +2273,8 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
 
             const asstMsg = buildAssistantMessage(jobAccepted.job_id, {
               report_markdown: result.report_markdown,
+              report_format: (result as any).report_format || activeSession.report_format,
+              report_matrix: (result as any).report_matrix,
               status: result.status || "completed",
               providers: isAgentSession ? [orchProv, leadProv] : currentProviderIds,
               sources: consolidatedSources,
@@ -2484,6 +2822,21 @@ export function ChatDashboard({ initialChatId }: ChatDashboardProps) {
           initialSummarizationConfig={activeSessionAgentDefaults.initialSummarizationConfig}
           initialDelegatedProviders={activeSessionAgentDefaults.initialDelegatedProviders}
           initialTone={activeSessionAgentDefaults.initialTone}
+          initialReportFormat={activeSessionAgentDefaults.initialReportFormat}
+          initialAutoScaleAgents={activeSessionAgentDefaults.initialAutoScaleAgents}
+          initialMinAgents={activeSessionAgentDefaults.initialMinAgents}
+          initialMaxAgents={activeSessionAgentDefaults.initialMaxAgents}
+          initialEnableFactCheck={activeSessionAgentDefaults.initialEnableFactCheck}
+          initialFactCheckProvider={activeSessionAgentDefaults.initialFactCheckProvider}
+          initialFactCheckConfig={activeSessionAgentDefaults.initialFactCheckConfig}
+          initialEnableDebate={activeSessionAgentDefaults.initialEnableDebate}
+          initialDebateProvider={activeSessionAgentDefaults.initialDebateProvider}
+          initialDebateDefenderProvider={activeSessionAgentDefaults.initialDebateDefenderProvider}
+          initialMaxDebateRounds={activeSessionAgentDefaults.initialMaxDebateRounds}
+          initialEnableConsensus={activeSessionAgentDefaults.initialEnableConsensus}
+          initialConsensusProviders={activeSessionAgentDefaults.initialConsensusProviders}
+          initialConsensusThreshold={activeSessionAgentDefaults.initialConsensusThreshold}
+          initialMaxConsensusRounds={activeSessionAgentDefaults.initialMaxConsensusRounds}
         />
       )}
     </div>
