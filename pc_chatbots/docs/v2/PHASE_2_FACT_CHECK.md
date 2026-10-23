@@ -19,14 +19,14 @@ Summarize (existing) → Orchestrate → Research → **Fact-Check (NEW)** → L
 
 ## Acceptance Criteria
 
-- [ ] New `"fact_checking"` status appears in pipeline flow
-- [ ] `enable_fact_check` flag in `AgentResearchRequest` (default `false`)
-- [ ] When enabled, claims are extracted from research results
-- [ ] Each claim is verified by the fact-check provider and gets a verdict
-- [ ] Verdicts are stored in `Claim` model and visible in the final report
-- [ ] When disabled, pipeline behaves exactly as before (no regression)
-- [ ] Frontend shows fact-check status in timeline
-- [ ] Frontend shows verdict badges on claims in the report
+- [x] New `"fact_checking"` status appears in pipeline flow
+- [x] `enable_fact_check` flag in `AgentResearchRequest` (default `false`)
+- [x] When enabled, claims are extracted from research results
+- [x] Each claim is verified by the fact-check provider and gets a verdict
+- [x] Verdicts are stored in `Claim` model and visible in the final report
+- [x] When disabled, pipeline behaves exactly as before (no regression)
+- [x] Frontend shows fact-check status in timeline
+- [x] Frontend shows verdict badges on claims in the report
 
 ---
 

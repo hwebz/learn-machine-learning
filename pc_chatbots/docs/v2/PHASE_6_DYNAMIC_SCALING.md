@@ -17,13 +17,13 @@ This can be implemented **right after Phase 1** since it only modifies the orche
 
 ## Acceptance Criteria
 
-- [ ] New `auto_scale_agents` flag (default `true`)
-- [ ] `min_agents` and `max_agents` config fields
-- [ ] Complexity analysis returns `recommended_agent_count` and `recommended_groups`
-- [ ] The orchestrator prompt uses the dynamic agent count
-- [ ] Complexity result is visible in SSE events and dispatch banner
-- [ ] When disabled, orchestrator uses the current fixed 2–5 range
-- [ ] Frontend shows complexity assessment and has slider for min/max
+- [x] New `auto_scale_agents` flag (default `true`)
+- [x] `min_agents` and `max_agents` config fields
+- [x] Complexity analysis returns `recommended_agent_count` and `recommended_groups`
+- [x] The orchestrator prompt uses the dynamic agent count
+- [x] Complexity result is visible in SSE events and dispatch banner
+- [x] When disabled, orchestrator uses the current fixed 2–5 range
+- [x] Frontend shows complexity assessment and has slider for min/max
 
 ---
 

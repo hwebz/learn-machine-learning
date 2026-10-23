@@ -19,16 +19,16 @@ Summarize → Orchestrate → Research → [Fact-Check] → **Debate (NEW)** →
 
 ## Acceptance Criteria
 
-- [ ] New `"debating"` status appears in pipeline flow
-- [ ] `enable_debate` flag in `AgentResearchRequest` (default `false`)
-- [ ] Configurable `debate_provider`, `max_debate_rounds` (default 2)
-- [ ] Red Team critique is generated and stored
-- [ ] Rebuttal from a defender provider is generated and stored
-- [ ] Full debate transcript is persisted in `debate_transcript_json`
-- [ ] Lead synthesis prompt includes debate outcomes
-- [ ] When disabled, pipeline behaves exactly as before
-- [ ] Frontend shows debate status in timeline
-- [ ] Frontend shows debate transcript in a viewable component
+- [x] New `"debating"` status appears in pipeline flow
+- [x] `enable_debate` flag in `AgentResearchRequest` (default `false`)
+- [x] Configurable `debate_provider`, `max_debate_rounds` (default 2)
+- [x] Red Team critique is generated and stored
+- [x] Rebuttal from a defender provider is generated and stored
+- [x] Full debate transcript is persisted in `debate_transcript_json`
+- [x] Lead synthesis prompt includes debate outcomes
+- [x] When disabled, pipeline behaves exactly as before
+- [x] Frontend shows debate status in timeline
+- [x] Frontend shows debate transcript in a viewable component
 
 ---
 

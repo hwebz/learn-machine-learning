@@ -19,15 +19,15 @@ Summarize → Orchestrate → Research → [Fact-Check] → [Debate] → **Conse
 
 ## Acceptance Criteria
 
-- [ ] New `"consensus"` status appears in pipeline flow
-- [ ] `enable_consensus` flag in `AgentResearchRequest` (default `false`)
-- [ ] Key theses are extracted from findings + debate
-- [ ] Multiple providers score each thesis (1–5)
-- [ ] Scoring iterates until std dev < threshold or max rounds reached
-- [ ] Consensus scores are stored and passed to lead synthesis
-- [ ] When disabled, pipeline behaves exactly as before
-- [ ] Frontend shows consensus progress in timeline
-- [ ] Frontend visualizes consensus scores
+- [x] New `"consensus"` status appears in pipeline flow
+- [x] `enable_consensus` flag in `AgentResearchRequest` (default `false`)
+- [x] Key theses are extracted from findings + debate
+- [x] Multiple providers score each thesis (1–5)
+- [x] Scoring iterates until std dev < threshold or max rounds reached
+- [x] Consensus scores are stored and passed to lead synthesis
+- [x] When disabled, pipeline behaves exactly as before
+- [x] Frontend shows consensus progress in timeline
+- [x] Frontend visualizes consensus scores
 
 ---
 

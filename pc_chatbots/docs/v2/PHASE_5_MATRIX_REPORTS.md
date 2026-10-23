@@ -17,13 +17,13 @@ Unlike Phases 3/4, this phase doesn't add a new pipeline stage. It changes the *
 
 ## Acceptance Criteria
 
-- [ ] New `report_format` field in `AgentResearchRequest`: `"narrative"` (default/current), `"matrix"`, or `"hybrid"`
-- [ ] `"matrix"` format produces a JSON-structured report with comparison table + Pros/Cons
-- [ ] `"hybrid"` format produces both narrative Markdown AND a matrix section
-- [ ] `"narrative"` behaves exactly as current (no regression)
-- [ ] Backend converts matrix JSON to well-formatted Markdown for storage
-- [ ] Frontend can render the matrix as a sortable table
-- [ ] Frontend can toggle between narrative and matrix view for `"hybrid"` reports
+- [x] New `report_format` field in `AgentResearchRequest`: `"narrative"` (default/current), `"matrix"`, or `"hybrid"`
+- [x] `"matrix"` format produces a JSON-structured report with comparison table + Pros/Cons
+- [x] `"hybrid"` format produces both narrative Markdown AND a matrix section
+- [x] `"narrative"` behaves exactly as current (no regression)
+- [x] Backend converts matrix JSON to well-formatted Markdown for storage
+- [x] Frontend can render the matrix as a sortable table
+- [x] Frontend can toggle between narrative and matrix view for `"hybrid"` reports
 
 ---
 
