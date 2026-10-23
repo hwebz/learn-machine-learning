@@ -115,6 +115,10 @@ def build_summarization_prompt(
 
     history_text = "\n\n---\n\n".join(history_blocks) if history_blocks else "Không có dữ liệu trước đó."
 
+    topic_ref = current_topic.strip()
+    if len(topic_ref) > 5000:
+        topic_ref = topic_ref[:5000] + f"\n\n[... Truncated for summary briefing. Total prompt length: {len(current_topic)} chars ...]"
+
     return f"""You are an Expert Research Context Summarizer.
 Your goal is to synthesize and condense the ongoing multi-round research history into a dense, token-efficient Research Context Briefing (under 400 words).
 This Briefing will be provided to the Master Orchestrator and specialized AI sub-agents so they have full context without exceeding token limits or losing continuity.
@@ -123,7 +127,7 @@ This Briefing will be provided to the Master Orchestrator and specialized AI sub
 {history_text}
 
 ## Upcoming Follow-up Research Topic / Question:
-"{current_topic}"
+"{topic_ref}"
 
 ## Strict Instructions:
 1. Extract the core findings, established facts, conclusions, and key technical decisions already made.
@@ -206,7 +210,7 @@ DO NOT assign any sub-task to any provider outside this list. Every single item 
 
 ## Output JSON Schema:
 {{
-  "research_topic": "{research_topic}",
+  "research_topic": "<Brief summary or title of the research topic>",
   "agents_dispatch": [
     {{
       "id": "<provider_id>",
@@ -313,9 +317,13 @@ Convergence Achieved: {"✅ Yes (High Agreement)" if consensus_result.get("conve
 IMPORTANT: Incorporate these consensus scores into your analysis. High-scoring theses (score >= 4.0) should be prioritized as robust core findings. Lower-scoring or high-variance theses should be presented with nuance and appropriate caveats.
 """
 
+    topic_ref = research_topic.strip()
+    if len(topic_ref) > 15_000:
+        topic_ref = topic_ref[:15_000] + f"\n\n[... Truncated for synthesis. Total prompt length: {len(research_topic)} chars ...]"
+
     return f"""You are the Lead Research Synthesizer.
 You have been provided with comprehensive findings gathered by specialized AI agents investigating different aspects of the topic:
-"{research_topic}"
+"{topic_ref}"
 {context_section}
 {fact_check_section}
 {debate_section}
@@ -395,9 +403,13 @@ def build_matrix_report_prompt(
             scores_lines.append(f"- {sc.get('id')}: \"{thesis.get('thesis', '')}\" — {sc.get('mean', '?')}/5")
         consensus_section = "\n## Consensus Scores:\n" + "\n".join(scores_lines) + "\n"
 
+    topic_ref = research_topic.strip()
+    if len(topic_ref) > 4000:
+        topic_ref = topic_ref[:4000] + "... [truncated topic reference]"
+
     return f"""You are the Lead Research Synthesizer producing a STRUCTURED COMPARATIVE REPORT.
 
-## Research Topic: {research_topic}
+## Research Topic: {topic_ref}
 {context_section}
 ## Research Findings:
 {findings_text}
@@ -526,10 +538,16 @@ def build_complexity_analysis_prompt(
     max_agents: int = 5,
 ) -> str:
     """Quick LLM call to assess topic complexity and recommend agent count."""
+    topic_preview = research_topic.strip()
+    if len(topic_preview) > 8_000:
+        topic_preview = (
+            topic_preview[:8_000]
+            + f"\n\n[... Truncated for complexity analysis. Total topic length: {len(research_topic)} chars, ~{len(research_topic.split())} words ...]"
+        )
     return f"""You are a Research Planning Analyst. Assess the complexity of the following research topic and recommend how many specialized AI agents should investigate it.
 
 ## Research Topic:
-"{research_topic}"
+"{topic_preview}"
 
 ## Available Provider Count: {len(available_providers)}
 ## Allowed Range: {min_agents} to {max_agents} agents
@@ -811,6 +829,10 @@ def build_red_team_prompt(
     fact_check_summary: str | None = None,
 ) -> str:
     """Prompt for the Red Team agent to critique the research findings."""
+    topic_ref = research_topic.strip()
+    if len(topic_ref) > 3000:
+        topic_ref = topic_ref[:3000] + "... [truncated topic reference]"
+
     fc_section = ""
     if fact_check_summary:
         fc_section = f"""
@@ -820,7 +842,7 @@ def build_red_team_prompt(
 
     return f"""You are a Red Team Critical Analyst. Your role is adversarial — your job is to find weaknesses, gaps, biases, and logical flaws in the following research findings.
 
-## Research Topic: {research_topic}
+## Research Topic: {topic_ref}
 
 ## Research Findings to Critique:
 {findings_summary[:6000]}
@@ -846,6 +868,10 @@ def build_rebuttal_prompt(
     round_number: int,
 ) -> str:
     """Prompt for the defender agent to rebut the Red Team critique."""
+    topic_ref = research_topic.strip()
+    if len(topic_ref) > 3000:
+        topic_ref = topic_ref[:3000] + "... [truncated topic reference]"
+
     return f"""You are the Research Defense Analyst (Round {round_number}). The Red Team has critiqued the research findings. Your role is to:
 
 1. Address each critique point directly.
@@ -853,7 +879,7 @@ def build_rebuttal_prompt(
 3. Concede points where the critique is valid — acknowledge gaps honestly.
 4. Strengthen the overall analysis based on the critique.
 
-## Research Topic: {research_topic}
+## Research Topic: {topic_ref}
 
 ## Original Research Findings:
 {original_findings[:4000]}
@@ -1079,6 +1105,10 @@ def build_thesis_extraction_prompt(
     debate_summary: str | None = None,
 ) -> str:
     """Extract key theses from research findings for consensus scoring."""
+    topic_ref = research_topic.strip()
+    if len(topic_ref) > 3000:
+        topic_ref = topic_ref[:3000] + "... [truncated topic reference]"
+
     debate_section = ""
     if debate_summary:
         debate_section = f"""
@@ -1088,7 +1118,7 @@ def build_thesis_extraction_prompt(
 
     return f"""You are a Research Analyst. Extract the TOP 5-8 most important theses (key conclusions, disputed assertions, or actionable recommendations) from the following research findings.
 
-## Research Topic: {research_topic}
+## Research Topic: {topic_ref}
 
 ## Research Findings:
 {findings_summary[:5000]}
@@ -1629,6 +1659,12 @@ async def run_agent_pipeline(job_id: str, cancel_event: asyncio.Event) -> None:
                     pass
 
         if auto_scale:
+            await _set_agent_status(
+                job_id,
+                "orchestrating",
+                message="Đang phân tích độ phức tạp chủ đề để tối ưu số lượng tác nhân...",
+                data={"orchestrator": orchestrator_prov, "role": "orchestrator", "stage": "complexity_analysis"},
+            )
             complexity_info = await analyze_complexity(
                 job_id=job_id,
                 research_topic=research_topic,

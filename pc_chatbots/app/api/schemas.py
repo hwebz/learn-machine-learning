@@ -38,7 +38,7 @@ class OrchestratorOutput(BaseModel):
 
 
 class AgentResearchRequest(BaseModel):
-    query: str = Field(min_length=1, max_length=20_000)
+    query: str = Field(min_length=1, max_length=500_000)
     orchestrator_provider: ProviderName
     orchestrator_config: dict[str, Any] | None = Field(default_factory=dict)
     lead_provider: ProviderName
@@ -85,7 +85,7 @@ class AgentResearchRequest(BaseModel):
 
 
 class ResearchRequest(BaseModel):
-    query: str = Field(min_length=1, max_length=20_000)
+    query: str = Field(min_length=1, max_length=500_000)
     depth: Literal["standard", "deep"] | None = Field(default=None)
     providers: list[ProviderName] = Field(default_factory=lambda: ["perplexity", "gemini"], min_length=1)
     max_minutes: int = Field(default=20, ge=1, le=180)
